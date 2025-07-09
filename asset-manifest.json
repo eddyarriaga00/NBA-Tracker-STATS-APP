@@ -1,10 +1,10 @@
 {
   "files": {
-    "main.css": "/nba-tracker/static/css/main.6c695426.css",
-    "main.js": "/nba-tracker/static/js/main.0ec5cdbf.js",
-    "index.html": "/nba-tracker/index.html",
-    "main.6c695426.css.map": "/nba-tracker/static/css/main.6c695426.css.map",
-    "main.0ec5cdbf.js.map": "/nba-tracker/static/js/main.0ec5cdbf.js.map"
+    "main.css": "/Users/eddyarriaga/nba-tracker/src/pages/Home.jsx/static/css/main.6c695426.css",
+    "main.js": "/Users/eddyarriaga/nba-tracker/src/pages/Home.jsx/static/js/main.0ec5cdbf.js",
+    "index.html": "/Users/eddyarriaga/nba-tracker/src/pages/Home.jsx/index.html",
+    "main.6c695426.css.map": "/Users/eddyarriaga/nba-tracker/src/pages/Home.jsx/static/css/main.6c695426.css.map",
+    "main.0ec5cdbf.js.map": "/Users/eddyarriaga/nba-tracker/src/pages/Home.jsx/static/js/main.0ec5cdbf.js.map"
   },
   "entrypoints": [
     "static/css/main.6c695426.css",
