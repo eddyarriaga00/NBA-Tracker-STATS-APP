@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/nba-tracker/static/css/main.6c695426.css",
+    "main.js": "/nba-tracker/static/js/main.0ec5cdbf.js",
+    "index.html": "/nba-tracker/index.html",
+    "main.6c695426.css.map": "/nba-tracker/static/css/main.6c695426.css.map",
+    "main.0ec5cdbf.js.map": "/nba-tracker/static/js/main.0ec5cdbf.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.6c695426.css",
+    "static/js/main.0ec5cdbf.js"
+  ]
+}
