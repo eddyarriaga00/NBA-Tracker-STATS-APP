@@ -1,13 +1,11 @@
 {
   "files": {
-    "main.css": "/NBA-Tracker-STATS-APP/static/css/main.c3275b67.css",
-    "main.js": "/NBA-Tracker-STATS-APP/static/js/main.a7ba7fcb.js",
+    "main.js": "/NBA-Tracker-STATS-APP/static/js/main.7307b983.js",
+    "static/media/logo192.png": "/NBA-Tracker-STATS-APP/static/media/logo192.991ec53b686dcc7e2fe2.png",
     "index.html": "/NBA-Tracker-STATS-APP/index.html",
-    "main.c3275b67.css.map": "/NBA-Tracker-STATS-APP/static/css/main.c3275b67.css.map",
-    "main.a7ba7fcb.js.map": "/NBA-Tracker-STATS-APP/static/js/main.a7ba7fcb.js.map"
+    "main.7307b983.js.map": "/NBA-Tracker-STATS-APP/static/js/main.7307b983.js.map"
   },
   "entrypoints": [
-    "static/css/main.c3275b67.css",
-    "static/js/main.a7ba7fcb.js"
+    "static/js/main.7307b983.js"
   ]
 }
