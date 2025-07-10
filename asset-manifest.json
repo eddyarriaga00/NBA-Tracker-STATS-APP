@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/Users/eddyarriaga/nba-tracker/src/pages/Home.jsx/static/css/main.6c695426.css",
-    "main.js": "/Users/eddyarriaga/nba-tracker/src/pages/Home.jsx/static/js/main.0ec5cdbf.js",
-    "index.html": "/Users/eddyarriaga/nba-tracker/src/pages/Home.jsx/index.html",
-    "main.6c695426.css.map": "/Users/eddyarriaga/nba-tracker/src/pages/Home.jsx/static/css/main.6c695426.css.map",
-    "main.0ec5cdbf.js.map": "/Users/eddyarriaga/nba-tracker/src/pages/Home.jsx/static/js/main.0ec5cdbf.js.map"
+    "main.css": "/NBA-Tracker/static/css/main.314a345e.css",
+    "main.js": "/NBA-Tracker/static/js/main.4395227c.js",
+    "index.html": "/NBA-Tracker/index.html",
+    "main.314a345e.css.map": "/NBA-Tracker/static/css/main.314a345e.css.map",
+    "main.4395227c.js.map": "/NBA-Tracker/static/js/main.4395227c.js.map"
   },
   "entrypoints": [
-    "static/css/main.6c695426.css",
-    "static/js/main.0ec5cdbf.js"
+    "static/css/main.314a345e.css",
+    "static/js/main.4395227c.js"
   ]
 }
