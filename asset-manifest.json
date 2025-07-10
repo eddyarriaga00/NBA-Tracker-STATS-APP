@@ -1,10 +1,10 @@
 {
   "files": {
-    "main.css": "/NBA-Tracker/static/css/main.314a345e.css",
-    "main.js": "/NBA-Tracker/static/js/main.4395227c.js",
-    "index.html": "/NBA-Tracker/index.html",
-    "main.314a345e.css.map": "/NBA-Tracker/static/css/main.314a345e.css.map",
-    "main.4395227c.js.map": "/NBA-Tracker/static/js/main.4395227c.js.map"
+    "main.css": "/NBA-Tracker-STATS-APP/static/css/main.314a345e.css",
+    "main.js": "/NBA-Tracker-STATS-APP/static/js/main.4395227c.js",
+    "index.html": "/NBA-Tracker-STATS-APP/index.html",
+    "main.314a345e.css.map": "/NBA-Tracker-STATS-APP/static/css/main.314a345e.css.map",
+    "main.4395227c.js.map": "/NBA-Tracker-STATS-APP/static/js/main.4395227c.js.map"
   },
   "entrypoints": [
     "static/css/main.314a345e.css",
