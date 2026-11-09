@@ -81,7 +81,7 @@ export function usePregame(g, on) {
       byTeam[t.teamId] = { ...byTeam[t.teamId], out, gtd };
     }
     for (const t of data.lastFive ?? []) {
-      byTeam[t.teamId] = { ...byTeam[t.teamId], form: t.games.map((x) => x.result).filter((r) => r === 'W' || r === 'L').slice(-5) }; // oldest → newest
+      byTeam[t.teamId] = { ...byTeam[t.teamId], form: t.games.filter((x) => x.result === 'W' || x.result === 'L').slice(-5).map((x) => ({ r: x.result, date: x.date, opp: x.opp, atVs: x.atVs, score: x.score })) }; // oldest → newest
     }
     return byTeam;
   }, [data]);

@@ -13,11 +13,23 @@ function Streak({ s }) {
   return <span className={`font-semibold ${s[0] === 'W' ? 'text-[#30a46c]' : s[0] === 'L' ? 'text-live' : ''}`}>{s}</span>;
 }
 
+const md = (d) => {
+  const x = new Date(d);
+  return Number.isNaN(x) ? '' : `${x.getMonth() + 1}/${x.getDate()}`;
+};
+
 function Form({ form }) {
   return (
-    <span className="inline-flex items-center gap-[3px]" title={`Last ${form.length}: ${form.join(' ')}`}>
-      {form.map((r, i) => (
-        <span key={i} className={`h-[7px] w-[7px] rounded-full ${r === 'W' ? 'bg-[#30a46c]' : 'border-[1.5px] border-live'}`} />
+    <span className="inline-flex items-start gap-[3px] pt-[4px]">
+      {form.map((f, i) => (
+        <span
+          key={i}
+          title={`${md(f.date)} ${f.r} ${f.atVs ?? ''} ${f.opp ?? ''} ${f.score ?? ''}`.replace(/\s+/g, ' ').trim()}
+          className="flex w-[24px] flex-col items-center gap-[2px]"
+        >
+          <span className={`h-[7px] w-[7px] rounded-full ${f.r === 'W' ? 'bg-[#30a46c]' : 'border-[1.5px] border-live'}`} />
+          <span className="text-[8.5px] leading-none text-label-3 num">{md(f.date)}</span>
+        </span>
       ))}
     </span>
   );
@@ -55,7 +67,7 @@ function TeamRow({ t, state, dim, hasBall, redZone, hide, extra }) {
           )}
         </div>
         {/* Records update after a game ends, so they'd spoil the result. */}
-        <div className="flex items-center gap-1.5 truncate text-[11px] text-label-2 num md:text-[12px]">
+        <div className={`flex gap-1.5 truncate text-[11px] text-label-2 num md:text-[12px] ${extra?.form?.length ? 'items-start' : 'items-center'}`}>
           {hide ? '\u00a0' : (
             <>
               <span>{t.record}</span>
