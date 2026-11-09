@@ -4,6 +4,7 @@ import { getGame } from '../api/espn';
 import Comments, { useCommentCounts } from '../components/Comments';
 import Preview from '../components/Preview';
 import WinProbability from '../components/WinProbability';
+import FootballField from '../components/FootballField';
 import { BackButton, Card, ErrorState, Headshot, LiveBadge, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
 import { visibleColor } from '../lib/color';
 import { useLeague } from '../lib/league';
@@ -20,8 +21,8 @@ function Hero({ g }) {
   const { status, home, away } = g;
   const final = status.state === 'post';
   const pre = status.state === 'pre';
-  const a = visibleColor(away.color, dark);
-  const h = visibleColor(home.color, dark);
+  const a = visibleColor(away.color, dark, away.alt);
+  const h = visibleColor(home.color, dark, home.alt);
 
   const Side = ({ t }) => (
     <Link
@@ -84,22 +85,60 @@ function Hero({ g }) {
   );
 }
 
+function Timeouts({ n }) {
+  if (n == null) return null;
+  return (
+    <span className="flex gap-1" aria-label={`${n} timeouts left`}>
+      {[0, 1, 2].map((i) => (
+        <span key={i} className={`h-1.5 w-3 rounded-full ${i < n ? 'bg-[#ffd60a]' : 'bg-fill-strong'}`} />
+      ))}
+    </span>
+  );
+}
+
 function Situation({ g }) {
   const s = g.situation;
-  if (g.status.state !== 'in' || !s || (!s.downDistance && !s.lastPlay)) return null;
+  if (g.status.state !== 'in' || !s || (!s.downDistance && !s.lastPlay && !s.spot)) return null;
   const team = s.possession === g.home.id ? g.home : s.possession === g.away.id ? g.away : null;
+  const nfl = g.league === 'nfl';
   return (
-    <Card className={`mt-3 px-4 py-3 ${s.redZone ? 'ring-2 ring-live/60' : ''}`}>
+    <Card className={`mt-3 overflow-hidden px-4 py-3 ${s.redZone ? 'ring-2 ring-live/60' : ''}`}>
       <div className="flex items-center gap-2.5">
         {team && <TeamLogo abbr={team.abbr} size={26} />}
         <div className="min-w-0 flex-1">
-          <div className="text-[15px] font-semibold">
-            {s.full || s.downDistance || <span className="text-[12px] uppercase tracking-wide text-label-2">Last play</span>}
-            {s.redZone && <span className="ml-2 rounded-full bg-live px-2 py-0.5 text-[11px] font-bold text-white">RED ZONE</span>}
+          <div className="flex flex-wrap items-center gap-x-2 text-[15px] font-semibold">
+            {team && <span>{team.abbr} ball</span>}
+            {s.full || s.downDistance ? (
+              <span className={team ? 'text-label-2' : ''}>{s.full || s.downDistance}</span>
+            ) : (
+              <span className="text-[12px] uppercase tracking-wide text-label-2">Last play</span>
+            )}
+            {s.redZone && <span className="rounded-full bg-live px-2 py-0.5 text-[11px] font-bold text-white">RED ZONE</span>}
           </div>
-          {s.lastPlay && <div className="mt-0.5 text-[13px] text-label-2">{s.lastPlay}</div>}
         </div>
       </div>
+      {nfl && (
+        <div className="mt-3">
+          <FootballField situation={s} home={g.home} away={g.away} size="lg" />
+        </div>
+      )}
+      {nfl && (s.driveSummary || s.homeTimeouts != null) && (
+        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 text-[12px] text-label-2">
+          {s.driveSummary && (
+            <span>
+              Drive: <span className="font-semibold text-label">{s.driveSummary}</span>
+              {s.driveStart && <> · started at {s.driveStart}</>}
+            </span>
+          )}
+          {s.homeTimeouts != null && (
+            <span className="flex items-center gap-3">
+              <span className="flex items-center gap-1.5">{g.away.abbr} <Timeouts n={s.awayTimeouts} /></span>
+              <span className="flex items-center gap-1.5">{g.home.abbr} <Timeouts n={s.homeTimeouts} /></span>
+            </span>
+          )}
+        </div>
+      )}
+      {s.lastPlay && <div className="mt-2 border-t border-sep pt-2 text-[13px] text-label-2">{s.lastPlay}</div>}
     </Card>
   );
 }

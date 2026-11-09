@@ -16,6 +16,7 @@ const Player = lazy(() => import('./pages/Player'));
 const Team = lazy(() => import('./pages/Team'));
 const Teams = lazy(() => import('./pages/Teams'));
 const Chat = lazy(() => import('./pages/Chat'));
+const DevField = import.meta.env.DEV ? lazy(() => import('./pages/DevField')) : null;
 
 // Only "nba" and "nfl" are valid league segments; anything else goes home.
 function LeagueGuard({ children }) {
@@ -40,6 +41,7 @@ createRoot(document.getElementById('root')).render(
           <Route element={<Shell />}>
             <Route index element={<Home />} />
             <Route path="chat" element={<Chat />} />
+            {import.meta.env.DEV && <Route path="dev/field" element={<DevField />} />}
             <Route path=":lg" element={guard(<Scores />)} />
             <Route path=":lg/game/:id" element={guard(<Keyed Page={Game} />)} />
             <Route path=":lg/standings" element={guard(<Standings />)} />

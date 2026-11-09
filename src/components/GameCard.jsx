@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Card, LiveBadge, TeamLogo } from './ui';
 import { Icon } from './icons';
+import FootballField from './FootballField';
 
 function TeamRow({ t, state, dim, hasBall, redZone }) {
   const showScore = state !== 'pre' && t.score != null;
@@ -100,6 +101,11 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
           <TeamRow t={away} state={status.state} dim={final && !away.winner} hasBall={poss && poss === away.id} redZone={situation?.redZone} />
           <TeamRow t={home} state={status.state} dim={final && !home.winner} hasBall={poss && poss === home.id} redZone={situation?.redZone} />
         </div>
+        {live && g.league === 'nfl' && situation && (
+          <div className="px-3.5 pb-2.5 md:px-4">
+            <FootballField situation={situation} home={home} away={away} size="sm" />
+          </div>
+        )}
         {footer && <div className="border-t border-sep px-3.5 py-2 text-[11.5px] text-label-2 md:px-4 md:py-2.5 md:text-[12px]">{footer}</div>}
       </Card>
     </Link>

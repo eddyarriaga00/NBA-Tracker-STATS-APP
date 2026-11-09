@@ -7,9 +7,15 @@ function lum(hex) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-export function visibleColor(hex, dark) {
-  const l = lum(hex || '#888888');
-  if (dark && l < 0.12) return '#8e8e93';
-  if (!dark && l > 0.85) return '#8e8e93';
-  return hex;
+/** Team color that shows up on the current background; falls back to the
+ *  team's secondary color, then to neutral gray. */
+export function visibleColor(hex, dark, alt) {
+  const ok = (c) => {
+    if (!c) return false;
+    const l = lum(c);
+    return dark ? l >= 0.12 : l <= 0.85;
+  };
+  if (ok(hex || '#888888')) return hex || '#888888';
+  if (ok(alt)) return alt;
+  return '#8e8e93';
 }

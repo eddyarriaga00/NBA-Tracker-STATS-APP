@@ -42,8 +42,8 @@ export default function WinProbability({ wp, home, away, live }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wp, w]);
 
-  const homeC = visibleColor(home.color, dark);
-  const awayC = visibleColor(away.color, dark);
+  const homeC = visibleColor(home.color, dark, home.alt);
+  const awayC = visibleColor(away.color, dark, away.alt);
   const last = wp.points.at(-1);
   const shown = hover ?? last;
   const homePct = shown.home;

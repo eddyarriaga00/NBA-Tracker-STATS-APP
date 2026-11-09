@@ -102,6 +102,7 @@ function normCompetitor(c) {
     location: t.location,
     full: t.displayName,
     color: hex(t.color),
+    alt: t.alternateColor ? hex(t.alternateColor) : null,
     score: c?.score != null && c.score !== '' ? Number(c.score?.value ?? c.score) : null,
     winner: !!c?.winner,
     record: totalRecord(c ?? {}),
@@ -129,12 +130,24 @@ function cardLeaders(lg, comp, away, home) {
 
 function normSituation(s) {
   if (!s) return null;
+  const drive = s.lastPlay?.drive;
   return {
     downDistance: s.shortDownDistanceText ?? '',
     full: s.downDistanceText ?? '',
     possession: s.possession ?? null,
     redZone: !!s.isRedZone,
     lastPlay: s.lastPlay?.text?.trim() ?? '',
+    // Field position, for the live field graphic.
+    spot: s.possessionText ?? '', // e.g. "TB 20" or "50"
+    yardLine: typeof s.yardLine === 'number' ? s.yardLine : null, // yards from the offense's own goal
+    down: s.down ?? null,
+    distance: s.distance ?? null,
+    goalToGo: /goal/i.test(s.downDistanceText ?? ''),
+    driveStart: drive?.start?.text ?? '',
+    driveStartYardLine: typeof drive?.start?.yardLine === 'number' ? drive.start.yardLine : null,
+    driveSummary: drive?.description ?? '',
+    homeTimeouts: s.homeTimeouts ?? null,
+    awayTimeouts: s.awayTimeouts ?? null,
   };
 }
 
