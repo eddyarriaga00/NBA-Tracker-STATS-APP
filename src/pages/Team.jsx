@@ -144,6 +144,11 @@ function Schedule({ t, lg }) {
 function Roster({ t, lg }) {
   return (
     <div className="space-y-4">
+      {t.pastRoster && (
+        <p className="px-1 text-[12.5px] text-label-2">
+          {t.groups.length ? `Everyone who played for the ${t.short} in ${t.season}.` : `ESPN doesn’t have player stats for the ${t.short} in ${t.season}.`}
+        </p>
+      )}
       {t.groups.map((g) => (
         <div key={g.title}>
           {t.groups.length > 1 && <SectionTitle className="!mt-0">{g.title}</SectionTitle>}
@@ -161,6 +166,7 @@ function Roster({ t, lg }) {
                   </div>
                 </div>
                 <BioButton lg={lg} id={p.id} />
+                {p.line && <div className="num shrink-0 text-right text-[12.5px] font-semibold text-label-2">{p.line}</div>}
                 <div className="hidden shrink-0 text-right text-[12px] text-label-2 sm:block">
                   <div>{p.height}{p.weight ? ` · ${p.weight}` : ''}</div>
                   <div>{p.age ? `Age ${p.age}` : ''}{p.exp != null ? ` · ${p.exp ? `${p.exp} yr${p.exp > 1 ? 's' : ''}` : 'Rookie'}` : ''}</div>
@@ -283,11 +289,6 @@ export default function Team() {
             {tab === 'stats' && <TeamStats lg={lg} id={id} season={season} />}
             {tab === 'roster' && (
               <>
-                {!t.isCurrent && (
-                  <p className="mb-3 px-1 text-[12px] text-label-2">
-                    Rosters are only available for the current season. Showing the {seasonLabel(lg, currentSeason(lg))} roster.
-                  </p>
-                )}
                 <Roster t={t} lg={lg} />
               </>
             )}

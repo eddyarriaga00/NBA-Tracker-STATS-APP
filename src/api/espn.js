@@ -1020,8 +1020,13 @@ export async function getTeam(lg, id, season, opts) {
   const cur = currentSeason(lg);
   const yr = season || cur;
   const sq = yr !== cur ? `season=${yr}&` : '';
+  // ESPN's roster feed is always today's roster, so past seasons use that
+  // season's player stats (everyone who played for the team that year).
+  const past = yr !== cur;
   const [rosterR, schedR, postR] = await Promise.allSettled([
-    get(`${site(lg)}/teams/${id}/roster`, o),
+    past
+      ? get(`https://site.web.api.espn.com/apis/site/v2/sports/${LEAGUES[lg].path}/teams/${id}/athletes/statistics?season=${yr}`, { ...o, ttl: 6 * 60 * 60_000, patient: true })
+      : get(`${site(lg)}/teams/${id}/roster`, o),
     get(`${site(lg)}/teams/${id}/schedule${sq ? `?${sq.slice(0, -1)}` : ''}`, o),
     get(`${site(lg)}/teams/${id}/schedule?${sq}seasontype=3`, o),
   ]);
@@ -1048,7 +1053,9 @@ export async function getTeam(lg, id, season, opts) {
     injury: a.injuries?.[0]?.status ?? '',
   });
   const raw = r.athletes ?? [];
-  const groups = raw.length && raw[0]?.items
+  const groups = past
+    ? pastRoster(lg, r)
+    : raw.length && raw[0]?.items
     ? raw.map((g) => ({
         title:
           {
@@ -1098,9 +1105,39 @@ export async function getTeam(lg, id, season, opts) {
     coach: r.coach?.[0] ? `${r.coach[0].firstName} ${r.coach[0].lastName}` : '',
     season: sch.requestedSeason?.displayName ?? seasonLabel(lg, yr),
     isCurrent: yr === cur,
+    pastRoster: past,
     groups,
     schedule,
   };
+}
+
+/** A past season's roster from its player stats, with each player's main number. */
+function pastRoster(lg, d) {
+  const cats = d.results ?? [];
+  const seen = new Set();
+  const player = (l, label) => {
+    const a = l.athlete ?? {};
+    if (!a.id || seen.has(a.id)) return null;
+    seen.add(a.id);
+    return { id: a.id, name: a.displayName, headshot: headshotOf(a), jersey: '', pos: a.position?.abbreviation ?? '', line: `${l.displayValue} ${label}` };
+  };
+  if (lg === 'nba') {
+    const c = cats[0];
+    const players = (c?.leaders ?? []).map((l) => player(l, 'PPG')).filter(Boolean);
+    return players.length ? [{ title: 'Roster', players }] : [];
+  }
+  const label = { passing: 'pass yds', rushing: 'rush yds', receiving: 'rec yds', defensive: 'tackles', kicking: 'FG', punting: 'punt yds', returning: 'ret yds', scoring: 'pts' };
+  const sections = [
+    ['Offense', ['passing', 'rushing', 'receiving']],
+    ['Defense', ['defensive']],
+    ['Special Teams', ['kicking', 'punting', 'returning']],
+  ];
+  return sections
+    .map(([title, names]) => ({
+      title,
+      players: names.flatMap((n) => (cats.find((c) => c.name === n)?.leaders ?? []).map((l) => player(l, label[n]))).filter(Boolean),
+    }))
+    .filter((g) => g.players.length);
 }
 
 /** All teams in a league, grouped by division, from the standings feed. */
