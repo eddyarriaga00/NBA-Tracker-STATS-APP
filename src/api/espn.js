@@ -191,6 +191,7 @@ function normGame(lg, e) {
     league: lg,
     date: e.date,
     status: normStatus(e.status ?? comp.status, e.date, e.timeValid),
+    timeValid: e.timeValid !== false,
     home: normCompetitor(home),
     away: normCompetitor(away),
     leaders: cardLeaders(lg, comp, away, home),

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, LiveBadge, TeamLogo } from './ui';
 import { Icon } from './icons';
@@ -41,6 +42,43 @@ function TeamRow({ t, state, dim, hasBall, redZone, hide }) {
         </div>
       )}
     </div>
+  );
+}
+
+// "in 2h 15m" next to the start time, for games later today.
+function useNow(ms) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), ms);
+    return () => clearInterval(id);
+  }, [ms]);
+  return now;
+}
+
+export function countdownText(start, now) {
+  const left = start - now;
+  if (left <= 60_000) return 'Starting soon';
+  const mins = Math.ceil(left / 60_000);
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h ? `in ${h}h${m ? ` ${m}m` : ''}` : `in ${m}m`;
+}
+
+function Countdown({ g }) {
+  const now = useNow(20_000);
+  const start = Date.parse(g.date);
+  if (!start || g.timeValid === false || g.status.postponed) return null;
+  if (new Date(start).toDateString() !== new Date(now).toDateString()) return null; // today only
+  if (start - now < -30 * 60_000) return null; // long overdue: the status will update soon
+  const soon = start - now <= 15 * 60_000;
+  return (
+    <span
+      className={`num shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+        soon ? 'bg-accent/15 text-accent' : 'bg-fill text-label-2'
+      }`}
+    >
+      {countdownText(start, now)}
+    </span>
   );
 }
 
@@ -113,8 +151,11 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
           {live ? (
             <LiveBadge label={status.label} />
           ) : (
-            <span className={`shrink-0 font-semibold ${final ? 'text-label' : 'text-label-2'}`}>
-              {status.postponed ? status.label || 'Postponed' : status.label}
+            <span className="flex shrink-0 items-center gap-2">
+              <span className={`shrink-0 font-semibold ${final ? 'text-label' : 'text-label-2'}`}>
+                {status.postponed ? status.label || 'Postponed' : status.label}
+              </span>
+              {status.state === 'pre' && <Countdown g={g} />}
             </span>
           )}
           <span className="flex min-w-0 items-center gap-2 text-label-2">
