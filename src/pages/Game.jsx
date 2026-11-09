@@ -3,6 +3,12 @@ import { Link, useParams } from 'react-router-dom';
 import { getGame } from '../api/espn';
 import Comments, { useCommentCounts } from '../components/Comments';
 import Preview from '../components/Preview';
+import Highlights from '../components/Highlights';
+import { HeatBadge } from '../components/GameCard';
+import { Icon } from '../components/icons';
+import { downloadICS, gameUrl } from '../lib/calendar';
+import { useSpoilers } from '../lib/settings';
+import { toast } from '../lib/toast';
 import WinProbability from '../components/WinProbability';
 import FootballField from '../components/FootballField';
 import { BackButton, Card, ErrorState, Headshot, LiveBadge, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
@@ -17,7 +23,7 @@ import { formatLine, sumLines } from '../lib/quarterStats';
 const periodName = (n) => (n <= 4 ? `Q${n}` : n === 5 ? 'OT' : `${n - 4}OT`);
 const titleCase = (s) => s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
 
-function Hero({ g }) {
+function Hero({ g, hide, onReveal }) {
   const { dark } = useTheme();
   const lg = useLeague();
   const { status, home, away } = g;
@@ -35,7 +41,7 @@ function Hero({ g }) {
       <TeamLogo abbr={t.abbr} size={48} className="drop-shadow-sm md:h-20 md:w-20" />
       <div className="text-center">
         <div className="text-[14px] font-semibold leading-tight md:text-[17px]">{t.name}</div>
-        <div className="num text-[12px] text-label-2">{t.record}</div>
+        <div className="num text-[12px] text-label-2">{hide ? '\u00a0' : t.record}</div>
       </div>
     </Link>
   );
@@ -69,6 +75,14 @@ function Hero({ g }) {
               <div className="text-[13px] text-label-2">
                 {new Date(g.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
               </div>
+            </>
+          ) : hide ? (
+            <>
+              <div className="text-[13px] font-semibold text-label-2">Score hidden</div>
+              <button onClick={onReveal} className="rounded-full bg-accent px-4 py-1.5 text-[14px] font-semibold text-white active:scale-95">
+                Reveal
+              </button>
+              {status.state === 'in' ? <LiveBadge label={status.label} /> : <span className="text-[12px] text-label-2">{status.state === 'post' ? 'Final' : status.label}</span>}
             </>
           ) : (
             <>
@@ -572,15 +586,68 @@ function GameInfo({ g }) {
   );
 }
 
+function Actions({ g }) {
+  const share = async () => {
+    const url = gameUrl(g.league, g.id);
+    const title = `${g.away.name} at ${g.home.name}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      toast({ title: 'Link copied', body: 'Send it to your friends.', ms: 2500 });
+    } catch (e) {
+      if (e?.name !== 'AbortError') toast({ title: "Couldn't share", body: url, ms: 5000 });
+    }
+  };
+  const addToCalendar = () => {
+    downloadICS(
+      [{ id: g.id, league: g.league, date: g.date, title: `${g.away.name} at ${g.home.name}${g.broadcast ? ` (${g.broadcast})` : ''}`, location: [g.venue, g.city].filter(Boolean).join(', '), url: gameUrl(g.league, g.id) }],
+      `${g.away.abbr}-at-${g.home.abbr}`,
+      'NBA Tracker'
+    );
+  };
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      <HeatBadge g={g} />
+      <span className="flex-1" />
+      {g.status.state === 'pre' && g.timeValid && !g.status.postponed && (
+        <button onClick={addToCalendar} className="flex items-center gap-1.5 rounded-full bg-fill px-3 py-1.5 text-[13px] font-semibold text-accent active:scale-95">
+          <Icon.CalendarPlus className="h-4 w-4" /> Add to Calendar
+        </button>
+      )}
+      <button onClick={share} className="flex items-center gap-1.5 rounded-full bg-fill px-3 py-1.5 text-[13px] font-semibold text-accent active:scale-95">
+        <Icon.Share className="h-4 w-4" /> Share
+      </button>
+    </div>
+  );
+}
+
+function HiddenNotice({ onReveal }) {
+  return (
+    <Card className="mt-6 px-5 py-8 text-center">
+      <div className="text-[16px] font-semibold">Spoiler-free mode is on</div>
+      <p className="mx-auto mt-1 max-w-xs text-[13px] text-label-2">Box score, plays, highlights, and comments are hidden so you don’t see the result.</p>
+      <button onClick={onReveal} className="mt-4 rounded-full bg-accent px-5 py-2 text-[14px] font-semibold text-white active:scale-95">
+        Reveal everything
+      </button>
+    </Card>
+  );
+}
+
 export default function Game() {
   const { id } = useParams();
   const lg = useLeague();
   const [tab, setTab] = useState('box');
   const room = `${lg}:game:${id}`;
   const counts = useCommentCounts([room]);
+  const spoilers = useSpoilers();
   const { data: g, error, loading, reload, updatedAt } = useData((fresh) => getGame(lg, id, { fresh }), [lg, id], {
     pollMs: gameDelay,
   });
+  const hide = g ? spoilers.hidden(g) : false;
+  const reveal = () => g && spoilers.reveal(g);
 
   const comments = (
     <>
@@ -595,7 +662,7 @@ export default function Game() {
     <div>
       <div className="flex items-start justify-between">
         <BackButton label="Scores" fallback={`/${lg}`} />
-        {g?.status.state === 'in' && <Freshness updatedAt={updatedAt} error={error} className="mt-1" />}
+        {g?.status.state === 'in' && !hide && <Freshness updatedAt={updatedAt} error={error} className="mt-1" />}
       </div>
 
       {loading && !g ? (
@@ -608,41 +675,53 @@ export default function Game() {
         <ErrorState error={error} onRetry={reload} />
       ) : (
         <div className="rise">
-          <Hero g={g} />
-          <Situation g={g} />
-          <Linescore g={g} />
-          {g.status.state !== 'pre' && g.winProb && (
-            <WinProbability wp={g.winProb} home={g.home} away={g.away} live={g.status.state === 'in'} />
-          )}
-          {g.status.state === 'pre' && <Preview g={g} />}
-
-          {g.status.state !== 'pre' && (
+          <Hero g={g} hide={hide} onReveal={reveal} />
+          <Actions g={g} />
+          {hide ? (
             <>
-              <Segmented
-                className="mt-6"
-                value={tab}
-                onChange={setTab}
-                options={[
-                  { value: 'box', label: 'Box Score' },
-                  { value: 'team', label: 'Team Stats' },
-                  { value: 'plays', label: lg === 'nfl' ? 'Drives' : 'Plays' },
-                ]}
-              />
-              <div className="mt-3">
-                {tab === 'box' && <BoxScore g={g} />}
-                {tab === 'team' && <TeamStats g={g} />}
-                {tab === 'plays' && (lg === 'nfl' ? <Drives g={g} /> : <Plays g={g} />)}
+              <HiddenNotice onReveal={reveal} />
+              <GameInfo g={g} />
+            </>
+          ) : (
+            <>
+              <Situation g={g} />
+              <Linescore g={g} />
+              {g.status.state !== 'pre' && g.winProb && (
+                <WinProbability wp={g.winProb} home={g.home} away={g.away} live={g.status.state === 'in'} />
+              )}
+              {g.status.state === 'pre' && <Preview g={g} />}
+
+              {g.status.state !== 'pre' && (
+                <>
+                  <Segmented
+                    className="mt-6"
+                    value={tab}
+                    onChange={setTab}
+                    options={[
+                      { value: 'box', label: 'Box Score' },
+                      { value: 'team', label: 'Team Stats' },
+                      { value: 'plays', label: lg === 'nfl' ? 'Drives' : 'Plays' },
+                    ]}
+                  />
+                  <div className="mt-3">
+                    {tab === 'box' && <BoxScore g={g} />}
+                    {tab === 'team' && <TeamStats g={g} />}
+                    {tab === 'plays' && (lg === 'nfl' ? <Drives g={g} /> : <Plays g={g} />)}
+                  </div>
+                </>
+              )}
+
+              <Highlights videos={g.videos} />
+
+              <div className="grid grid-cols-1 gap-x-4 md:grid-cols-2">
+                <div>{comments}</div>
+                <div>
+                  <GameLeaders g={g} />
+                  <GameInfo g={g} />
+                </div>
               </div>
             </>
           )}
-
-          <div className="grid grid-cols-1 gap-x-4 md:grid-cols-2">
-            <div>{comments}</div>
-            <div>
-              <GameLeaders g={g} />
-              <GameInfo g={g} />
-            </div>
-          </div>
         </div>
       )}
     </div>

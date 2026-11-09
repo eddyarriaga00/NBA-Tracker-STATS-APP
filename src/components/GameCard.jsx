@@ -2,9 +2,11 @@ import { Link } from 'react-router-dom';
 import { Card, LiveBadge, TeamLogo } from './ui';
 import { Icon } from './icons';
 import FootballField from './FootballField';
+import { gameHeat } from '../lib/excitement';
+import { useSpoilers } from '../lib/settings';
 
-function TeamRow({ t, state, dim, hasBall, redZone }) {
-  const showScore = state !== 'pre' && t.score != null;
+function TeamRow({ t, state, dim, hasBall, redZone, hide }) {
+  const showScore = state !== 'pre' && t.score != null && !hide;
   return (
     <div className="flex items-center gap-3">
       <TeamLogo abbr={t.abbr} size={26} className="md:h-[30px] md:w-[30px]" />
@@ -18,7 +20,8 @@ function TeamRow({ t, state, dim, hasBall, redZone }) {
             />
           )}
         </div>
-        <div className="text-[11px] text-label-2 num md:text-[12px]">{t.record}</div>
+        {/* Records update after a game ends, so they'd spoil the result. */}
+        <div className="text-[11px] text-label-2 num md:text-[12px]">{hide ? '\u00a0' : t.record}</div>
       </div>
       {showScore && (
         <div className="flex items-center gap-1.5">
@@ -41,14 +44,43 @@ function TeamRow({ t, state, dim, hasBall, redZone }) {
   );
 }
 
+export function HeatBadge({ g }) {
+  const heat = gameHeat(g);
+  if (!heat) return null;
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
+        heat.hot ? 'bg-[#ff9f0a]/15 text-[#c26a00] dark:text-[#ffb340]' : 'bg-fill text-label-2'
+      }`}
+    >
+      {heat.hot && <span aria-hidden>🔥</span>}
+      {heat.label}
+    </span>
+  );
+}
+
 export default function GameCard({ g, index = 0, comments = 0, favorite = false }) {
   const { status, home, away, situation } = g;
-  const final = status.state === 'post';
+  const spoilers = useSpoilers();
+  const hide = spoilers.hidden(g);
+  const final = status.state === 'post' && !hide;
   const live = status.state === 'in';
-  const poss = live ? situation?.possession : null;
+  const poss = live && !hide ? situation?.possession : null;
 
   let footer = null;
-  if (live && situation?.downDistance) {
+  if (hide) {
+    footer = (
+      <span className="flex items-center justify-between gap-2">
+        <span>Score hidden</span>
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); spoilers.reveal(g); }}
+          className="rounded-full bg-fill px-2.5 py-0.5 text-[12px] font-semibold text-accent active:scale-95"
+        >
+          Reveal
+        </button>
+      </span>
+    );
+  } else if (live && situation?.downDistance) {
     const team = poss === home.id ? home.abbr : poss === away.id ? away.abbr : '';
     footer = (
       <span className={situation.redZone ? 'font-semibold text-live' : ''}>
@@ -86,6 +118,7 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
             </span>
           )}
           <span className="flex min-w-0 items-center gap-2 text-label-2">
+            <HeatBadge g={g} />
             {favorite && <Icon.Star filled className="h-3.5 w-3.5 shrink-0 text-[#ff9f0a]" />}
             <span className="truncate">{g.broadcast}</span>
             {comments > 0 && (
@@ -98,10 +131,10 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
         </div>
         {g.note && <div className="truncate px-4 pt-1 text-[12px] font-medium text-accent">{g.note}</div>}
         <div className="space-y-2 px-3.5 pb-3 pt-2.5 md:space-y-3 md:px-4 md:pb-3.5 md:pt-3">
-          <TeamRow t={away} state={status.state} dim={final && !away.winner} hasBall={poss && poss === away.id} redZone={situation?.redZone} />
-          <TeamRow t={home} state={status.state} dim={final && !home.winner} hasBall={poss && poss === home.id} redZone={situation?.redZone} />
+          <TeamRow t={away} state={status.state} dim={final && !away.winner} hasBall={poss && poss === away.id} redZone={situation?.redZone} hide={hide} />
+          <TeamRow t={home} state={status.state} dim={final && !home.winner} hasBall={poss && poss === home.id} redZone={situation?.redZone} hide={hide} />
         </div>
-        {live && g.league === 'nfl' && situation && (
+        {live && !hide && g.league === 'nfl' && situation && (
           <div className="px-3.5 pb-2.5 md:px-4">
             <FootballField situation={situation} home={home} away={away} size="sm" />
           </div>

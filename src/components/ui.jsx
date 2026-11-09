@@ -4,7 +4,7 @@ import { logoUrl } from '../api/espn';
 import { useLeague } from '../lib/league';
 import { useTheme } from '../lib/theme';
 
-export function TeamLogo({ abbr, size = 32, className = '', league }) {
+export function TeamLogo({ abbr, size = 32, className = '', league, eager = false }) {
   const { dark } = useTheme();
   const ctx = useLeague();
   const [failed, setFailed] = useState(0); // 0 ok, 1 dark variant failed, 2 both failed
@@ -27,7 +27,7 @@ export function TeamLogo({ abbr, size = 32, className = '', league }) {
       alt=""
       width={size}
       height={size}
-      loading="lazy"
+      loading={eager ? 'eager' : 'lazy'}
       onError={() => setFailed((f) => (dark && f === 0 ? 1 : 2))}
       className={`h-[var(--s)] w-[var(--s)] shrink-0 object-contain ${className}`}
       style={{ '--s': `${size}px` }}

@@ -3,10 +3,13 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { LEAGUES } from '../api/espn';
 import { LeagueCtx, leagueFromPath, rememberLeague } from '../lib/league';
 import { useTheme } from '../lib/theme';
+import { useSetting } from '../lib/settings';
 import { Icon } from './icons';
 import ErrorBoundary from './ErrorBoundary';
 import { BioProvider } from './BioSheet';
 import Search from './Search';
+import Toaster from './Toaster';
+import { useGameAlerts } from '../lib/alerts';
 
 const THEMES = [
   { value: 'system', label: 'System', icon: Icon.Auto },
@@ -14,11 +17,32 @@ const THEMES = [
   { value: 'dark', label: 'Dark', icon: Icon.Moon },
 ];
 
-function ThemeMenu() {
+function Toggle({ on, onChange, label, sub }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={on}
+      onClick={() => onChange(!on)}
+      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-fill"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px]">{label}</span>
+        {sub && <span className="block text-[11.5px] leading-snug text-label-2">{sub}</span>}
+      </span>
+      <span className={`relative h-[22px] w-[38px] shrink-0 rounded-full transition-colors ${on ? 'bg-win' : 'bg-fill-strong'}`}>
+        <span className={`absolute top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow transition-transform ${on ? 'translate-x-[18px]' : 'translate-x-[2px]'}`} />
+      </span>
+    </button>
+  );
+}
+
+function SettingsMenu() {
   const { pref, setPref } = useTheme();
+  const [spoilerFree, setSpoilerFree] = useSetting('spoilerFree');
+  const [alertsFollowed, setAlertsFollowed] = useSetting('alertsFollowed');
+  const [alertsClose, setAlertsClose] = useSetting('alertsClose');
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-  const Current = THEMES.find((t) => t.value === pref)?.icon ?? Icon.Auto;
 
   useEffect(() => {
     if (!open) return;
@@ -32,23 +56,30 @@ function ThemeMenu() {
     };
   }, [open]);
 
+  // Turning on alerts asks for notification permission (falls back to in-app banners).
+  const enableAlerts = (setter) => (v) => {
+    setter(v);
+    if (v && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+  };
+
   return (
     <div ref={ref} className="relative">
       <button
-        aria-label="Appearance"
+        aria-label="Settings"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="grid h-9 w-9 place-items-center rounded-full text-label-2 transition hover:bg-fill hover:text-label active:scale-95"
+        className="relative grid h-9 w-9 place-items-center rounded-full text-label-2 transition hover:bg-fill hover:text-label active:scale-95"
       >
-        <Current className="h-[20px] w-[20px]" />
+        <Icon.Gear className="h-[20px] w-[20px]" />
+        {spoilerFree && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent" aria-hidden />}
       </button>
       {open && (
-        <div className="rise absolute right-0 top-11 z-50 w-48 overflow-hidden rounded-xl border border-sep bg-card/95 p-1 shadow-[0_12px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+        <div className="rise absolute right-0 top-11 z-50 max-h-[80dvh] w-72 overflow-y-auto rounded-xl border border-sep bg-card/95 p-1 shadow-[0_12px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
           <div className="px-3 pb-1 pt-2 text-[12px] font-medium text-label-2">Appearance</div>
           {THEMES.map((t) => (
             <button
               key={t.value}
-              onClick={() => { setPref(t.value); setOpen(false); }}
+              onClick={() => setPref(t.value)}
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-[15px] hover:bg-fill"
             >
               <t.icon className="h-[18px] w-[18px] text-label-2" />
@@ -56,6 +87,15 @@ function ThemeMenu() {
               {pref === t.value && <Icon.Check className="h-4 w-4 text-accent" />}
             </button>
           ))}
+          <div className="my-1 h-px bg-sep" />
+          <Toggle on={spoilerFree} onChange={setSpoilerFree} label="Spoiler-free" sub="Hide scores until you tap Reveal" />
+          <div className="my-1 h-px bg-sep" />
+          <div className="px-3 pb-1 pt-1 text-[12px] font-medium text-label-2">Alerts</div>
+          <Toggle on={alertsFollowed} onChange={enableAlerts(setAlertsFollowed)} label="Followed teams" sub="Start and final of your teams’ games" />
+          <Toggle on={alertsClose} onChange={enableAlerts(setAlertsClose)} label="Close games" sub="Any game that’s close late" />
+          <p className="px-3 pb-2 pt-1 text-[11px] leading-snug text-label-3">
+            Alerts work while the app is open. Allow notifications to get them when it’s in the background.
+          </p>
         </div>
       )}
     </div>
@@ -101,6 +141,7 @@ export default function Shell() {
   const { pathname } = useLocation();
   const league = leagueFromPath(pathname);
   const [searchOpen, setSearchOpen] = useState(false);
+  useGameAlerts(); // follows your teams and close games while the app is open
   const closeSearch = useCallback(() => setSearchOpen(false), []);
 
   useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
@@ -154,7 +195,7 @@ export default function Shell() {
               >
                 <Icon.Search className="h-[20px] w-[20px]" />
               </button>
-              <ThemeMenu />
+              <SettingsMenu />
             </div>
           </div>
         </header>
@@ -185,6 +226,7 @@ export default function Shell() {
         </nav>
 
         <Search open={searchOpen} onClose={closeSearch} league={league} />
+        <Toaster />
       </div>
       </BioProvider>
     </LeagueCtx.Provider>

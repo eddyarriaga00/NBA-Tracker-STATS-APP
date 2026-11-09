@@ -4,6 +4,7 @@ import { currentSeason, getStandings, seasonLabel, seasonOptions } from '../api/
 import { Card, ErrorState, PageTitle, SeasonPicker, Segmented, Skeleton, TeamLogo } from '../components/ui';
 import { useLeague } from '../lib/league';
 import { useData } from '../lib/useData';
+import Bracket from '../components/Bracket';
 
 function usePref(key, initial) {
   const [v, setV] = useState(() => {
@@ -108,7 +109,9 @@ function Table({ teams, dividers = {}, showSeed = true, title }) {
 export default function Standings() {
   const lg = useLeague();
   const [conf, setConf] = usePref(`conf:${lg}`, lg === 'nfl' ? 'American' : 'East');
-  const [view, setView] = usePref('nflStandingsView', 'division');
+  const [rawView, setView] = usePref(`standingsView:${lg}`, lg === 'nfl' ? 'division' : 'table');
+  const valid = lg === 'nfl' ? ['division', 'playoff', 'bracket'] : ['table', 'bracket'];
+  const view = valid.includes(rawView) ? rawView : valid[0];
   const [pickedSeason, setSeason] = useState(null);
   const season = pickedSeason && seasonOptions(lg).some((o) => o.value === pickedSeason) ? pickedSeason : currentSeason(lg);
   const { data, error, loading, reload } = useData((fresh) => getStandings(lg, season, { fresh }), [lg, season]);
@@ -128,21 +131,25 @@ export default function Standings() {
         Standings
       </PageTitle>
       <div className="mb-4 flex flex-wrap gap-2">
-        <Segmented className="w-full md:w-72" value={conf} onChange={setConf} options={confOptions} />
-        {lg === 'nfl' && (
-          <Segmented
-            className="w-full md:w-72"
-            value={view}
-            onChange={setView}
-            options={[{ value: 'division', label: 'Divisions' }, { value: 'playoff', label: 'Playoff Picture' }]}
-          />
-        )}
+        {view !== 'bracket' && <Segmented className="w-full md:w-72" value={conf} onChange={setConf} options={confOptions} />}
+        <Segmented
+          className="w-full md:w-96"
+          value={view}
+          onChange={setView}
+          options={
+            lg === 'nfl'
+              ? [{ value: 'division', label: 'Divisions' }, { value: 'playoff', label: 'Playoff Picture' }, { value: 'bracket', label: 'Bracket' }]
+              : [{ value: 'table', label: 'Standings' }, { value: 'bracket', label: 'Bracket' }]
+          }
+        />
       </div>
 
       {loading && !data ? (
         <Skeleton className="h-[640px] !rounded-2xl" />
       ) : error && !data ? (
         <ErrorState error={error} onRetry={reload} />
+      ) : view === 'bracket' ? (
+        <Bracket key={`${lg}:${season}`} confs={data} season={season} />
       ) : lg === 'nfl' && view === 'division' ? (
         <div key={conf} className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {current?.divisions.map((d) => <Table key={d.name} title={d.name} teams={d.teams} />)}
@@ -159,11 +166,11 @@ export default function Standings() {
           />
         </div>
       )}
-      <p className="mt-3 px-1 text-[12px] text-label-2">
+      {view !== 'bracket' && <p className="mt-3 px-1 text-[12px] text-label-2">
         {lg === 'nfl'
           ? 'Seeds 1–4 are division winners, 5–7 are wild cards. Seed 1 gets a first-round bye.'
           : 'Seeds 1–6 make the playoffs. Seeds 7–10 play in the Play-In Tournament.'}
-      </p>
+      </p>}
     </div>
   );
 }

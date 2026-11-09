@@ -7,6 +7,12 @@ import { useFavorites } from '../lib/favorites';
 import { useLeague } from '../lib/league';
 import { Icon } from '../components/icons';
 import { BioButton } from '../components/BioSheet';
+import { downloadICS, gameUrl } from '../lib/calendar';
+import { useSetting } from '../lib/settings';
+
+// Spoiler-free mode hides results from the last two days.
+const RECENT_MS = 48 * 60 * 60 * 1000;
+const isRecent = (e) => Date.now() - new Date(e.date).getTime() < RECENT_MS;
 import { useTheme } from '../lib/theme';
 import { useData } from '../lib/useData';
 
@@ -15,6 +21,8 @@ const fmtTime = (d) => new Date(d).toLocaleTimeString([], { hour: 'numeric', min
 
 function GameRow({ e, lg }) {
   const done = e.state === 'post';
+  const [spoilerFree] = useSetting('spoilerFree');
+  const hide = spoilerFree && e.state !== 'pre' && isRecent(e);
   return (
     <Link to={`/${lg}/game/${e.id}`} className="flex items-center gap-3 px-4 py-2.5 transition hover:bg-fill/40">
       <div className="w-[80px] shrink-0 md:w-[88px]">
@@ -26,7 +34,9 @@ function GameRow({ e, lg }) {
       <span className="w-5 shrink-0 text-center text-[12px] text-label-2">{e.home ? 'vs' : '@'}</span>
       <TeamLogo abbr={e.opp.abbr} size={26} />
       <span className="min-w-0 flex-1 truncate text-[14px] font-semibold md:text-[15px]">{e.opp.name}</span>
-      {done ? (
+      {hide ? (
+        <span className="shrink-0 text-[13px] text-label-2">{done ? 'Final · hidden' : 'Live · hidden'}</span>
+      ) : done ? (
         <span className="num shrink-0 text-[14px]">
           <span className={`mr-1.5 font-bold ${e.win ? 'text-win' : 'text-live'}`}>{e.win ? 'W' : 'L'}</span>
           {e.us}–{e.them}
@@ -77,6 +87,20 @@ function TeamStats({ lg, id, season }) {
 
 function Schedule({ t, lg }) {
   const [showAll, setShowAll] = useState(false);
+  const exportUpcoming = () =>
+    downloadICS(
+      t.schedule
+        .filter((e) => e.state === 'pre')
+        .map((e) => ({
+          id: e.id,
+          league: lg,
+          date: e.date,
+          title: `${e.home ? `${e.opp.name} at ${t.short}` : `${t.short} at ${e.opp.name}`}${e.broadcast ? ` (${e.broadcast})` : ''}`,
+          url: gameUrl(lg, e.id),
+        })),
+      `${t.abbr}-schedule`,
+      `${t.name} schedule`
+    );
   const played = t.schedule.filter((e) => e.state === 'post');
   const upcoming = t.schedule.filter((e) => e.state !== 'post');
   const shownUpcoming = showAll ? upcoming : upcoming.slice(0, 8);
@@ -84,7 +108,16 @@ function Schedule({ t, lg }) {
     <div className="space-y-5">
       {upcoming.length > 0 && (
         <div>
-          <SectionTitle className="!mt-0">Upcoming</SectionTitle>
+          <SectionTitle
+            className="!mt-0"
+            right={
+              <button onClick={exportUpcoming} className="flex items-center gap-1 text-[13px] font-semibold text-accent">
+                <Icon.CalendarPlus className="h-4 w-4" /> Add all to Calendar
+              </button>
+            }
+          >
+            Upcoming
+          </SectionTitle>
           <Card className="divide-y divide-sep">
             {shownUpcoming.map((e) => <GameRow key={e.id} e={e} lg={lg} />)}
           </Card>
@@ -146,6 +179,7 @@ export default function Team() {
   const lg = useLeague();
   const { dark } = useTheme();
   const [tab, setTab] = useState('schedule');
+  const [spoilerFree] = useSetting('spoilerFree');
   const { isFav, toggle } = useFavorites();
   const [pickedSeason, setSeason] = useState(null);
   const season = pickedSeason && seasonOptions(lg).some((o) => o.value === pickedSeason) ? pickedSeason : currentSeason(lg);
@@ -215,16 +249,19 @@ export default function Team() {
               <Card className="px-4 py-3">
                 <div className="text-[12px] font-semibold uppercase tracking-wide text-label-2">Last {form.length}</div>
                 <div className="mt-2 flex gap-1.5">
-                  {form.map((e) => (
-                    <Link
-                      key={e.id}
-                      to={`/${lg}/game/${e.id}`}
-                      title={`${e.home ? 'vs' : '@'} ${e.opp.abbr} ${e.us}-${e.them}`}
-                      className={`grid h-9 flex-1 place-items-center rounded-lg text-[14px] font-bold text-white ${e.win ? 'bg-win' : 'bg-live'}`}
-                    >
-                      {e.win ? 'W' : 'L'}
-                    </Link>
-                  ))}
+                  {form.map((e) => {
+                    const hidden = spoilerFree && isRecent(e);
+                    return (
+                      <Link
+                        key={e.id}
+                        to={`/${lg}/game/${e.id}`}
+                        title={hidden ? 'Hidden (spoiler-free)' : `${e.home ? 'vs' : '@'} ${e.opp.abbr} ${e.us}-${e.them}`}
+                        className={`grid h-9 flex-1 place-items-center rounded-lg text-[14px] font-bold text-white ${hidden ? 'bg-label-3' : e.win ? 'bg-win' : 'bg-live'}`}
+                      >
+                        {hidden ? '?' : e.win ? 'W' : 'L'}
+                      </Link>
+                    );
+                  })}
                 </div>
               </Card>
             )}

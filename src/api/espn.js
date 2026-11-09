@@ -471,6 +471,16 @@ export async function getGame(lg, id, opts) {
     league: lg,
     quarters,
     preview: normPreview(lg, s, away, home),
+    videos: (s.videos ?? [])
+      .map((v) => ({
+        id: String(v.id ?? v.links?.web?.href ?? ''),
+        title: v.headline ?? '',
+        duration: v.duration ?? 0,
+        thumb: v.thumbnail ?? '',
+        src: v.links?.source?.HD?.href ?? v.links?.source?.full?.href ?? v.links?.source?.href ?? '',
+        web: v.links?.web?.href ?? '',
+      }))
+      .filter((v) => v.src || v.web),
     winProb: normWinProb(lg, s),
     date: comp.date,
     status: normStatus(comp.status, comp.date, comp.timeValid ?? s.header?.timeValid),
