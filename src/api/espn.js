@@ -905,7 +905,14 @@ export async function getPlayer(lg, id, opts) {
     published: n.published,
   }));
 
-  return { league: lg, bio, splits, gamelog, career: careerStats, news };
+  const awards = (ov.awards ?? []).map((x) => ({
+    id: x.id,
+    name: x.name,
+    count: x.displayCount ?? '',
+    seasons: (x.seasons ?? []).map(Number).filter(Boolean),
+  }));
+
+  return { league: lg, bio, splits, gamelog, career: careerStats, news, awards };
 }
 
 // ---------- Teams ----------
@@ -1130,4 +1137,126 @@ function normGamelog(log) {
 export async function getGamelog(lg, id, season, opts) {
   const d = await get(`${web(lg)}/athletes/${id}/gamelog${season ? `?season=${season}` : ''}`, { ttl: 5 * 60_000, ...opts });
   return normGamelog(d);
+}
+
+
+// ---------- Awards & contracts (ESPN core API) ----------
+
+const CORE = (lg) => `https://sports.core.api.espn.com/v2/sports/${LEAGUES[lg].path.replace('/', '/leagues/')}`;
+// The core API hands out http:// links; secure pages can only load https://.
+const secure = (ref) => String(ref ?? '').replace(/^http:\/\//, 'https://');
+const refId = (ref, kind) => String(ref ?? '').match(new RegExp(`/${kind}/(\\d+)`))?.[1];
+
+/** Run async jobs with limited concurrency (be gentle on phones and on ESPN). */
+async function pool(items, size, fn) {
+  const out = new Array(items.length);
+  let i = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(size, items.length) }, async () => {
+      while (i < items.length) {
+        const k = i++;
+        try { out[k] = await fn(items[k], k); } catch { out[k] = null; }
+      }
+    })
+  );
+  return out;
+}
+
+// Display order for award cards; anything else follows.
+const AWARD_ORDER = {
+  nba: ['33', '43', '39', '35', '40', '36', '297', '53', '377', '218', '217', '77', '44', '45', '46', '49', '50', '47', '48', '378'],
+  nfl: ['477', '317', '478', '479', '480', '481', '483', '482', '484'],
+};
+
+async function teamAbbrMap(lg) {
+  try {
+    const confs = await getTeams(lg);
+    return Object.fromEntries(confs.flatMap((c) => c.divisions.flatMap((d) => d.teams.map((t) => [t.id, t.abbr]))));
+  } catch {
+    return {};
+  }
+}
+
+/** Awards for a season; returns null when that season has none yet. */
+export async function getAwards(lg, season, opts) {
+  const o = { ttl: 6 * 60 * 60_000, ...opts };
+  const list = await get(`${CORE(lg)}/seasons/${season}/awards?limit=50`, o);
+  const refs = (list.items ?? []).map((x) => secure(x.$ref));
+  if (!refs.length) return null;
+  const [awards, abbr] = await Promise.all([pool(refs, 8, (u) => get(u, o)), teamAbbrMap(lg)]);
+
+  const winnersToFetch = [];
+  for (const a of awards) for (const w of a?.winners ?? []) if (w.athlete?.$ref) winnersToFetch.push(secure(w.athlete.$ref));
+  const people = {};
+  await pool([...new Set(winnersToFetch)], 10, async (u) => {
+    people[u] = await get(u, o);
+  });
+
+  const order = AWARD_ORDER[lg];
+  const rank = (id) => (order.indexOf(String(id)) + 1 || 999);
+  return awards
+    .filter(Boolean)
+    .map((a) => ({
+      id: String(a.id),
+      name: a.name,
+      description: a.description ?? '',
+      team: (a.winners ?? []).length > 1,
+      winners: (a.winners ?? []).map((w) => {
+        const p = people[secure(w.athlete?.$ref)] ?? {};
+        const pid = refId(w.athlete?.$ref, 'athletes');
+        const tid = refId(w.team?.$ref, 'teams');
+        return {
+          id: pid,
+          name: p.displayName ?? p.fullName ?? [p.firstName, p.lastName].filter(Boolean).join(' '),
+          headshot: p.headshot?.href ?? (pid ? `https://a.espncdn.com/i/headshots/${lg}/players/full/${pid}.png` : ''),
+          pos: p.position?.abbreviation ?? '',
+          isCoach: /coach/i.test(a.name ?? ''), // coaches have no player page or contract
+          teamId: tid,
+          teamAbbr: abbr[tid] ?? '',
+        };
+      }),
+    }))
+    .filter((a) => a.winners.length)
+    .sort((x, y) => rank(x.id) - rank(y.id));
+}
+
+/** Most recent season (current or one of the last few) that has awards. */
+export async function getLatestAwards(lg, opts) {
+  const cur = currentSeason(lg);
+  for (const yr of [cur, cur - 1, cur - 2]) {
+    try {
+      const a = await getAwards(lg, yr, opts);
+      if (a?.length) return { season: yr, awards: a };
+    } catch { /* try an earlier season */ }
+  }
+  return { season: cur - 1, awards: [] };
+}
+
+/** Salary history and current contract details. */
+export async function getContracts(lg, id, opts) {
+  const o = { ttl: 6 * 60 * 60_000, ...opts };
+  const list = await get(`${CORE(lg)}/athletes/${id}/contracts?limit=40`, o);
+  const refs = (list.items ?? []).map((x) => secure(x.$ref));
+  const [rows, abbr] = await Promise.all([pool(refs, 8, (u) => get(u, o)), teamAbbrMap(lg)]);
+  const seasons = rows
+    .filter(Boolean)
+    .map((c) => {
+      const season = Number(refId(c.season?.$ref, 'seasons'));
+      const tid = refId(c.team?.$ref, 'teams');
+      return {
+        season,
+        salary: typeof c.salary === 'number' ? c.salary : null,
+        bonus: typeof c.bonus === 'number' ? c.bonus : null,
+        remaining: typeof c.salaryRemaining === 'number' ? c.salaryRemaining : null,
+        yearsRemaining: typeof c.yearsRemaining === 'number' ? c.yearsRemaining : null,
+        signedThrough: c.signedThrough ?? null,
+        active: !!c.active,
+        teamId: tid,
+        teamAbbr: abbr[tid] ?? '',
+      };
+    })
+    .filter((c) => c.season)
+    .sort((a, b) => b.season - a.season);
+  const current = seasons.find((c) => c.active) ?? seasons[0] ?? null;
+  return { current, seasons };
 }

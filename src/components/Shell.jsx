@@ -5,6 +5,7 @@ import { LeagueCtx, leagueFromPath, rememberLeague } from '../lib/league';
 import { useTheme } from '../lib/theme';
 import { Icon } from './icons';
 import ErrorBoundary from './ErrorBoundary';
+import { BioProvider } from './BioSheet';
 import Search from './Search';
 
 const THEMES = [
@@ -124,6 +125,7 @@ export default function Shell() {
 
   return (
     <LeagueCtx.Provider value={league}>
+      <BioProvider>
       <div className="min-h-dvh">
         <header className="sticky top-0 z-40 border-b border-sep bg-bar pt-[env(safe-area-inset-top)] backdrop-blur-xl backdrop-saturate-150">
           <div className="mx-auto flex h-12 max-w-5xl items-center gap-2.5 px-3 md:h-14 md:gap-3 md:px-4">
@@ -184,6 +186,7 @@ export default function Shell() {
 
         <Search open={searchOpen} onClose={closeSearch} league={league} />
       </div>
+      </BioProvider>
     </LeagueCtx.Provider>
   );
 }

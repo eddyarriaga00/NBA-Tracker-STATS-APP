@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { LEADER_CATS, currentSeason, getLeaders, seasonOptions } from '../api/espn';
-import { Card, Chips, ErrorState, Headshot, PageTitle, SeasonPicker, Skeleton, TeamLogo } from '../components/ui';
+import { Card, Chips, ErrorState, Headshot, PageTitle, SeasonPicker, Segmented, Skeleton, TeamLogo } from '../components/ui';
+import { BioButton } from '../components/BioSheet';
+import Awards from '../components/Awards';
 import { visibleColor } from '../lib/color';
 import { useLeague } from '../lib/league';
 import { useTheme } from '../lib/theme';
@@ -41,6 +43,27 @@ function Hero({ p, cat }) {
 
 export default function Leaders() {
   const lg = useLeague();
+  const [view, setView] = useState(() => {
+    try { return localStorage.getItem('leadersView') === 'awards' ? 'awards' : 'stats'; } catch { return 'stats'; }
+  });
+  const pickView = (v) => {
+    setView(v);
+    try { localStorage.setItem('leadersView', v); } catch { /* ignore */ }
+  };
+  const tabs = <Segmented className="mb-4 md:max-w-sm" value={view} onChange={pickView} options={[{ value: 'stats', label: 'Stat Leaders' }, { value: 'awards', label: 'Awards' }]} />;
+  if (view === 'awards') {
+    return (
+      <div>
+        <PageTitle eyebrow={lg.toUpperCase()}>Awards</PageTitle>
+        {tabs}
+        <Awards key={lg} />
+      </div>
+    );
+  }
+  return <StatLeaders lg={lg} tabs={tabs} />;
+}
+
+function StatLeaders({ lg, tabs }) {
   const cats = LEADER_CATS[lg];
   const [picked, setKey] = useState(cats[0].key);
   const key = cats.some((c) => c.key === picked) ? picked : cats[0].key;
@@ -57,6 +80,7 @@ export default function Leaders() {
       <PageTitle eyebrow={data?.season || lg.toUpperCase()} right={<SeasonPicker options={seasonOptions(lg)} value={season} onChange={setSeason} />}>
         Leaders
       </PageTitle>
+      {tabs}
       <Chips
         className="mb-4"
         value={key}
@@ -91,6 +115,7 @@ export default function Leaders() {
                   </div>
                 </div>
                 <span className="num w-14 text-right font-display text-[17px] font-bold md:w-16 md:text-[20px]">{p.value}</span>
+                <BioButton lg={lg} id={p.id} />
               </Link>
             ))}
           </Card>

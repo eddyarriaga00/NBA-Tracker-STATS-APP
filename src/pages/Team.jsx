@@ -6,6 +6,7 @@ import { visibleColor } from '../lib/color';
 import { useFavorites } from '../lib/favorites';
 import { useLeague } from '../lib/league';
 import { Icon } from '../components/icons';
+import { BioButton } from '../components/BioSheet';
 import { useTheme } from '../lib/theme';
 import { useData } from '../lib/useData';
 
@@ -126,6 +127,7 @@ function Roster({ t, lg }) {
                     {[p.jersey && `#${p.jersey}`, p.pos, p.college].filter(Boolean).join(' · ')}
                   </div>
                 </div>
+                <BioButton lg={lg} id={p.id} />
                 <div className="hidden shrink-0 text-right text-[12px] text-label-2 sm:block">
                   <div>{p.height}{p.weight ? ` · ${p.weight}` : ''}</div>
                   <div>{p.age ? `Age ${p.age}` : ''}{p.exp != null ? ` · ${p.exp ? `${p.exp} yr${p.exp > 1 ? 's' : ''}` : 'Rookie'}` : ''}</div>

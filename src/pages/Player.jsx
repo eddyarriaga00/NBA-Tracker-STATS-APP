@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { currentSeason, getGamelog, getPlayer, seasonLabel } from '../api/espn';
 import { Icon } from '../components/icons';
+import { BioButton } from '../components/BioSheet';
 import { BackButton, Card, Chips, ErrorState, SeasonPicker, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
 import { visibleColor } from '../lib/color';
 import { useLeague } from '../lib/league';
@@ -29,12 +30,15 @@ function Hero({ bio, lg }) {
           <div className="mt-1.5 text-[13px] text-label-2 md:mt-2 md:text-[14px]">
             {[bio.jersey && `#${bio.jersey}`, bio.position].filter(Boolean).join(' · ')}
           </div>
-          {bio.team && (
-            <Link to={`/${lg}/team/${bio.team.id}`} className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-fill px-2.5 py-1 text-[13px] font-semibold transition hover:bg-fill-strong">
-              <TeamLogo abbr={bio.team.abbr} size={18} />
-              {bio.team.name}
-            </Link>
-          )}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {bio.team && (
+              <Link to={`/${lg}/team/${bio.team.id}`} className="inline-flex items-center gap-1.5 rounded-full bg-fill px-2.5 py-1 text-[13px] font-semibold transition hover:bg-fill-strong">
+                <TeamLogo abbr={bio.team.abbr} size={18} />
+                {bio.team.name}
+              </Link>
+            )}
+            <BioButton lg={lg} id={bio.id} className="!py-1.5 !text-[13px]" />
+          </div>
           {bio.injury && (
             <div className="mt-2">
               <span className="rounded-full bg-live/12 px-2.5 py-1 text-[12px] font-bold text-live">{bio.injury}</span>
