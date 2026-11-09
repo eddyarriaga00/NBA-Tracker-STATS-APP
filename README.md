@@ -36,9 +36,10 @@ Comments are stored in a free [Supabase](https://supabase.com) database so every
 1. Create a free project at supabase.com.
 2. Open **SQL Editor**, paste the contents of [`supabase/schema.sql`](supabase/schema.sql), and click **Run**.
 3. Open **Authentication → Sign In / Providers** and turn on **Allow anonymous sign-ins**. (People pick a nickname; no passwords.)
-4. Open **Project Settings → API** and copy the **Project URL** and the **anon public** key.
+4. Open **Project Settings → API Keys** and copy the **Project URL** and the **publishable** (or **anon public**) key. Never use the secret / service_role key in the app.
 5. Copy `.env.example` to `.env.local` and paste both values in.
-6. Restart `npm run dev`.
+6. Run `npm run check:comments`. It tests posting, reactions, deleting, and security, and links straight to anything that needs fixing.
+7. Restart `npm run dev`.
 
 The anon key is designed to be public. The database rules only let people post, react, and delete as themselves, and limit spam to 6 messages per 30 seconds.
 

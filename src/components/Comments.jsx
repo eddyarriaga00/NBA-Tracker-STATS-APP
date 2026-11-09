@@ -91,8 +91,20 @@ function useThread(room) {
   const [supabase, setClient] = useState(null);
   useEffect(() => {
     let alive = true;
-    getClient().then((c) => alive && setClient(c)).catch(() => alive && setStatus('error'));
-    return () => { alive = false; };
+    let sub;
+    getClient()
+      .then((c) => {
+        if (!alive || !c) return;
+        setClient(c);
+        // Stay in sync when you sign in from another tab or the session refreshes,
+        // so your own messages always show as yours.
+        sub = c.auth.onAuthStateChange((_event, session) => setMe(session?.user?.id ?? null)).data.subscription;
+      })
+      .catch(() => alive && setStatus('error'));
+    return () => {
+      alive = false;
+      sub?.unsubscribe();
+    };
   }, []);
 
   const load = useCallback(async () => {
