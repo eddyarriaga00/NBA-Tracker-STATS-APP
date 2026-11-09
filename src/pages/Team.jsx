@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { getTeam } from '../api/espn';
-import { BackButton, Card, ErrorState, Headshot, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
+import { currentSeason, getTeam, getTeamStats, seasonLabel, seasonOptions } from '../api/espn';
+import { BackButton, Card, ErrorState, Headshot, SeasonPicker, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
 import { visibleColor } from '../lib/color';
 import { useFavorites } from '../lib/favorites';
 import { useLeague } from '../lib/league';
@@ -18,7 +18,9 @@ function GameRow({ e, lg }) {
     <Link to={`/${lg}/game/${e.id}`} className="flex items-center gap-3 px-4 py-2.5 transition hover:bg-fill/40">
       <div className="w-[80px] shrink-0 md:w-[88px]">
         <div className="text-[13px] font-semibold">{fmtDate(e.date)}</div>
-        {e.week && <div className="text-[11px] text-label-2">{e.week}</div>}
+        {(e.week || e.playoff) && (
+          <div className={`text-[11px] ${e.playoff ? 'font-semibold text-accent' : 'text-label-2'}`}>{e.playoff ? 'Playoffs' : e.week}</div>
+        )}
       </div>
       <span className="w-5 shrink-0 text-center text-[12px] text-label-2">{e.home ? 'vs' : '@'}</span>
       <TeamLogo abbr={e.opp.abbr} size={26} />
@@ -37,6 +39,38 @@ function GameRow({ e, lg }) {
         </span>
       )}
     </Link>
+  );
+}
+
+function TeamStats({ lg, id, season }) {
+  const { data, error, loading, reload } = useData((fresh) => getTeamStats(lg, id, season, { fresh }), [lg, id, season]);
+  if (loading && !data) return <Skeleton className="h-[420px] !rounded-2xl" />;
+  if (error && !data) return <ErrorState error={error} onRetry={reload} />;
+  if (!data.sections.length) return <Card className="py-10 text-center text-label-2">No team stats for this season yet.</Card>;
+  return (
+    <div className="space-y-4">
+      <p className="px-1 text-[12px] text-label-2">
+        {data.season} season{data.gamesPlayed ? ` · ${data.gamesPlayed} games` : ''}
+      </p>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        {data.sections.map((sec) => (
+          <Card key={sec.title} className="overflow-hidden">
+            <div className="px-4 pb-1 pt-3 text-[15px] font-bold">{sec.title}</div>
+            <div className="divide-y divide-sep">
+              {sec.rows.map((r) => (
+                <div key={r.label} className="flex items-center justify-between gap-3 px-4 py-2.5 text-[14px]">
+                  <span className="text-label-2">{r.label}</span>
+                  <span className="num font-semibold">
+                    {r.value}
+                    {r.rank && <span className="ml-1.5 text-[11px] font-normal text-label-3">{r.rank}</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -111,10 +145,20 @@ export default function Team() {
   const { dark } = useTheme();
   const [tab, setTab] = useState('schedule');
   const { isFav, toggle } = useFavorites();
-  const { data: t, error, loading, reload } = useData((fresh) => getTeam(lg, id, { fresh }), [lg, id]);
+  const [pickedSeason, setSeason] = useState(null);
+  const season = pickedSeason && seasonOptions(lg).some((o) => o.value === pickedSeason) ? pickedSeason : currentSeason(lg);
+  const { data: t, error, loading, reload } = useData((fresh) => getTeam(lg, id, season, { fresh }), [lg, id, season]);
 
   const form = useMemo(() => (t ? t.schedule.filter((e) => e.state === 'post').slice(-5) : []), [t]);
   const next = t?.schedule.find((e) => e.state !== 'post');
+  const seasonRecord = useMemo(() => {
+    if (!t || t.isCurrent) return '';
+    const reg = t.schedule.filter((e) => e.state === 'post' && !e.playoff);
+    const w = reg.filter((e) => e.win).length;
+    const po = t.schedule.filter((e) => e.state === 'post' && e.playoff);
+    const pw = po.filter((e) => e.win).length;
+    return `${seasonLabel(lg, season)}: ${w}-${reg.length - w}${po.length ? ` · Playoffs ${pw}-${po.length - pw}` : ''}`;
+  }, [t, lg, season]);
   const c = t ? visibleColor(t.color, dark) : '#888';
 
   return (
@@ -144,7 +188,7 @@ export default function Team() {
               <TeamLogo abbr={t.abbr} size={60} className="md:h-28 md:w-28" />
               <div className="min-w-0">
                 <h1 className="font-display text-[22px] font-bold leading-tight tracking-tight md:text-[34px]">{t.name}</h1>
-                <div className="mt-0.5 text-[14px] font-semibold md:mt-1 md:text-[15px]">{t.record}</div>
+                <div className="mt-0.5 text-[14px] font-semibold md:mt-1 md:text-[15px]">{t.record || seasonRecord}</div>
                 <div className="text-[13px] text-label-2">{t.standing}</div>
                 {t.coach && <div className="mt-1 text-[12px] text-label-2">Head coach: {t.coach}</div>}
               </div>
@@ -184,13 +228,29 @@ export default function Team() {
             )}
           </div>
 
-          <Segmented
-            className="mt-6"
-            value={tab}
-            onChange={setTab}
-            options={[{ value: 'schedule', label: 'Schedule' }, { value: 'roster', label: 'Roster' }]}
-          />
-          <div className="mt-4">{tab === 'schedule' ? <Schedule t={t} lg={lg} /> : <Roster t={t} lg={lg} />}</div>
+          <div className="mt-6 flex items-center gap-2">
+            <Segmented
+              className="flex-1"
+              value={tab}
+              onChange={setTab}
+              options={[{ value: 'schedule', label: 'Schedule' }, { value: 'stats', label: 'Stats' }, { value: 'roster', label: 'Roster' }]}
+            />
+            <SeasonPicker options={seasonOptions(lg)} value={season} onChange={setSeason} />
+          </div>
+          <div className="mt-4">
+            {tab === 'schedule' && <Schedule t={t} lg={lg} />}
+            {tab === 'stats' && <TeamStats lg={lg} id={id} season={season} />}
+            {tab === 'roster' && (
+              <>
+                {!t.isCurrent && (
+                  <p className="mb-3 px-1 text-[12px] text-label-2">
+                    Rosters are only available for the current season. Showing the {seasonLabel(lg, currentSeason(lg))} roster.
+                  </p>
+                )}
+                <Roster t={t} lg={lg} />
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>

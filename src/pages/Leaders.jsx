@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { LEADER_CATS, getLeaders } from '../api/espn';
-import { Card, Chips, ErrorState, Headshot, PageTitle, Skeleton, TeamLogo } from '../components/ui';
+import { LEADER_CATS, currentSeason, getLeaders, seasonOptions } from '../api/espn';
+import { Card, Chips, ErrorState, Headshot, PageTitle, SeasonPicker, Skeleton, TeamLogo } from '../components/ui';
 import { visibleColor } from '../lib/color';
 import { useLeague } from '../lib/league';
 import { useTheme } from '../lib/theme';
@@ -44,7 +44,9 @@ export default function Leaders() {
   const cats = LEADER_CATS[lg];
   const [picked, setKey] = useState(cats[0].key);
   const key = cats.some((c) => c.key === picked) ? picked : cats[0].key;
-  const { data, error, loading, reload } = useData((fresh) => getLeaders(lg, { fresh }), [lg]);
+  const [pickedSeason, setSeason] = useState(null);
+  const season = pickedSeason && seasonOptions(lg).some((o) => o.value === pickedSeason) ? pickedSeason : currentSeason(lg);
+  const { data, error, loading, reload } = useData((fresh) => getLeaders(lg, season, { fresh }), [lg, season]);
   const cat = cats.find((c) => c.key === key);
   const list = data?.categories[key] ?? [];
   const num = (v) => parseFloat(String(v).replace(/,/g, '')) || 0;
@@ -52,7 +54,9 @@ export default function Leaders() {
 
   return (
     <div>
-      <PageTitle eyebrow={data?.season || lg.toUpperCase()}>Leaders</PageTitle>
+      <PageTitle eyebrow={data?.season || lg.toUpperCase()} right={<SeasonPicker options={seasonOptions(lg)} value={season} onChange={setSeason} />}>
+        Leaders
+      </PageTitle>
       <Chips
         className="mb-4"
         value={key}

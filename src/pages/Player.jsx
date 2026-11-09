@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { getPlayer } from '../api/espn';
+import { currentSeason, getGamelog, getPlayer, seasonLabel } from '../api/espn';
 import { Icon } from '../components/icons';
-import { BackButton, Card, Chips, ErrorState, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
+import { BackButton, Card, Chips, ErrorState, SeasonPicker, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
 import { visibleColor } from '../lib/color';
 import { useLeague } from '../lib/league';
 import { useTheme } from '../lib/theme';
@@ -98,6 +98,35 @@ function SimpleTable({ head, rows, first = 'Season', sticky = true }) {
   );
 }
 
+/** Game log with a season picker; the current season comes with the player page. */
+function SeasonGameLog({ initial, lg, id }) {
+  const cur = currentSeason(lg);
+  const [season, setSeason] = useState(cur);
+  const seasons = (initial?.seasons?.length ? initial.seasons : [cur, cur - 1, cur - 2]).filter((y) => y <= cur);
+  const opts = [...new Set([cur, ...seasons])].sort((a, b) => b - a).map((y) => ({ value: y, label: seasonLabel(lg, y) }));
+  const { data, error, loading, reload } = useData(
+    (fresh) => (season === cur && initial ? Promise.resolve(initial) : getGamelog(lg, id, season, { fresh })),
+    [lg, id, season]
+  );
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between px-1">
+        <span className="text-[13px] text-label-2">{data ? `${data.rows.length} games` : ' '}</span>
+        <SeasonPicker options={opts} value={season} onChange={setSeason} />
+      </div>
+      {loading && !data ? (
+        <Skeleton className="h-[300px] !rounded-2xl" />
+      ) : error && !data ? (
+        <ErrorState error={error} onRetry={reload} />
+      ) : data ? (
+        <GameLog key={season} log={data} lg={lg} />
+      ) : (
+        <Card className="py-10 text-center text-label-2">No game log for this season.</Card>
+      )}
+    </div>
+  );
+}
+
 function GameLog({ log, lg }) {
   const options = log.labels.map((l, i) => ({ value: i, label: l }));
   const defaultIdx = Math.max(0, log.labels.indexOf(lg === 'nba' ? 'PTS' : 'YDS'));
@@ -159,6 +188,7 @@ function GameLog({ log, lg }) {
                   <span className="w-9 text-[13px] font-semibold">{r.opp}</span>
                   <span className={`text-[12px] font-bold ${r.result === 'W' ? 'text-win' : r.result === 'L' ? 'text-live' : 'text-label-2'}`}>{r.result}</span>
                   <span className="text-[12px] text-label-2">{r.score}</span>
+                  {r.playoff && <span className="rounded bg-accent/12 px-1 text-[10px] font-bold text-accent">PO</span>}
                 </Link>
               </td>
               {r.stats.map((s, i) => (
@@ -288,7 +318,7 @@ export default function Player() {
           <Facts bio={p.bio} />
           <Segmented className="mt-7" value={tab} onChange={setTab} options={tabs} />
           <div className="mt-3">
-            {tab === 'log' && (p.gamelog ? <GameLog log={p.gamelog} lg={lg} /> : <Card className="py-10 text-center text-label-2">No game log available.</Card>)}
+            {tab === 'log' && <SeasonGameLog initial={p.gamelog} lg={lg} id={id} />}
             {tab === 'splits' && <Splits splits={p.splits} />}
             {tab === 'career' && <Career career={p.career} lg={lg} />}
             {tab === 'news' && <News news={p.news} />}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { commentsEnabled, currentUserId, ensureUser, supabase } from '../lib/supabase';
+import { commentsEnabled, currentUserId, ensureUser, getClient } from '../lib/supabase';
 import { Icon } from './icons';
 
 export const EMOJIS = ['🔥', '😂', '💀', '👍', '👎', '🐐'];
@@ -60,9 +60,10 @@ export function useCommentCounts(rooms) {
   const key = rooms.join(',');
   const [counts, setCounts] = useState({});
   useEffect(() => {
-    if (!supabase || !rooms.length) return;
+    if (!commentsEnabled || !rooms.length) return;
     let alive = true;
-    supabase
+    getClient()
+      .then((supabase) => supabase
       .from('comments')
       .select('room')
       .in('room', rooms)
@@ -72,7 +73,8 @@ export function useCommentCounts(rooms) {
         const c = {};
         for (const r of data) c[r.room] = (c[r.room] ?? 0) + 1;
         setCounts(c);
-      });
+      }))
+      .catch(() => {});
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
@@ -86,8 +88,15 @@ function useThread(room) {
   const [reactions, setReactions] = useState([]); // rows {comment_id,user_id,emoji}
   const [status, setStatus] = useState('loading'); // loading | live | offline | error
   const [me, setMe] = useState(null);
+  const [supabase, setClient] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    getClient().then((c) => alive && setClient(c)).catch(() => alive && setStatus('error'));
+    return () => { alive = false; };
+  }, []);
 
   const load = useCallback(async () => {
+    if (!supabase) return;
     const [c, r] = await Promise.all([
       supabase.from('comments').select('*').eq('room', room).order('created_at', { ascending: false }).limit(PAGE),
       supabase.from('comment_reactions').select('comment_id,user_id,emoji').eq('room', room).limit(5000),
@@ -95,7 +104,7 @@ function useThread(room) {
     if (c.error) throw c.error;
     setComments((c.data ?? []).reverse());
     setReactions(r.data ?? []);
-  }, [room]);
+  }, [room, supabase]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -139,7 +148,7 @@ function useThread(room) {
       window.removeEventListener('online', onVisible);
       supabase.removeChannel(channel);
     };
-  }, [room, load]);
+  }, [room, load, supabase]);
 
   const post = async (author, body) => {
     const user = await ensureUser();

@@ -1,22 +1,24 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { fromKey, getNbaScoreboard, getNflScoreboard, toKey } from '../api/espn';
+import { currentSeason, fromKey, getNbaScoreboard, getNflScoreboard, seasonOptions, toKey } from '../api/espn';
 import { useCommentCounts } from '../components/Comments';
 import GameCard from '../components/GameCard';
 import { Icon } from '../components/icons';
-import { Empty, ErrorState, PageTitle, Skeleton } from '../components/ui';
+import { Empty, ErrorState, PageTitle, SeasonPicker, Segmented, Skeleton } from '../components/ui';
+import { SORTS, sectionGames, useGameSort } from '../lib/gameSort';
 import { useFavorites } from '../lib/favorites';
 import { useLeague } from '../lib/league';
 import { useData } from '../lib/useData';
 
 const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 
-function GameGrid({ games, loading, error, reload, emptyTitle, emptySub }) {
+function GameGrid({ games, loading, error, reload, emptyTitle, emptySub, byDay = false }) {
   const rooms = useMemo(() => (games ?? []).map((g) => `${g.league}:game:${g.id}`), [games]);
   const counts = useCommentCounts(rooms);
   const { isFav } = useFavorites();
+  const [mode, setMode] = useGameSort();
   const fav = (g) => isFav(g.league, g.home.id) || isFav(g.league, g.away.id);
-  const sorted = games ? [...games.filter(fav), ...games.filter((g) => !fav(g))] : games;
+
   if (loading && !games)
     return (
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -25,9 +27,38 @@ function GameGrid({ games, loading, error, reload, emptyTitle, emptySub }) {
     );
   if (error && !games) return <ErrorState error={error} onRetry={reload} />;
   if (!games.length) return <Empty title={emptyTitle} subtitle={emptySub} />;
+
+  const sections = sectionGames(games, mode, { byDay, isFav: fav });
+  let index = 0;
   return (
-    <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 md:gap-3">
-      {sorted.map((g, i) => <GameCard key={g.id} g={g} index={i} favorite={fav(g)} comments={counts[`${g.league}:game:${g.id}`] ?? 0} />)}
+    <div>
+      {games.length > 1 && (
+        <div className="mb-3 flex items-center justify-end gap-2">
+          <span className="text-[12px] text-label-2">Sort</span>
+          <Segmented
+            className="w-52"
+            value={mode}
+            onChange={setMode}
+            options={Object.entries(SORTS).map(([value, s]) => ({ value, label: s.label }))}
+          />
+        </div>
+      )}
+      {sections.map((sec) => (
+        <section key={sec.key} className="mb-5 last:mb-0">
+          {sec.title && sections.length > 1 && (
+            <h2 className="mb-1.5 flex items-center gap-1.5 px-1 text-[11.5px] font-semibold uppercase tracking-wide text-label-2 md:mb-2 md:text-[13px]">
+              {sec.live && <span className="live-dot h-[7px] w-[7px] rounded-full bg-live" />}
+              <span className={sec.live ? 'text-live' : ''}>{sec.title}</span>
+              <span className="font-normal text-label-3">· {sec.games.length}</span>
+            </h2>
+          )}
+          <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 md:gap-3">
+            {sec.games.map((g) => (
+              <GameCard key={g.id} g={g} index={index++} favorite={fav(g)} comments={counts[`${g.league}:game:${g.id}`] ?? 0} />
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
@@ -159,16 +190,6 @@ function NflScores() {
 
   const pick = (c) => setParams({ w: `${c.type}-${c.week}-${data.year}` }, { replace: true });
 
-  const days = useMemo(() => {
-    if (!data) return [];
-    const m = new Map();
-    for (const g of data.games) {
-      const label = new Date(g.date).toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
-      if (!m.has(label)) m.set(label, []);
-      m.get(label).push(g);
-    }
-    return [...m.entries()];
-  }, [data]);
 
   const current = chips.find((c) => c.key === curKey);
   const live = data?.games.filter((g) => g.status.state === 'in').length ?? 0;
@@ -186,6 +207,11 @@ function NflScores() {
                 This Week
               </button>
             )}
+            <SeasonPicker
+              options={seasonOptions('nfl')}
+              value={Number(data?.year ?? sel?.year ?? currentSeason('nfl'))}
+              onChange={(yr) => setParams(yr === currentSeason('nfl') ? {} : { w: `2-1-${yr}` }, { replace: true })}
+            />
           </>
         }
       >
@@ -224,12 +250,7 @@ function NflScores() {
         ) : !data.games.length ? (
           <Empty title="No Games" subtitle="There are no NFL games this week." />
         ) : (
-          days.map(([label, games]) => (
-            <section key={label} className="mb-5">
-              <h2 className="mb-1.5 px-1 text-[11.5px] font-semibold uppercase tracking-wide text-label-2 md:mb-2 md:text-[13px]">{label}</h2>
-              <GameGrid games={games} />
-            </section>
-          ))
+          <GameGrid games={data.games} byDay />
         )}
         {data?.byes?.length > 0 && (
           <p className="mt-2 px-1 text-[13px] text-label-2">

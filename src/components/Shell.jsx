@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { LEAGUES } from '../api/espn';
 import { LeagueCtx, leagueFromPath, rememberLeague } from '../lib/league';
@@ -159,7 +159,9 @@ export default function Shell() {
 
         <main className="mx-auto max-w-5xl px-3 pb-[calc(84px+env(safe-area-inset-bottom))] pt-3 md:px-4 md:pt-4 lg:pb-16">
           <ErrorBoundary resetKey={pathname}>
-            <Outlet />
+            <Suspense fallback={<div className="skeleton mt-2 h-[240px] rounded-2xl" />}>
+              <Outlet />
+            </Suspense>
           </ErrorBoundary>
         </main>
 

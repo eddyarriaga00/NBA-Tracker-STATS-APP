@@ -14,6 +14,22 @@ const leadersUrl = (lg) => `https://site.api.espn.com/apis/site/v3/sports/${LEAG
 
 const cache = new Map();
 
+// ---------- Seasons ----------
+// ESPN names NBA seasons by the year they end (2026-27 = 2027) and NFL seasons
+// by the year they start (2026 season = 2026).
+export function currentSeason(lg, now = new Date()) {
+  const y = now.getFullYear();
+  const m = now.getMonth(); // 0 = Jan
+  if (lg === 'nba') return m >= 9 ? y + 1 : y; // new season from October
+  return m >= 7 ? y : y - 1; // NFL: new season from August
+}
+export const seasonLabel = (lg, yr) => (lg === 'nba' ? `${yr - 1}-${String(yr).slice(2)}` : String(yr));
+/** This season plus the previous `back` seasons, newest first. */
+export function seasonOptions(lg, back = 4) {
+  const cur = currentSeason(lg);
+  return Array.from({ length: back + 1 }, (_, i) => ({ value: cur - i, label: seasonLabel(lg, cur - i) }));
+}
+
 async function get(url, { ttl = 15_000, fresh = false } = {}) {
   const hit = cache.get(url);
   if (!fresh && hit && Date.now() - hit.at < ttl) return hit.data;
@@ -418,6 +434,8 @@ export async function getGame(lg, id, opts) {
     id,
     league: lg,
     quarters,
+    preview: normPreview(lg, s, away, home),
+    winProb: normWinProb(lg, s),
     date: comp.date,
     status: normStatus(comp.status, comp.date, comp.timeValid ?? s.header?.timeValid),
     timeValid: (comp.timeValid ?? s.header?.timeValid) !== false,
@@ -437,6 +455,131 @@ export async function getGame(lg, id, opts) {
     weather: info.weather ? `${info.weather.temperature ?? ''}° ${info.weather.displayValue ?? ''}`.trim() : '',
     broadcast: (comp.broadcasts ?? []).map((b) => b.media?.shortName).filter(Boolean).join(', '),
   };
+}
+
+// ---------- Preview (odds, predictor, injuries, form, series) ----------
+
+function normPreview(lg, s, away, home) {
+  const pc = (s.pickcenter ?? [])[0];
+  const odds = pc
+    ? {
+        provider: pc.provider?.name ?? '',
+        details: pc.details ?? '',
+        overUnder: pc.overUnder,
+        awayML: pc.awayTeamOdds?.moneyLine,
+        homeML: pc.homeTeamOdds?.moneyLine,
+      }
+    : null;
+
+  const pr = s.predictor;
+  const pct = (x) => (x == null || x === '' ? null : Number(x));
+  let predictor = null;
+  if (pr) {
+    const h = pct(pr.homeTeam?.gameProjection);
+    const a = pct(pr.awayTeam?.gameProjection);
+    if (h != null || a != null) predictor = { home: h ?? 100 - a, away: a ?? 100 - h };
+  }
+
+  const injuries = (s.injuries ?? [])
+    .map((t) => ({
+      teamId: t.team?.id,
+      abbr: t.team?.abbreviation,
+      list: (t.injuries ?? []).map((i) => ({
+        id: i.athlete?.id,
+        name: i.athlete?.displayName,
+        pos: i.athlete?.position?.abbreviation ?? '',
+        headshot: headshotOf(i.athlete),
+        status: i.status ?? i.type?.description ?? '',
+        detail: [i.details?.type, i.details?.location === 'Body' ? '' : i.details?.detail].filter(Boolean).join(' · '),
+        returnDate: i.details?.returnDate ?? '',
+      })),
+    }))
+    .filter((t) => t.list.length);
+
+  const lastFive = (s.lastFiveGames ?? []).map((t) => ({
+    teamId: t.team?.id,
+    abbr: t.team?.abbreviation,
+    games: (t.events ?? []).map((e) => ({
+      id: e.id,
+      date: e.gameDate,
+      result: e.gameResult,
+      score: e.score,
+      atVs: e.atVs,
+      opp: e.opponent?.abbreviation,
+    })),
+  }));
+
+  const ss = (s.seasonseries ?? [])[0];
+  const series = ss
+    ? {
+        title: ss.title ?? 'Season Series',
+        summary: ss.summary ?? '',
+        events: (ss.events ?? []).map((e) => {
+          const comps = e.competitors ?? [];
+          const h = comps.find((c) => c.homeAway === 'home');
+          const a = comps.find((c) => c.homeAway === 'away');
+          return {
+            id: e.id,
+            date: e.date,
+            state: e.statusType?.state ?? 'pre',
+            away: a ? { abbr: a.team?.abbreviation, score: a.score, winner: a.winner } : null,
+            home: h ? { abbr: h.team?.abbreviation, score: h.score, winner: h.winner } : null,
+          };
+        }),
+      }
+    : null;
+
+  if (!odds && !predictor && !injuries.length && !lastFive.length && !series) return null;
+  return { odds, predictor, injuries, lastFive, series };
+}
+
+// ---------- Win probability ----------
+
+function normWinProb(lg, s) {
+  const wp = s.winprobability ?? [];
+  if (wp.length < 2) return null;
+  const regLen = lg === 'nfl' ? 900 : 720;
+  const otLen = lg === 'nfl' ? 600 : 300;
+  const clockSec = (c) => {
+    const v = String(c ?? '');
+    if (v.includes(':')) {
+      const [m, x] = v.split(':').map(Number);
+      return (m || 0) * 60 + (x || 0);
+    }
+    return Number(v) || 0;
+  };
+  const elapsed = (period, clock) => {
+    const len = period <= 4 ? regLen : otLen;
+    const before = Math.min(period - 1, 4) * regLen + Math.max(0, period - 5) * otLen;
+    return before + Math.max(0, len - clockSec(clock));
+  };
+
+  const plays = {};
+  for (const p of s.plays ?? []) plays[p.id] = p;
+  for (const d of [...(s.drives?.previous ?? []), ...(s.drives?.current ? [s.drives.current] : [])]) {
+    for (const p of d.plays ?? []) plays[p.id] = p;
+  }
+
+  const points = [];
+  let maxPeriod = 4;
+  for (const w of wp) {
+    const p = plays[w.playId];
+    if (!p || !p.period?.number) continue;
+    maxPeriod = Math.max(maxPeriod, p.period.number);
+    points.push({
+      t: elapsed(p.period.number, p.clock?.displayValue),
+      home: Math.round((w.homeWinPercentage ?? 0.5) * 1000) / 10,
+      period: p.period.number,
+      clock: p.clock?.displayValue ?? '',
+      text: p.text ?? '',
+      away: p.awayScore,
+      homeScore: p.homeScore,
+    });
+  }
+  if (points.length < 2) return null;
+  points.sort((a, b) => a.t - b.t);
+  const total = 4 * regLen + Math.max(0, maxPeriod - 4) * otLen;
+  return { points, total, regLen, otLen, periods: maxPeriod };
 }
 
 // ---------- Standings ----------
@@ -470,8 +613,11 @@ function normEntry(e) {
   };
 }
 
-export async function getStandings(lg, opts) {
-  const url = lg === 'nfl' ? `${standingsUrl(lg)}?level=3` : standingsUrl(lg);
+export async function getStandings(lg, season, opts) {
+  const q = new URLSearchParams();
+  if (lg === 'nfl') q.set('level', '3');
+  if (season && season !== currentSeason(lg)) q.set('season', String(season));
+  const url = `${standingsUrl(lg)}${q.toString() ? `?${q}` : ''}`;
   const s = await get(url, { ttl: 60_000, ...opts });
   return (s.children ?? []).map((conf) => {
     const divisions = (conf.children ?? []).map((d) => ({
@@ -523,11 +669,91 @@ export const LEADER_CATS = {
   ],
 };
 
-export async function getLeaders(lg, opts) {
-  const d = await get(leadersUrl(lg), { ttl: 5 * 60_000, ...opts });
+// Past seasons come from the player rankings feed: NBA's leaders feed only
+// covers the current season, and NFL's returns *playoff* leaders for past years.
+// The rankings feed applies official minimums for rate stats (FG%, etc.).
+const PAST_SORT = {
+  nba: {
+    pointsPerGame: 'offensive.avgPoints',
+    reboundsPerGame: 'general.avgRebounds',
+    assistsPerGame: 'offensive.avgAssists',
+    stealsPerGame: 'defensive.avgSteals',
+    blocksPerGame: 'defensive.avgBlocks',
+    '3PointsMadePerGame': 'offensive.avgThreePointFieldGoalsMade',
+    fieldGoalPercentage: 'offensive.fieldGoalPct',
+    '3PointPct': 'offensive.threePointFieldGoalPct',
+    FreeThrowPct: 'offensive.freeThrowPct',
+    doubleDouble: 'general.doubleDouble',
+  },
+  nfl: {
+    passingYards: 'passing.passingYards',
+    passingTouchdowns: 'passing.passingTouchdowns',
+    // Passer rating isn't qualified by ESPN; NFL minimum is 14 attempts per team game.
+    quarterbackRating: { sort: 'passing.QBRating', min: ['passing.passingAttempts', 224] },
+    rushingYards: 'rushing.rushingYards',
+    rushingTouchdowns: 'rushing.rushingTouchdowns',
+    receivingYards: 'receiving.receivingYards',
+    receptions: 'receiving.receptions',
+    receivingTouchdowns: 'receiving.receivingTouchdowns',
+    sacks: 'defensive.sacks',
+    totalTackles: 'defensive.totalTackles',
+    interceptions: 'defensiveInterceptions.interceptions',
+    totalTouchdowns: 'scoring.totalTouchdowns',
+  },
+};
+
+async function getPastLeaders(lg, season, opts) {
+  const base = `https://site.web.api.espn.com/apis/common/v3/sports/${LEAGUES[lg].path}/statistics/byathlete`;
+  const entries = await Promise.all(
+    Object.entries(PAST_SORT[lg]).map(async ([key, spec]) => {
+      const { sort, min } = typeof spec === 'string' ? { sort: spec } : spec;
+      try {
+        const d = await get(`${base}?season=${season}&seasontype=2&limit=${min ? 60 : 10}&sort=${sort}:desc`, { ttl: 60 * 60_000, ...opts });
+        // Category names differ in case between the sort key and the response.
+        const field = (path) => {
+          const [catName, statName] = path.split('.');
+          const ci = (d.categories ?? []).findIndex((c) => c.name.toLowerCase() === catName.toLowerCase());
+          const si = d.categories?.[ci]?.names?.indexOf(statName) ?? -1;
+          return (x) => {
+            const cat = (x.categories ?? []).find((c) => c.name.toLowerCase() === catName.toLowerCase()) ?? x.categories?.[ci];
+            return cat?.totals?.[si] ?? '';
+          };
+        };
+        const value = field(sort);
+        const minVal = min ? field(min[0]) : null;
+        const list = (d.athletes ?? [])
+          .filter((x) => !minVal || (parseFloat(String(minVal(x)).replace(/,/g, '')) || 0) >= min[1])
+          .slice(0, 10)
+          .map((x) => {
+            const a = x.athlete ?? {};
+            return {
+              id: a.id,
+              name: a.displayName,
+              first: a.firstName,
+              last: a.lastName,
+              headshot: headshotOf(a),
+              pos: a.position?.abbreviation,
+              jersey: a.jersey,
+              value: value(x),
+              team: { id: a.teamId, abbr: a.teamShortName, name: a.teamShortName, color: '#8e8e93' },
+            };
+          });
+        return [key, list];
+      } catch {
+        return [key, []];
+      }
+    })
+  );
+  return { season: `${seasonLabel(lg, season)} Regular Season`, categories: Object.fromEntries(entries) };
+}
+
+export async function getLeaders(lg, season, opts) {
+  const past = season && season !== currentSeason(lg);
+  if (past) return getPastLeaders(lg, season, opts);
+  const d = await get(`${leadersUrl(lg)}${past ? `?season=${season}` : ''}`, { ttl: 5 * 60_000, ...opts });
   const cats = d.leaders?.categories ?? [];
   return {
-    season: d.currentSeason?.displayName ?? '',
+    season: (past ? d.requestedSeason?.displayName : d.currentSeason?.displayName) ?? '',
     categories: Object.fromEntries(
       cats.map((c) => [
         c.name,
@@ -613,30 +839,7 @@ export async function getPlayer(lg, id, opts) {
       }
     : null;
 
-  let gamelog = null;
-  if (log?.events) {
-    const rows = [];
-    for (const st of log.seasonTypes ?? []) {
-      for (const cat of st.categories ?? []) {
-        for (const e of cat.events ?? []) {
-          const meta = log.events[e.eventId];
-          if (!meta) continue;
-          rows.push({
-            id: e.eventId,
-            date: meta.gameDate,
-            atVs: meta.atVs,
-            opp: meta.opponent?.abbreviation,
-            result: meta.gameResult,
-            score: meta.score,
-            season: st.displayName,
-            stats: e.stats ?? [],
-          });
-        }
-      }
-    }
-    rows.sort((x, y) => new Date(y.date) - new Date(x.date));
-    gamelog = { labels: log.labels ?? [], names: log.displayNames ?? [], rows };
-  }
+  const gamelog = normGamelog(log);
 
   let careerStats = null;
   if (career?.categories?.length) {
@@ -671,15 +874,23 @@ export async function getPlayer(lg, id, opts) {
 
 // ---------- Teams ----------
 
-export async function getTeam(lg, id, opts) {
+export async function getTeam(lg, id, season, opts) {
   const o = { ttl: 60_000, ...opts };
-  const [rosterR, schedR] = await Promise.allSettled([
+  const cur = currentSeason(lg);
+  const yr = season || cur;
+  const sq = yr !== cur ? `season=${yr}&` : '';
+  const [rosterR, schedR, postR] = await Promise.allSettled([
     get(`${site(lg)}/teams/${id}/roster`, o),
-    get(`${site(lg)}/teams/${id}/schedule`, o),
+    get(`${site(lg)}/teams/${id}/schedule${sq ? `?${sq.slice(0, -1)}` : ''}`, o),
+    get(`${site(lg)}/teams/${id}/schedule?${sq}seasontype=3`, o),
   ]);
   if (rosterR.status !== 'fulfilled' && schedR.status !== 'fulfilled') throw rosterR.reason;
   const r = rosterR.status === 'fulfilled' ? rosterR.value : {};
   const sch = schedR.status === 'fulfilled' ? schedR.value : {};
+  const post = postR.status === 'fulfilled' ? postR.value : {};
+  const allEvents = [...(sch.events ?? []), ...(post.events ?? [])].filter(
+    (e, i, arr) => arr.findIndex((x) => x.id === e.id) === i
+  );
   const t = r.team ?? sch.team ?? {};
 
   const toPlayer = (a) => ({
@@ -711,7 +922,7 @@ export async function getTeam(lg, id, opts) {
       }))
     : [{ title: 'Roster', players: raw.map(toPlayer) }];
 
-  const schedule = (sch.events ?? []).map((e) => {
+  const schedule = allEvents.map((e) => {
     const c = e.competitions?.[0] ?? {};
     const me = (c.competitors ?? []).find((x) => x.team?.id === String(id)) ?? {};
     const opp = (c.competitors ?? []).find((x) => x.team?.id !== String(id)) ?? {};
@@ -728,10 +939,12 @@ export async function getTeam(lg, id, opts) {
       win: me.winner,
       week: e.week?.text ?? '',
       seasonType: e.seasonType?.abbreviation ?? '',
+      playoff: e.seasonType?.type === 3 || e.seasonType?.abbreviation === 'post',
       broadcast: c.broadcasts?.[0]?.media?.shortName ?? '',
     };
   });
 
+  schedule.sort((a, b) => new Date(a.date) - new Date(b.date));
   return {
     league: lg,
     id: t.id ?? id,
@@ -739,10 +952,11 @@ export async function getTeam(lg, id, opts) {
     name: t.displayName,
     short: t.shortDisplayName ?? t.name,
     color: hex(t.color),
-    record: t.recordSummary ?? '',
-    standing: t.standingSummary ?? '',
+    record: yr === cur ? t.recordSummary ?? '' : '',
+    standing: yr === cur ? t.standingSummary ?? '' : '',
     coach: r.coach?.[0] ? `${r.coach[0].firstName} ${r.coach[0].lastName}` : '',
-    season: sch.requestedSeason?.displayName ?? '',
+    season: sch.requestedSeason?.displayName ?? seasonLabel(lg, yr),
+    isCurrent: yr === cur,
     groups,
     schedule,
   };
@@ -807,4 +1021,77 @@ export async function searchPlayers(query, opts) {
     }
   }
   return out;
+}
+
+
+// ---------- Team season stats ----------
+
+const TEAM_STATS = {
+  nba: [
+    ['Scoring', [['offensive', 'avgPoints', 'Points / Game'], ['offensive', 'fieldGoalPct', 'Field Goal %'], ['offensive', 'threePointFieldGoalPct', '3-Point %'], ['offensive', 'freeThrowPct', 'Free Throw %'], ['offensive', 'twoPointFieldGoalPct', '2-Point %'], ['offensive', 'avgThreePointFieldGoalsMade', '3PM / Game'], ['offensive', 'avgFreeThrowsAttempted', 'FTA / Game']]],
+    ['Playmaking', [['offensive', 'avgAssists', 'Assists / Game'], ['offensive', 'avgTurnovers', 'Turnovers / Game'], ['general', 'assistTurnoverRatio', 'Assist / Turnover']]],
+    ['Rebounding & Defense', [['general', 'avgRebounds', 'Rebounds / Game'], ['offensive', 'avgOffensiveRebounds', 'Off. Rebounds / Game'], ['defensive', 'avgDefensiveRebounds', 'Def. Rebounds / Game'], ['defensive', 'avgSteals', 'Steals / Game'], ['defensive', 'avgBlocks', 'Blocks / Game'], ['general', 'avgFouls', 'Fouls / Game']]],
+  ],
+  nfl: [
+    ['Offense', [['passing', 'totalPointsPerGame', 'Points / Game'], ['passing', 'yardsPerGame', 'Yards / Game'], ['passing', 'passingYardsPerGame', 'Pass Yards / Game'], ['rushing', 'rushingYardsPerGame', 'Rush Yards / Game'], ['passing', 'completionPct', 'Completion %'], ['passing', 'yardsPerPassAttempt', 'Yards / Pass'], ['rushing', 'yardsPerRushAttempt', 'Yards / Rush'], ['passing', 'passingTouchdowns', 'Pass TDs'], ['rushing', 'rushingTouchdowns', 'Rush TDs'], ['passing', 'QBRating', 'Passer Rating'], ['passing', 'sacks', 'Sacks Allowed']]],
+    ['Efficiency', [['miscellaneous', 'thirdDownConvPct', '3rd Down %'], ['miscellaneous', 'fourthDownConvPct', '4th Down %'], ['miscellaneous', 'redzoneTouchdownPct', 'Red Zone TD %'], ['miscellaneous', 'turnOverDifferential', 'Turnover Diff.'], ['miscellaneous', 'totalTakeaways', 'Takeaways'], ['miscellaneous', 'totalGiveaways', 'Giveaways'], ['miscellaneous', 'totalPenalties', 'Penalties']]],
+    ['Defense', [['defensive', 'sacks', 'Sacks'], ['defensive', 'totalTackles', 'Tackles'], ['defensive', 'tacklesForLoss', 'Tackles for Loss'], ['defensive', 'passesDefended', 'Passes Defended'], ['defensiveInterceptions', 'interceptions', 'Interceptions'], ['general', 'fumblesRecovered', 'Fumbles Recovered']]],
+    ['Special Teams', [['kicking', 'fieldGoalPct', 'Field Goal %'], ['kicking', 'longFieldGoalMade', 'Longest FG'], ['kicking', 'extraPointPct', 'Extra Point %'], ['punting', 'grossAvgPuntYards', 'Punt Average'], ['returning', 'yardsPerKickReturn', 'Kick Return Avg.']]],
+  ],
+};
+
+export async function getTeamStats(lg, id, season, opts) {
+  const past = season && season !== currentSeason(lg);
+  const d = await get(`${site(lg)}/teams/${id}/statistics${past ? `?season=${season}` : ''}`, { ttl: 10 * 60_000, ...opts });
+  const cats = d.results?.stats?.categories ?? [];
+  const find = (cat, name) => cats.find((c) => c.name === cat)?.stats?.find((x) => x.name === name);
+  const sections = TEAM_STATS[lg]
+    .map(([title, rows]) => ({
+      title,
+      rows: rows
+        .map(([cat, name, label]) => {
+          const x = find(cat, name);
+          return x && { label, value: x.displayValue, rank: x.rankDisplayValue ?? '' };
+        })
+        .filter(Boolean),
+    }))
+    .filter((sec) => sec.rows.length);
+  const gp = find('general', 'gamesPlayed')?.displayValue ?? find('passing', 'teamGamesPlayed')?.displayValue;
+  return { season: d.requestedSeason?.displayName ?? seasonLabel(lg, season || currentSeason(lg)), gamesPlayed: gp, sections };
+}
+
+// ---------- Player game log by season ----------
+
+function normGamelog(log) {
+  if (!log?.events) return null;
+  const rows = [];
+  for (const st of log.seasonTypes ?? []) {
+    if (/preseason/i.test(st.displayName ?? '')) continue; // exhibition games skew averages
+    const playoff = /postseason|play ?in/i.test(st.displayName ?? '');
+    for (const cat of st.categories ?? []) {
+      for (const e of cat.events ?? []) {
+        const meta = log.events[e.eventId];
+        if (!meta) continue;
+        rows.push({
+          playoff,
+          id: e.eventId,
+          date: meta.gameDate,
+          atVs: meta.atVs,
+          opp: meta.opponent?.abbreviation,
+          result: meta.gameResult,
+          score: meta.score,
+          season: st.displayName,
+          stats: e.stats ?? [],
+        });
+      }
+    }
+  }
+  rows.sort((x, y) => new Date(y.date) - new Date(x.date));
+  const seasons = (log.filters ?? []).find((f) => f.name === 'season')?.options?.map((o) => Number(o.value)).filter(Boolean) ?? [];
+  return { labels: log.labels ?? [], names: log.displayNames ?? [], rows, seasons };
+}
+
+export async function getGamelog(lg, id, season, opts) {
+  const d = await get(`${web(lg)}/athletes/${id}/gamelog${season ? `?season=${season}` : ''}`, { ttl: 5 * 60_000, ...opts });
+  return normGamelog(d);
 }

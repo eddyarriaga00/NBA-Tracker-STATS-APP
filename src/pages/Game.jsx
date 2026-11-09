@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { getGame } from '../api/espn';
 import Comments, { useCommentCounts } from '../components/Comments';
+import Preview from '../components/Preview';
+import WinProbability from '../components/WinProbability';
 import { BackButton, Card, ErrorState, Headshot, LiveBadge, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
 import { visibleColor } from '../lib/color';
 import { useLeague } from '../lib/league';
@@ -132,17 +134,21 @@ function Linescore({ g }) {
   );
 }
 
+// Each row lists the ESPN category names to try (pre-game NBA uses per-game names).
 const LEADER_ROWS = {
-  nba: [['points', 'Points'], ['rebounds', 'Rebounds'], ['assists', 'Assists']],
-  nfl: [['passingYards', 'Passing'], ['rushingYards', 'Rushing'], ['receivingYards', 'Receiving'], ['sacks', 'Sacks'], ['totalTackles', 'Tackles']],
+  nba: [[['points', 'pointsPerGame'], 'Points'], [['rebounds', 'reboundsPerGame'], 'Rebounds'], [['assists', 'assistsPerGame'], 'Assists']],
+  nfl: [[['passingYards'], 'Passing'], [['rushingYards'], 'Rushing'], [['receivingYards'], 'Receiving'], [['sacks'], 'Sacks'], [['totalTackles'], 'Tackles']],
 };
+const pickCat = (cats, keys) => keys.map((k) => cats[k]).find(Boolean);
 
 function GameLeaders({ g }) {
   const lg = useLeague();
   const by = Object.fromEntries(g.leaders.map((l) => [l.teamId, l.cats]));
   const A = by[g.away.id] ?? {};
   const H = by[g.home.id] ?? {};
-  const rows = LEADER_ROWS[lg].filter(([k]) => A[k] || H[k]);
+  const rows = LEADER_ROWS[lg]
+    .map(([keys, label]) => [keys[0], label, pickCat(A, keys), pickCat(H, keys)])
+    .filter(([, , a, h]) => a || h);
   if (!rows.length) return null;
   const big = lg === 'nba';
 
@@ -167,11 +173,11 @@ function GameLeaders({ g }) {
     <>
       <SectionTitle>{g.status.state === 'pre' ? 'Season Leaders' : 'Game Leaders'}</SectionTitle>
       <Card className="divide-y divide-sep">
-        {rows.map(([k, label]) => (
+        {rows.map(([k, label, a, h]) => (
           <div key={k} className="flex items-center gap-3 px-4 py-3">
-            <Player p={A[k]} />
+            <Player p={a} />
             <div className="w-14 shrink-0 text-center text-[10.5px] font-semibold uppercase tracking-wide text-label-2 md:w-16 md:text-[11px]">{label}</div>
-            <Player p={H[k]} right />
+            <Player p={h} right />
           </div>
         ))}
       </Card>
@@ -562,6 +568,10 @@ export default function Game() {
           <Hero g={g} />
           <Situation g={g} />
           <Linescore g={g} />
+          {g.status.state !== 'pre' && g.winProb && (
+            <WinProbability wp={g.winProb} home={g.home} away={g.away} live={g.status.state === 'in'} />
+          )}
+          {g.status.state === 'pre' && <Preview g={g} />}
 
           {g.status.state !== 'pre' && (
             <>

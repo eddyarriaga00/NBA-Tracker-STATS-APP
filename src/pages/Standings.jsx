@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getStandings } from '../api/espn';
-import { Card, ErrorState, PageTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
+import { currentSeason, getStandings, seasonLabel, seasonOptions } from '../api/espn';
+import { Card, ErrorState, PageTitle, SeasonPicker, Segmented, Skeleton, TeamLogo } from '../components/ui';
 import { useLeague } from '../lib/league';
 import { useData } from '../lib/useData';
 
@@ -109,7 +109,9 @@ export default function Standings() {
   const lg = useLeague();
   const [conf, setConf] = usePref(`conf:${lg}`, lg === 'nfl' ? 'American' : 'East');
   const [view, setView] = usePref('nflStandingsView', 'division');
-  const { data, error, loading, reload } = useData((fresh) => getStandings(lg, { fresh }), [lg]);
+  const [pickedSeason, setSeason] = useState(null);
+  const season = pickedSeason && seasonOptions(lg).some((o) => o.value === pickedSeason) ? pickedSeason : currentSeason(lg);
+  const { data, error, loading, reload } = useData((fresh) => getStandings(lg, season, { fresh }), [lg, season]);
   const current = data?.find((c) => c.name?.startsWith(conf)) ?? data?.[0];
 
   const confOptions =
@@ -119,7 +121,12 @@ export default function Standings() {
 
   return (
     <div>
-      <PageTitle eyebrow={lg.toUpperCase()}>Standings</PageTitle>
+      <PageTitle
+        eyebrow={`${lg.toUpperCase()} · ${seasonLabel(lg, season)}`}
+        right={<SeasonPicker options={seasonOptions(lg)} value={season} onChange={setSeason} />}
+      >
+        Standings
+      </PageTitle>
       <div className="mb-4 flex flex-wrap gap-2">
         <Segmented className="w-full md:w-72" value={conf} onChange={setConf} options={confOptions} />
         {lg === 'nfl' && (

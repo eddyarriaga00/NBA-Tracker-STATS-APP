@@ -201,3 +201,22 @@ export function Chips({ options, value, onChange, className = '' }) {
     </div>
   );
 }
+
+/** Compact season dropdown. Native <select> so phones get their own picker. */
+export function SeasonPicker({ options, value, onChange, className = '' }) {
+  return (
+    <label className={`relative inline-flex shrink-0 items-center ${className}`}>
+      <span className="sr-only">Season</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="cursor-pointer appearance-none rounded-full bg-fill py-1 pl-3 pr-7 text-[13px] font-semibold text-label outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      <svg viewBox="0 0 24 24" className="pointer-events-none absolute right-2.5 h-3.5 w-3.5 text-label-2" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+    </label>
+  );
+}
