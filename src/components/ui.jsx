@@ -7,8 +7,20 @@ import { useTheme } from '../lib/theme';
 export function TeamLogo({ abbr, size = 32, className = '', league }) {
   const { dark } = useTheme();
   const ctx = useLeague();
-  const [failed, setFailed] = useState(false);
-  const src = logoUrl(league ?? ctx, abbr, dark && !failed);
+  const [failed, setFailed] = useState(0); // 0 ok, 1 dark variant failed, 2 both failed
+  useEffect(() => setFailed(0), [abbr, dark]);
+  const src = logoUrl(league ?? ctx, abbr, dark && failed === 0);
+  if (!abbr || abbr === 'TBD' || failed >= 2) {
+    return (
+      <span
+        aria-hidden
+        className={`grid h-[var(--s)] w-[var(--s)] shrink-0 place-items-center rounded-full bg-fill text-[10px] font-bold text-label-3 ${className}`}
+        style={{ '--s': `${size}px` }}
+      >
+        {abbr && abbr !== 'TBD' ? abbr.slice(0, 3) : '?'}
+      </span>
+    );
+  }
   return (
     <img
       src={src}
@@ -16,7 +28,7 @@ export function TeamLogo({ abbr, size = 32, className = '', league }) {
       width={size}
       height={size}
       loading="lazy"
-      onError={() => setFailed(true)}
+      onError={() => setFailed((f) => (dark && f === 0 ? 1 : 2))}
       className={`h-[var(--s)] w-[var(--s)] shrink-0 object-contain ${className}`}
       style={{ '--s': `${size}px` }}
     />
@@ -112,9 +124,9 @@ export function Skeleton({ className = '' }) {
 export function ErrorState({ error, onRetry }) {
   return (
     <Card className="flex flex-col items-center gap-3 px-6 py-10 text-center">
-      <div className="text-[15px] font-semibold">Couldn't load data</div>
+      <div className="text-[15px] font-semibold">{error?.notFound ? 'Not found' : "Couldn't load data"}</div>
       <div className="text-[13px] text-label-2">{error?.message ?? 'Check your connection.'}</div>
-      {onRetry && (
+      {onRetry && !error?.notFound && (
         <button
           onClick={onRetry}
           className="rounded-full bg-accent px-4 py-1.5 text-[14px] font-semibold text-white active:opacity-70"

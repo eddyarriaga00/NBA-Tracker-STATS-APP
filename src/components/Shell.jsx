@@ -4,6 +4,7 @@ import { LEAGUES } from '../api/espn';
 import { LeagueCtx, leagueFromPath, rememberLeague } from '../lib/league';
 import { useTheme } from '../lib/theme';
 import { Icon } from './icons';
+import ErrorBoundary from './ErrorBoundary';
 import Search from './Search';
 
 const THEMES = [
@@ -157,7 +158,9 @@ export default function Shell() {
         </header>
 
         <main className="mx-auto max-w-5xl px-3 pb-[calc(84px+env(safe-area-inset-bottom))] pt-3 md:px-4 md:pt-4 lg:pb-16">
-          <Outlet />
+          <ErrorBoundary resetKey={pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
 
         <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-sep bg-bar pb-[env(safe-area-inset-bottom)] backdrop-blur-xl backdrop-saturate-150 lg:hidden">

@@ -21,12 +21,19 @@ async function get(url, { ttl = 15_000, fresh = false } = {}) {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const res = await fetch(url);
-      if (!res.ok) throw new Error(`ESPN request failed (${res.status})`);
+      if (res.status >= 400 && res.status < 500) {
+        // Not found / bad request won't fix itself, so don't retry.
+        const err = new Error("We couldn't find that. The link may be wrong or out of date.");
+        err.notFound = true;
+        throw err;
+      }
+      if (!res.ok) throw new Error(`ESPN is having trouble right now (${res.status}).`);
       const data = await res.json();
       cache.set(url, { at: Date.now(), data });
       return data;
     } catch (e) {
-      lastErr = e;
+      lastErr = e.message === 'Failed to fetch' ? new Error("Can't reach the server. Check your connection.") : e;
+      if (e.notFound) break;
       await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
     }
   }
@@ -44,11 +51,11 @@ export const logoUrl = (lg, abbr, dark = false) =>
 const headshotOf = (a) => (typeof a?.headshot === 'string' ? a.headshot : a?.headshot?.href);
 const hex = (c, fallback = '#888888') => (c ? `#${c}` : fallback);
 
-function normStatus(status, date) {
+function normStatus(status, date, timeValid = true) {
   const t = status?.type ?? {};
   const state = t.state ?? 'pre'; // pre | in | post
   let label = t.shortDetail ?? '';
-  if (state === 'pre' && t.name === 'STATUS_SCHEDULED' && date) {
+  if (state === 'pre' && t.name === 'STATUS_SCHEDULED' && date && timeValid !== false) {
     label = new Date(date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   }
   if (state === 'post') label = t.shortDetail?.startsWith('Final') ? t.shortDetail : 'Final';
@@ -69,7 +76,9 @@ function totalRecord(c) {
 
 function normCompetitor(c) {
   const t = c?.team ?? {};
+  const tbd = !t.id || Number(t.id) < 0 || t.abbreviation === 'TBD';
   return {
+    tbd,
     id: t.id,
     abbr: t.abbreviation,
     name: t.shortDisplayName ?? t.name,
@@ -122,7 +131,7 @@ function normGame(lg, e) {
     id: e.id,
     league: lg,
     date: e.date,
-    status: normStatus(e.status ?? comp.status, e.date),
+    status: normStatus(e.status ?? comp.status, e.date, e.timeValid),
     home: normCompetitor(home),
     away: normCompetitor(away),
     leaders: cardLeaders(lg, comp, away, home),
@@ -392,7 +401,8 @@ export async function getGame(lg, id, opts) {
     id,
     league: lg,
     date: comp.date,
-    status: normStatus(comp.status, comp.date),
+    status: normStatus(comp.status, comp.date, comp.timeValid ?? s.header?.timeValid),
+    timeValid: (comp.timeValid ?? s.header?.timeValid) !== false,
     home,
     away,
     box: normBox(lg, s),
@@ -670,7 +680,15 @@ export async function getTeam(lg, id, opts) {
   const raw = r.athletes ?? [];
   const groups = raw.length && raw[0]?.items
     ? raw.map((g) => ({
-        title: { offense: 'Offense', defense: 'Defense', specialTeam: 'Special Teams' }[g.position] ?? g.position,
+        title:
+          {
+            offense: 'Offense',
+            defense: 'Defense',
+            specialTeam: 'Special Teams',
+            injuredReserveOrOut: 'Injured Reserve / Out',
+            suspended: 'Suspended',
+            practiceSquad: 'Practice Squad',
+          }[g.position] ?? String(g.position ?? 'Other').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase()),
         players: (g.items ?? []).map(toPlayer),
       }))
     : [{ title: 'Roster', players: raw.map(toPlayer) }];

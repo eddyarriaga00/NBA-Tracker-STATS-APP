@@ -21,7 +21,11 @@ function Hero({ g }) {
   const h = visibleColor(home.color, dark);
 
   const Side = ({ t }) => (
-    <Link to={`/${lg}/team/${t.id}`} className="flex flex-1 flex-col items-center gap-1.5 transition active:scale-95">
+    <Link
+      to={t.tbd ? '#' : `/${lg}/team/${t.id}`}
+      onClick={(e) => t.tbd && e.preventDefault()}
+      className="flex min-w-0 flex-1 flex-col items-center gap-1.5 transition active:scale-95"
+    >
       <TeamLogo abbr={t.abbr} size={48} className="drop-shadow-sm md:h-20 md:w-20" />
       <div className="text-center">
         <div className="text-[14px] font-semibold leading-tight md:text-[17px]">{t.name}</div>
@@ -54,7 +58,7 @@ function Hero({ g }) {
           {pre ? (
             <>
               <div className="font-display text-[24px] font-bold tracking-tight md:text-[28px]">
-                {status.postponed ? status.label : new Date(g.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                {status.postponed || !g.timeValid ? status.label || 'TBD' : new Date(g.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
               </div>
               <div className="text-[13px] text-label-2">
                 {new Date(g.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}

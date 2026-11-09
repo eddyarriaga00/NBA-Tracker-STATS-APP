@@ -282,7 +282,7 @@ export default function Player() {
       ) : error && !p ? (
         <ErrorState error={error} onRetry={reload} />
       ) : (
-        <div className="rise">
+        <div className="rise" key={`${lg}:${id}`}>
           <Hero bio={p.bio} lg={lg} />
           <SummaryTiles bio={p.bio} lg={lg} />
           <Facts bio={p.bio} />
