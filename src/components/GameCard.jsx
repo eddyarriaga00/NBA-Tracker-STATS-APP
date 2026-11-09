@@ -15,7 +15,7 @@ function Streak({ s }) {
 
 const md = (d) => {
   const x = new Date(d);
-  return Number.isNaN(x) ? '' : `${x.getMonth() + 1}/${x.getDate()}`;
+  return Number.isNaN(x.getTime()) ? '' : `${x.getMonth() + 1}/${x.getDate()}`;
 };
 
 function Form({ form }) {

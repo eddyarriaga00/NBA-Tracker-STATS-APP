@@ -65,6 +65,11 @@ function Matchup({ preview, home, away }) {
   );
 }
 
+const numDate = (d) => {
+  const x = new Date(d);
+  return Number.isNaN(x.getTime()) ? '' : `${x.getMonth() + 1}/${x.getDate()}`;
+};
+
 function LastFive({ preview, home, away }) {
   const lg = useLeague();
   const rows = [away, home]
@@ -76,21 +81,26 @@ function LastFive({ preview, home, away }) {
       <SectionTitle>Last 5 Games</SectionTitle>
       <Card className="divide-y divide-sep">
         {rows.map(({ t, games }) => (
-          <div key={t.id} className="flex items-center gap-3 px-4 py-3">
-            <TeamLogo abbr={t.abbr} size={24} />
-            <span className="w-10 text-[14px] font-semibold">{t.abbr}</span>
+          <div key={t.id} className="flex items-start gap-3 px-4 py-3">
+            <TeamLogo abbr={t.abbr} size={24} className="mt-2" />
+            <span className="mt-2.5 w-10 text-[14px] font-semibold">{t.abbr}</span>
             <div className="flex flex-1 gap-1.5">
               {[...games].reverse().map((g) => (
                 <Link
                   key={g.id}
                   to={`/${lg}/game/${g.id}`}
                   title={`${g.atVs} ${g.opp} ${g.score}`}
-                  className={`flex h-10 flex-1 flex-col items-center justify-center rounded-lg leading-tight text-white transition active:scale-95 ${
-                    g.result === 'W' ? 'bg-win' : g.result === 'L' ? 'bg-live' : 'bg-label-3'
-                  }`}
+                  className="flex flex-1 flex-col items-center gap-1 transition active:scale-95"
                 >
-                  <span className="text-[13px] font-bold">{g.result || '–'}</span>
-                  <span className="text-[9.5px] font-semibold opacity-90">{g.opp}</span>
+                  <span
+                    className={`flex h-10 w-full flex-col items-center justify-center rounded-lg leading-tight text-white ${
+                      g.result === 'W' ? 'bg-win' : g.result === 'L' ? 'bg-live' : 'bg-label-3'
+                    }`}
+                  >
+                    <span className="text-[13px] font-bold">{g.result || '–'}</span>
+                    <span className="text-[9.5px] font-semibold opacity-90">{g.opp}</span>
+                  </span>
+                  <span className="num text-[10.5px] text-label-2">{numDate(g.date)}</span>
                 </Link>
               ))}
             </div>
