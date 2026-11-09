@@ -45,13 +45,30 @@ function norm(league: 'nba' | 'nfl', e: any): Game | null {
   };
 }
 
+// ESPN turns away bare server requests, so look like a normal browser and
+// fall back to its second API host if the first one refuses.
+const HEADERS = {
+  'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15',
+  accept: 'application/json, text/plain, */*',
+  'accept-language': 'en-US,en;q=0.9',
+  origin: 'https://www.espn.com',
+  referer: 'https://www.espn.com/',
+};
 async function json(url: string) {
-  const r = await fetch(url, { headers: { 'cache-control': 'no-cache' } });
-  if (!r.ok) throw new Error(`${r.status} ${url}`);
-  return r.json();
+  const bust = `${url.includes('?') ? '&' : '?'}_=${Date.now()}`;
+  const hosts = [url, url.replace('site.api.espn.com/apis/site', 'site.web.api.espn.com/apis/site')];
+  let last = '';
+  for (const u of hosts) {
+    const r = await fetch(u + bust, { headers: HEADERS });
+    if (r.ok) return r.json();
+    last = `${r.status} ${u}`;
+  }
+  throw new Error(last);
 }
 
+const loadErrors: string[] = [];
 async function loadGames(): Promise<Game[]> {
+  loadErrors.length = 0;
   // NBA "today" follows US Eastern time; keep yesterday until 5am ET for late games.
   const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
   const key = (d: Date) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
@@ -65,7 +82,10 @@ async function loadGames(): Promise<Game[]> {
   // Keep the league attached to each response.
   const results = await Promise.allSettled(urls.map(([lg, u]) => json(u).then((d) => [lg, d] as const)));
   for (const r of results) {
-    if (r.status !== 'fulfilled') continue;
+    if (r.status !== 'fulfilled') {
+      loadErrors.push(String(r.reason?.message ?? r.reason).slice(0, 200));
+      continue;
+    }
     const [lg, d] = r.value;
     for (const e of d.events ?? []) {
       const g = norm(lg, e);
@@ -104,7 +124,7 @@ Deno.serve(async (req) => {
   }
 
   const games = await loadGames();
-  if (!games.length) return Response.json({ games: 0 });
+  if (!games.length) return Response.json({ games: 0, errors: loadErrors });
   const { data: rows } = await db.from('alert_game_state').select('game_key,state,close_sent').in('game_key', games.map((g) => g.key));
   const prev = Object.fromEntries((rows ?? []).map((r) => [r.game_key, r]));
 
