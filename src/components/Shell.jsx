@@ -84,7 +84,7 @@ function LeagueSwitch({ league }) {
           role="tab"
           aria-selected={lg === league}
           onClick={() => go(lg)}
-          className={`relative z-10 px-3.5 py-1 text-[13px] font-bold tracking-wide transition-colors ${
+          className={`relative z-10 px-3 py-[3px] text-[12px] font-bold tracking-wide md:px-3.5 md:py-1 md:text-[13px] transition-colors ${
             lg === league ? 'text-label' : 'text-label-2'
           }`}
         >
@@ -125,9 +125,9 @@ export default function Shell() {
     <LeagueCtx.Provider value={league}>
       <div className="min-h-dvh">
         <header className="sticky top-0 z-40 border-b border-sep bg-bar pt-[env(safe-area-inset-top)] backdrop-blur-xl backdrop-saturate-150">
-          <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4">
+          <div className="mx-auto flex h-12 max-w-5xl items-center gap-2.5 px-3 md:h-14 md:gap-3 md:px-4">
             <NavLink to={`/${league}`} className="flex shrink-0 items-center gap-2" aria-label="Home">
-              <img src="./favicon.svg" alt="" className="h-8 w-8" />
+              <img src="./favicon.svg" alt="" className="h-7 w-7 md:h-8 md:w-8" />
             </NavLink>
             <LeagueSwitch league={league} />
             <nav className="mx-auto hidden items-center gap-1 lg:flex">
@@ -156,7 +156,7 @@ export default function Shell() {
           </div>
         </header>
 
-        <main className="mx-auto max-w-5xl px-4 pb-[calc(96px+env(safe-area-inset-bottom))] pt-4 lg:pb-16">
+        <main className="mx-auto max-w-5xl px-3 pb-[calc(84px+env(safe-area-inset-bottom))] pt-3 md:px-4 md:pt-4 lg:pb-16">
           <Outlet />
         </main>
 
@@ -166,11 +166,11 @@ export default function Shell() {
               <NavLink
                 key={t.label}
                 to={t.to}
-                className={`flex flex-col items-center gap-0.5 pb-1.5 pt-2 text-[10.5px] font-medium transition ${
+                className={`flex flex-col items-center gap-0.5 pb-1 pt-1.5 text-[10px] font-medium transition ${
                   isActive(t) ? 'text-accent' : 'text-label-3'
                 }`}
               >
-                <t.icon className="h-[25px] w-[25px]" />
+                <t.icon className="h-[22px] w-[22px]" />
                 {t.label}
               </NavLink>
             ))}

@@ -3,7 +3,9 @@ import { Link, useParams } from 'react-router-dom';
 import { getTeam } from '../api/espn';
 import { BackButton, Card, ErrorState, Headshot, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
 import { visibleColor } from '../lib/color';
+import { useFavorites } from '../lib/favorites';
 import { useLeague } from '../lib/league';
+import { Icon } from '../components/icons';
 import { useTheme } from '../lib/theme';
 import { useData } from '../lib/useData';
 
@@ -14,13 +16,13 @@ function GameRow({ e, lg }) {
   const done = e.state === 'post';
   return (
     <Link to={`/${lg}/game/${e.id}`} className="flex items-center gap-3 px-4 py-2.5 transition hover:bg-fill/40">
-      <div className="w-[88px] shrink-0">
+      <div className="w-[80px] shrink-0 md:w-[88px]">
         <div className="text-[13px] font-semibold">{fmtDate(e.date)}</div>
         {e.week && <div className="text-[11px] text-label-2">{e.week}</div>}
       </div>
       <span className="w-5 shrink-0 text-center text-[12px] text-label-2">{e.home ? 'vs' : '@'}</span>
       <TeamLogo abbr={e.opp.abbr} size={26} />
-      <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{e.opp.name}</span>
+      <span className="min-w-0 flex-1 truncate text-[14px] font-semibold md:text-[15px]">{e.opp.name}</span>
       {done ? (
         <span className="num shrink-0 text-[14px]">
           <span className={`mr-1.5 font-bold ${e.win ? 'text-win' : 'text-live'}`}>{e.win ? 'W' : 'L'}</span>
@@ -80,7 +82,7 @@ function Roster({ t, lg }) {
           <Card className="divide-y divide-sep">
             {g.players.map((p) => (
               <Link key={p.id} to={`/${lg}/player/${p.id}`} className="flex items-center gap-3 px-4 py-2.5 transition hover:bg-fill/40">
-                <Headshot src={p.headshot} size={42} />
+                <Headshot src={p.headshot} size={36} className="md:h-[42px] md:w-[42px]" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-[15px] font-semibold">{p.name}</span>
@@ -108,6 +110,7 @@ export default function Team() {
   const lg = useLeague();
   const { dark } = useTheme();
   const [tab, setTab] = useState('schedule');
+  const { isFav, toggle } = useFavorites();
   const { data: t, error, loading, reload } = useData((fresh) => getTeam(lg, id, { fresh }), [lg, id]);
 
   const form = useMemo(() => (t ? t.schedule.filter((e) => e.state === 'post').slice(-5) : []), [t]);
@@ -125,11 +128,23 @@ export default function Team() {
         <div className="rise">
           <Card className="relative overflow-hidden">
             <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: `linear-gradient(120deg, ${c}40 0%, ${c}10 50%, transparent 80%)` }} />
-            <div className="relative flex items-center gap-4 p-5 md:p-7">
-              <TeamLogo abbr={t.abbr} size={84} className="md:h-28 md:w-28" />
+            {t && (
+              <button
+                onClick={() => toggle(lg, t.id)}
+                aria-label={isFav(lg, t.id) ? 'Remove from favorites' : 'Add to favorites'}
+                className={`absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold transition active:scale-95 ${
+                  isFav(lg, t.id) ? 'bg-[#ff9f0a] text-white' : 'bg-fill text-label-2 hover:text-label'
+                }`}
+              >
+                <Icon.Star filled={isFav(lg, t.id)} className="h-4 w-4" />
+                {isFav(lg, t.id) ? 'Favorite' : 'Follow'}
+              </button>
+            )}
+            <div className="relative flex items-center gap-3 p-4 pr-24 md:gap-4 md:p-7 md:pr-32">
+              <TeamLogo abbr={t.abbr} size={60} className="md:h-28 md:w-28" />
               <div className="min-w-0">
-                <h1 className="font-display text-[28px] font-bold leading-tight tracking-tight md:text-[34px]">{t.name}</h1>
-                <div className="mt-1 text-[15px] font-semibold">{t.record}</div>
+                <h1 className="font-display text-[22px] font-bold leading-tight tracking-tight md:text-[34px]">{t.name}</h1>
+                <div className="mt-0.5 text-[14px] font-semibold md:mt-1 md:text-[15px]">{t.record}</div>
                 <div className="text-[13px] text-label-2">{t.standing}</div>
                 {t.coach && <div className="mt-1 text-[12px] text-label-2">Head coach: {t.coach}</div>}
               </div>

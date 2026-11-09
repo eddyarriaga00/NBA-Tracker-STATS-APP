@@ -17,8 +17,8 @@ export function TeamLogo({ abbr, size = 32, className = '', league }) {
       height={size}
       loading="lazy"
       onError={() => setFailed(true)}
-      className={`shrink-0 object-contain ${className}`}
-      style={{ width: size, height: size }}
+      className={`h-[var(--s)] w-[var(--s)] shrink-0 object-contain ${className}`}
+      style={{ '--s': `${size}px` }}
     />
   );
 }
@@ -27,8 +27,8 @@ export function Headshot({ src, size = 40, className = '' }) {
   const [failed, setFailed] = useState(!src);
   return (
     <div
-      className={`shrink-0 overflow-hidden rounded-full bg-fill ${className}`}
-      style={{ width: size, height: size }}
+      className={`h-[var(--s)] w-[var(--s)] shrink-0 overflow-hidden rounded-full bg-fill ${className}`}
+      style={{ '--s': `${size}px` }}
     >
       {!failed && (
         <img
@@ -54,8 +54,8 @@ export function Card({ children, className = '', ...rest }) {
 
 export function SectionTitle({ children, right, className = '' }) {
   return (
-    <div className={`mb-2 mt-7 flex items-baseline justify-between px-1 ${className}`}>
-      <h2 className="font-display text-[22px] font-bold tracking-tight">{children}</h2>
+    <div className={`mb-2 mt-6 flex items-baseline justify-between px-1 md:mt-7 ${className}`}>
+      <h2 className="font-display text-[19px] font-bold tracking-tight md:text-[22px]">{children}</h2>
       {right}
     </div>
   );
@@ -85,7 +85,7 @@ export function Segmented({ options, value, onChange, className = '' }) {
           role="tab"
           aria-selected={o.value === value}
           onClick={() => onChange(o.value)}
-          className={`relative z-10 truncate px-3 py-[7px] text-[13px] font-semibold transition-colors ${
+          className={`relative z-10 truncate px-2 py-[6px] text-[12.5px] font-semibold transition-colors md:px-3 md:py-[7px] md:text-[13px] ${
             o.value === value ? 'text-label' : 'text-label-2 hover:text-label'
           }`}
         >
@@ -140,9 +140,9 @@ export function PageTitle({ eyebrow, children, right }) {
     <div className="mb-3 flex items-end justify-between gap-3 px-1">
       <div className="min-w-0">
         {eyebrow && (
-          <div className="truncate text-[13px] font-semibold uppercase tracking-wide text-label-2">{eyebrow}</div>
+          <div className="truncate text-[11.5px] font-semibold uppercase tracking-wide text-label-2 md:text-[13px]">{eyebrow}</div>
         )}
-        <h1 className="font-display text-[34px] font-bold leading-tight tracking-tight">{children}</h1>
+        <h1 className="font-display text-[28px] font-bold leading-tight tracking-tight md:text-[34px]">{children}</h1>
       </div>
       {right && <div className="flex shrink-0 items-center gap-2 pb-1.5">{right}</div>}
     </div>
@@ -154,7 +154,7 @@ export function BackButton({ label = 'Back', fallback = '/' }) {
   return (
     <button
       onClick={() => (window.history.state?.idx > 0 ? navigate(-1) : navigate(fallback))}
-      className="mb-3 -ml-1 flex items-center gap-0.5 text-[17px] text-accent active:opacity-60"
+      className="mb-2 -ml-1 flex items-center gap-0.5 text-[16px] text-accent active:opacity-60 md:mb-3 md:text-[17px]"
     >
       <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m15 5-7 7 7 7" /></svg>
       {label}
@@ -179,7 +179,7 @@ export function Chips({ options, value, onChange, className = '' }) {
           key={o.value}
           data-active={o.value === value || undefined}
           onClick={() => onChange(o.value)}
-          className={`shrink-0 rounded-full px-4 py-1.5 text-[14px] font-semibold transition active:scale-95 ${
+          className={`shrink-0 rounded-full px-3.5 py-1 text-[13px] font-semibold transition active:scale-95 md:px-4 md:py-1.5 md:text-[14px] ${
             o.value === value ? 'bg-label text-bg' : 'bg-card text-label-2 hover:text-label'
           }`}
         >

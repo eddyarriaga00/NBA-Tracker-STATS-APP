@@ -20,13 +20,13 @@ function Hero({ bio, lg }) {
     <Card className="relative overflow-hidden">
       <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: `radial-gradient(120% 140% at 100% 100%, ${c}55 0%, ${c}18 45%, transparent 70%)` }} />
       {bio.headshot && (
-        <img src={bio.headshot} alt="" className="pointer-events-none absolute bottom-0 right-[-20px] h-[190px] w-auto object-contain object-bottom md:right-4 md:h-[250px]" />
+        <img src={bio.headshot} alt="" className="pointer-events-none absolute bottom-0 right-[-16px] h-[160px] w-auto object-contain object-bottom md:right-4 md:h-[250px]" />
       )}
-      <div className="relative min-h-[200px] p-5 md:min-h-[250px] md:p-7">
+      <div className="relative min-h-[170px] p-4 md:min-h-[250px] md:p-7">
         <div className="max-w-[60%]">
-          <div className="text-[15px] text-label-2">{bio.first}</div>
-          <h1 className="font-display text-[32px] font-bold leading-[1.05] tracking-tight [overflow-wrap:anywhere] md:text-[44px]">{bio.last}</h1>
-          <div className="mt-2 text-[14px] text-label-2">
+          <div className="text-[13px] text-label-2 md:text-[15px]">{bio.first}</div>
+          <h1 className="font-display text-[26px] font-bold leading-[1.05] tracking-tight [overflow-wrap:anywhere] md:text-[44px]">{bio.last}</h1>
+          <div className="mt-1.5 text-[13px] text-label-2 md:mt-2 md:text-[14px]">
             {[bio.jersey && `#${bio.jersey}`, bio.position].filter(Boolean).join(' · ')}
           </div>
           {bio.team && (
@@ -52,12 +52,12 @@ function SummaryTiles({ bio, lg }) {
   return (
     <>
       <SectionTitle right={<span className="text-[12px] text-label-2">{bio.summaryTitle}</span>}>This Season</SectionTitle>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-3">
         {bio.summary.map((s) => (
-          <Card key={s.label} className="px-4 py-3">
-            <div className="text-[12px] font-semibold uppercase tracking-wide text-label-2">{s.label}</div>
-            <div className="num mt-1 font-display text-[30px] font-bold leading-none tracking-tight">{s.value}</div>
-            {s.rank && <div className="mt-1.5 text-[12px] text-label-2">{s.rank} in {lg.toUpperCase()}</div>}
+          <Card key={s.label} className="px-3.5 py-2.5 md:px-4 md:py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-label-2 md:text-[12px]">{s.label}</div>
+            <div className="num mt-1 font-display text-[24px] font-bold leading-none tracking-tight md:text-[30px]">{s.value}</div>
+            {s.rank && <div className="mt-1 text-[11px] text-label-2 md:mt-1.5 md:text-[12px]">{s.rank} in {lg.toUpperCase()}</div>}
           </Card>
         ))}
       </div>
@@ -72,9 +72,9 @@ function Facts({ bio }) {
       <SectionTitle>Bio</SectionTitle>
       <Card className="grid grid-cols-2 gap-px overflow-hidden bg-sep md:grid-cols-4">
         {bio.facts.map(([k, v]) => (
-          <div key={k} className="bg-card px-4 py-3">
+          <div key={k} className="bg-card px-3.5 py-2.5 md:px-4 md:py-3">
             <div className="text-[12px] text-label-2">{k}</div>
-            <div className="mt-0.5 text-[15px] font-semibold">{v}</div>
+            <div className="mt-0.5 text-[14px] font-semibold md:text-[15px]">{v}</div>
           </div>
         ))}
       </Card>
@@ -117,7 +117,7 @@ function GameLog({ log, lg }) {
           <div className="text-[13px] font-semibold text-label-2">{log.labels[stat]} · last {chart.length} games</div>
           <div className="text-[13px] text-label-2">avg <span className="num font-bold text-label">{avg.toFixed(1)}</span></div>
         </div>
-        <div className="relative mt-3 flex h-[130px] items-end gap-[3px]">
+        <div className="relative mt-3 flex h-[110px] items-end gap-[3px] md:h-[130px]">
           <div aria-hidden className="absolute inset-x-0 border-t border-dashed border-label-3" style={{ bottom: `${(avg / max) * 100}%` }} />
           {chart.map(({ r, v }) => (
             <Link

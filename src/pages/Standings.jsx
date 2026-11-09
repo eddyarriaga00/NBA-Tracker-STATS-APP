@@ -70,7 +70,7 @@ function Table({ teams, dividers = {}, showSeed = true, title }) {
     <Card className="rise overflow-hidden">
       {title && <div className="px-4 pt-3 text-[15px] font-bold">{title}</div>}
       <div className="no-scrollbar overflow-x-auto">
-        <table className="num w-full whitespace-nowrap text-[14px]">
+        <table className="num w-full whitespace-nowrap text-[13px] md:text-[14px]">
           <thead>
             <tr className="border-b border-sep text-[11px] font-semibold uppercase tracking-wide text-label-2">
               <th className="sticky left-0 z-10 bg-card py-2.5 pl-4 text-left font-semibold">Team</th>
@@ -83,10 +83,10 @@ function Table({ teams, dividers = {}, showSeed = true, title }) {
             {teams.map((t, i) => [
               dividers[i] && <Divider key={`d${i}`} label={dividers[i]} cols={span} />,
               <tr key={t.id} className="transition-colors hover:bg-fill/50">
-                <td className="sticky left-0 z-10 bg-card py-2.5 pl-3 pr-2">
+                <td className="sticky left-0 z-10 bg-card py-2 pl-3 pr-2 md:py-2.5">
                   <Link to={`/${lg}/team/${t.id}`} className="flex items-center gap-3">
                     {showSeed && <span className="w-5 text-right text-[13px] text-label-2">{t.seed < 99 ? t.seed : ''}</span>}
-                    <TeamLogo abbr={t.abbr} size={26} />
+                    <TeamLogo abbr={t.abbr} size={22} className="md:h-[26px] md:w-[26px]" />
                     <span className="font-semibold">{t.name}</span>
                     {t.clinch && <span className="text-[11px] font-semibold text-label-2">{t.clinch}</span>}
                   </Link>

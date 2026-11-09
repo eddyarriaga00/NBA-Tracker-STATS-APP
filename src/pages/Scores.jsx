@@ -5,6 +5,7 @@ import { useCommentCounts } from '../components/Comments';
 import GameCard from '../components/GameCard';
 import { Icon } from '../components/icons';
 import { Empty, ErrorState, PageTitle, Skeleton } from '../components/ui';
+import { useFavorites } from '../lib/favorites';
 import { useLeague } from '../lib/league';
 import { useData } from '../lib/useData';
 
@@ -13,6 +14,9 @@ const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + 
 function GameGrid({ games, loading, error, reload, emptyTitle, emptySub }) {
   const rooms = useMemo(() => (games ?? []).map((g) => `${g.league}:game:${g.id}`), [games]);
   const counts = useCommentCounts(rooms);
+  const { isFav } = useFavorites();
+  const fav = (g) => isFav(g.league, g.home.id) || isFav(g.league, g.away.id);
+  const sorted = games ? [...games.filter(fav), ...games.filter((g) => !fav(g))] : games;
   if (loading && !games)
     return (
       <div className="grid gap-3 md:grid-cols-2">
@@ -22,8 +26,8 @@ function GameGrid({ games, loading, error, reload, emptyTitle, emptySub }) {
   if (error && !games) return <ErrorState error={error} onRetry={reload} />;
   if (!games.length) return <Empty title={emptyTitle} subtitle={emptySub} />;
   return (
-    <div className="grid gap-3 md:grid-cols-2">
-      {games.map((g, i) => <GameCard key={g.id} g={g} index={i} comments={counts[`${g.league}:game:${g.id}`] ?? 0} />)}
+    <div className="grid gap-2.5 md:grid-cols-2 md:gap-3">
+      {sorted.map((g, i) => <GameCard key={g.id} g={g} index={i} favorite={fav(g)} comments={counts[`${g.league}:game:${g.id}`] ?? 0} />)}
     </div>
   );
 }
@@ -49,14 +53,14 @@ function DateStrip({ selected, onSelect }) {
             <button
               key={k}
               onClick={() => onSelect(d)}
-              className={`flex flex-col items-center rounded-xl py-1.5 transition active:scale-95 ${
+              className={`flex flex-col items-center rounded-xl py-1 transition active:scale-95 md:py-1.5 ${
                 sel ? 'bg-accent text-white shadow-[0_4px_14px_rgba(0,122,255,0.35)]' : 'hover:bg-fill'
               }`}
             >
-              <span className={`text-[11px] font-semibold uppercase ${sel ? 'text-white/80' : 'text-label-2'}`}>
+              <span className={`text-[10px] font-semibold uppercase md:text-[11px] ${sel ? 'text-white/80' : 'text-label-2'}`}>
                 {d.toLocaleDateString([], { weekday: 'short' })}
               </span>
-              <span className={`num text-[17px] font-semibold ${!sel && k === todayKey ? 'text-accent' : ''}`}>{d.getDate()}</span>
+              <span className={`num text-[15px] font-semibold md:text-[17px] ${!sel && k === todayKey ? 'text-accent' : ''}`}>{d.getDate()}</span>
             </button>
           );
         })}
@@ -198,7 +202,7 @@ function NflScores() {
               key={c.key}
               data-active={c.key === curKey || undefined}
               onClick={() => pick(c)}
-              className={`shrink-0 rounded-full px-3.5 py-1.5 text-[14px] font-semibold transition active:scale-95 ${
+              className={`shrink-0 rounded-full px-3 py-1 text-[13px] font-semibold transition active:scale-95 md:px-3.5 md:py-1.5 md:text-[14px] ${
                 c.key === curKey ? 'bg-accent text-white shadow-[0_4px_14px_rgba(0,122,255,0.35)]' : 'bg-card text-label-2 hover:text-label'
               }`}
             >
@@ -222,7 +226,7 @@ function NflScores() {
         ) : (
           days.map(([label, games]) => (
             <section key={label} className="mb-5">
-              <h2 className="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-label-2">{label}</h2>
+              <h2 className="mb-1.5 px-1 text-[11.5px] font-semibold uppercase tracking-wide text-label-2 md:mb-2 md:text-[13px]">{label}</h2>
               <GameGrid games={games} />
             </section>
           ))

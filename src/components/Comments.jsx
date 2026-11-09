@@ -297,7 +297,7 @@ function Message({ c, mine, showHead, reactions, me, active, setActive, onReact,
         <div className={`relative flex items-center gap-1 ${mine ? 'flex-row-reverse' : ''}`}>
           <button
             onClick={() => setActive(active ? null : c.id)}
-            className={`whitespace-pre-wrap break-words rounded-[18px] px-3.5 py-2 text-left text-[15px] leading-snug [overflow-wrap:anywhere] ${
+            className={`whitespace-pre-wrap break-words rounded-[18px] px-3 py-1.5 text-left text-[14.5px] leading-snug md:px-3.5 md:py-2 md:text-[15px] [overflow-wrap:anywhere] ${
               mine ? 'bg-accent text-white' : 'bg-fill text-label'
             } ${c.pending ? 'opacity-60' : ''}`}
           >

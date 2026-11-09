@@ -22,9 +22,9 @@ function Hero({ g }) {
 
   const Side = ({ t }) => (
     <Link to={`/${lg}/team/${t.id}`} className="flex flex-1 flex-col items-center gap-1.5 transition active:scale-95">
-      <TeamLogo abbr={t.abbr} size={64} className="drop-shadow-sm md:h-20 md:w-20" />
+      <TeamLogo abbr={t.abbr} size={48} className="drop-shadow-sm md:h-20 md:w-20" />
       <div className="text-center">
-        <div className="text-[15px] font-semibold leading-tight md:text-[17px]">{t.name}</div>
+        <div className="text-[14px] font-semibold leading-tight md:text-[17px]">{t.name}</div>
         <div className="num text-[12px] text-label-2">{t.record}</div>
       </div>
     </Link>
@@ -33,7 +33,7 @@ function Hero({ g }) {
   const Score = ({ t }) => (
     <span
       key={status.state === 'in' ? t.score : undefined}
-      className={`num font-display text-[44px] font-bold leading-none tracking-tight md:text-[56px] ${
+      className={`num font-display text-[36px] font-bold leading-none tracking-tight md:text-[56px] ${
         final && !t.winner ? 'text-label-3' : ''
       } ${status.state === 'in' ? 'score-flash' : ''}`}
     >
@@ -48,12 +48,12 @@ function Hero({ g }) {
         className="pointer-events-none absolute inset-0 opacity-[0.14] dark:opacity-[0.22]"
         style={{ background: `linear-gradient(100deg, ${a} 0%, transparent 42%, transparent 58%, ${h} 100%)` }}
       />
-      <div className="relative flex items-center gap-2 px-3 py-6 md:px-8 md:py-8">
+      <div className="relative flex items-center gap-1 px-2 py-4 md:gap-2 md:px-8 md:py-8">
         <Side t={away} />
         <div className="flex shrink-0 flex-col items-center gap-2">
           {pre ? (
             <>
-              <div className="font-display text-[28px] font-bold tracking-tight">
+              <div className="font-display text-[24px] font-bold tracking-tight md:text-[28px]">
                 {status.postponed ? status.label : new Date(g.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
               </div>
               <div className="text-[13px] text-label-2">
@@ -62,9 +62,9 @@ function Hero({ g }) {
             </>
           ) : (
             <>
-              <div className="flex items-center gap-4 md:gap-6">
+              <div className="flex items-center gap-2.5 md:gap-6">
                 <Score t={away} />
-                <span className="text-[20px] text-label-3">–</span>
+                <span className="text-[18px] text-label-3">–</span>
                 <Score t={home} />
               </div>
               {status.state === 'in' ? <LiveBadge label={status.label} /> : <span className="text-[13px] font-semibold text-label-2">{status.label}</span>}
@@ -144,11 +144,11 @@ function GameLeaders({ g }) {
   const Player = ({ p, right }) =>
     p ? (
       <Link to={`/${lg}/player/${p.id}`} className={`flex min-w-0 flex-1 items-center gap-2.5 ${right ? 'flex-row-reverse text-right' : ''}`}>
-        <Headshot src={p.headshot} size={40} />
+        <Headshot src={p.headshot} size={34} className="md:h-10 md:w-10" />
         <div className="min-w-0">
           <div className="truncate text-[14px] font-semibold">{p.name}</div>
           {big ? (
-            <div className="num font-display text-[20px] font-bold leading-tight">{p.value}</div>
+            <div className="num font-display text-[18px] font-bold leading-tight md:text-[20px]">{p.value}</div>
           ) : (
             <div className="truncate text-[12px] text-label-2 num">{p.value}</div>
           )}
