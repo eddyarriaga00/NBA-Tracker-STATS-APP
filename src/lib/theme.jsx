@@ -29,9 +29,17 @@ export function ThemeProvider({ children }) {
     });
   }, [dark]);
 
+  // Also follows changes synced from your account on another device.
+  useEffect(() => {
+    const on = () => setPrefState(read());
+    window.addEventListener('theme', on);
+    return () => window.removeEventListener('theme', on);
+  }, []);
+
   const setPref = (p) => {
     setPrefState(p);
     try { localStorage.setItem('theme', p); } catch { /* storage unavailable */ }
+    window.dispatchEvent(new Event('theme-changed'));
   };
 
   return <ThemeCtx.Provider value={{ pref, dark, setPref }}>{children}</ThemeCtx.Provider>;

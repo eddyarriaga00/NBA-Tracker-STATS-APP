@@ -24,6 +24,22 @@ const setActive = (on) => {
   window.dispatchEvent(new Event('push'));
 };
 
+// Latest alert status, readable from any page (Settings shows it).
+let lastStatus = null;
+const publish = (s) => {
+  lastStatus = s;
+  window.dispatchEvent(new Event('push-status'));
+};
+export function usePushStatus() {
+  const [s, setS] = useState(lastStatus);
+  useEffect(() => {
+    const on = () => setS(lastStatus);
+    window.addEventListener('push-status', on);
+    return () => window.removeEventListener('push-status', on);
+  }, []);
+  return s;
+}
+
 /** Keeps this device's saved alert choices in sync with settings and followed teams. */
 export function usePushSync() {
   const [followedOn] = useSetting('alertsFollowed');
@@ -37,8 +53,11 @@ export function usePushSync() {
     let alive = true;
     const run = () =>
       syncPush({ followed: favs, followedOn, closeOn, spoiler })
-        .then((r) => alive && setStatus(r))
-        .catch((e) => alive && setStatus({ ok: false, reason: 'error', message: e?.message }));
+        .then((r) => alive && (setStatus(r), publish(r)))
+        .catch((e) => {
+          const r = { ok: false, reason: 'error', message: e?.message };
+          if (alive) (setStatus(r), publish(r));
+        });
     const t = setTimeout(run, 400); // settle rapid toggles
     // Re-sync once notification permission is granted from the settings toggle.
     window.addEventListener('notification-permission', run);

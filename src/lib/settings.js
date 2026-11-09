@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 // Small persisted settings (per device). Every hook instance stays in sync.
-const DEFAULTS = { spoilerFree: false, alertsFollowed: false, alertsClose: false };
+const DEFAULTS = { spoilerFree: false, alertsFollowed: false, alertsClose: false, defaultLeague: 'last' };
 
 const read = (key) => {
   try {

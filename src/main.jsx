@@ -10,6 +10,7 @@ import { loadPage, watchForUpdates } from './lib/update';
 
 registerServiceWorker(); // alerts when the app is closed + offline copy
 clearAlertBadgeOnOpen();
+import('./lib/sync').then((m) => m.startSync()); // followed teams + preferences follow your account
 // Coming back from Google sign-in.
 if (/[?&](code|error)=/.test(location.search) || /error_code=/.test(location.hash)) {
   import('./lib/account').then((m) => m.handleAuthRedirect());
@@ -28,6 +29,7 @@ const Teams = lazy(loadPage(() => import('./pages/Teams')));
 const Chat = lazy(loadPage(() => import('./pages/Chat')));
 const Compare = lazy(loadPage(() => import('./pages/Compare')));
 const Picks = lazy(loadPage(() => import('./pages/Picks')));
+const Settings = lazy(loadPage(() => import('./pages/Settings')));
 const DevField = import.meta.env.DEV ? lazy(() => import('./pages/DevField')) : null;
 
 // Only "nba" and "nfl" are valid league segments; anything else goes home.
@@ -53,6 +55,7 @@ createRoot(document.getElementById('root')).render(
           <Route element={<Shell />}>
             <Route index element={<Home />} />
             <Route path="chat" element={<Chat />} />
+            <Route path="settings" element={<Settings />} />
             {import.meta.env.DEV && <Route path="dev/field" element={<DevField />} />}
             <Route path=":lg" element={guard(<Scores />)} />
             <Route path=":lg/game/:id" element={guard(<Keyed Page={Game} />)} />

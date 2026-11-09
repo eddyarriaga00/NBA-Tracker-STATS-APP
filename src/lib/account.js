@@ -129,6 +129,7 @@ export async function createEmailAccount(email, password, nickname) {
     ? await sb.auth.updateUser({ email, password, data: meta })
     : await sb.auth.signUp({ email, password, options: { data: meta } });
   if (res.error) throw new Error(friendly(res.error));
+  window.dispatchEvent(new Event('signed-in'));
 }
 
 /** Sign in to an existing email account (this device switches to it). */
@@ -136,6 +137,7 @@ export async function signInWithEmail(email, password) {
   const sb = await getClient();
   const { error } = await sb.auth.signInWithPassword({ email, password });
   if (error) throw new Error(friendly(error));
+  window.dispatchEvent(new Event('signed-in'));
 }
 
 export async function signOut() {
@@ -163,7 +165,10 @@ export async function handleAuthRedirect() {
   let back = '#/';
   try { back = sessionStorage.getItem(RETURN_KEY) || '#/'; } catch { /* ignore */ }
   const sb = await getClient();
-  if (code) await sb.auth.exchangeCodeForSession(code).catch(() => {});
+  if (code) {
+    const { error } = await sb.auth.exchangeCodeForSession(code).catch((e) => ({ error: e }));
+    if (!error) window.dispatchEvent(new Event('signed-in'));
+  }
   history.replaceState(null, '', base() + back);
   if (errCode === 'identity_already_exists' || /already linked|already exists/i.test(errText || '')) {
     await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: base() } });
@@ -173,4 +178,36 @@ export async function handleAuthRedirect() {
     window.dispatchEvent(new CustomEvent('auth-error', { detail: (errText || errCode).replace(/\+/g, ' ') }));
   }
   window.dispatchEvent(new PopStateEvent('popstate')); // let the router see the restored page
+}
+
+/** Permanently deletes your account: picks, comments, reactions and alert signups. */
+export async function deleteAccount() {
+  const sb = await getClient();
+  const { error } = await sb.rpc('delete_my_account');
+  if (error) throw new Error(error.message);
+  await sb.auth.signOut({ scope: 'local' });
+  for (const k of ['pushActive', 'prefsSyncedUser']) {
+    try { localStorage.removeItem(k); } catch { /* ignore */ }
+  }
+}
+
+/** Your Pick'em record and comment count, for the profile card. */
+export async function getProfileStats(userId) {
+  const sb = await getClient();
+  const [picks, comments] = await Promise.all([
+    sb.from('picks').select('league,result').eq('user_id', userId),
+    sb.from('comments').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+  ]);
+  const rows = picks.data ?? [];
+  const w = rows.filter((r) => r.result === 'win').length;
+  const l = rows.filter((r) => r.result === 'loss').length;
+  return { picks: rows.length, w, l, pending: rows.filter((r) => !r.result).length, comments: comments.count ?? 0 };
+}
+
+/** Sends a test alert to this account's devices (server checks who you are). */
+export async function sendTestAlert() {
+  const sb = await getClient();
+  const { data, error } = await sb.functions.invoke('test-alert', { body: {} });
+  if (error) throw new Error('Couldn’t send a test alert.');
+  return data;
 }
