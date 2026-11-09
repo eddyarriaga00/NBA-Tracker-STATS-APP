@@ -10,6 +10,8 @@ import { visibleColor } from '../lib/color';
 import { useLeague } from '../lib/league';
 import { useTheme } from '../lib/theme';
 import { useData } from '../lib/useData';
+import { gameDelay } from '../lib/livePolling';
+import Freshness from '../components/Freshness';
 import { formatLine, sumLines } from '../lib/quarterStats';
 
 const periodName = (n) => (n <= 4 ? `Q${n}` : n === 5 ? 'OT' : `${n - 4}OT`);
@@ -576,9 +578,8 @@ export default function Game() {
   const [tab, setTab] = useState('box');
   const room = `${lg}:game:${id}`;
   const counts = useCommentCounts([room]);
-  const { data: g, error, loading, reload } = useData((fresh) => getGame(lg, id, { fresh }), [lg, id], {
-    pollMs: 15_000,
-    shouldPoll: (d) => d.status.state === 'in',
+  const { data: g, error, loading, reload, updatedAt } = useData((fresh) => getGame(lg, id, { fresh }), [lg, id], {
+    pollMs: gameDelay,
   });
 
   const comments = (
@@ -592,7 +593,10 @@ export default function Game() {
 
   return (
     <div>
-      <BackButton label="Scores" fallback={`/${lg}`} />
+      <div className="flex items-start justify-between">
+        <BackButton label="Scores" fallback={`/${lg}`} />
+        {g?.status.state === 'in' && <Freshness updatedAt={updatedAt} error={error} className="mt-1" />}
+      </div>
 
       {loading && !g ? (
         <div className="space-y-3">

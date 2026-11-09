@@ -30,14 +30,28 @@ export function seasonOptions(lg, back = 4) {
   return Array.from({ length: back + 1 }, (_, i) => ({ value: cur - i, label: seasonLabel(lg, cur - i) }));
 }
 
+const inflight = new Map();
+
 async function get(url, { ttl = 15_000, fresh = false } = {}) {
   const hit = cache.get(url);
   if (!fresh && hit && Date.now() - hit.at < ttl) return hit.data;
+  // Share one request when several parts of the page ask for the same URL.
+  const key = `${fresh ? 'F' : 'C'}${url}`;
+  if (inflight.has(key)) return inflight.get(key);
+  const p = fetchWithRetry(url, fresh, hit).finally(() => inflight.delete(key));
+  inflight.set(key, p);
+  return p;
+}
+
+async function fetchWithRetry(url, fresh, hit) {
   let lastErr;
   // Retry transient failures twice with a short backoff.
   for (let attempt = 0; attempt < 3; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000); // a stuck request must not stall live updates
     try {
-      const res = await fetch(url);
+      // Live refreshes skip the browser cache so every poll gets ESPN's latest.
+      const res = await fetch(url, { cache: fresh ? 'no-store' : 'default', signal: ctrl.signal });
       if (res.status >= 400 && res.status < 500) {
         // Not found / bad request won't fix itself, so don't retry.
         const err = new Error("We couldn't find that. The link may be wrong or out of date.");
@@ -49,12 +63,21 @@ async function get(url, { ttl = 15_000, fresh = false } = {}) {
       cache.set(url, { at: Date.now(), data });
       return data;
     } catch (e) {
-      lastErr = e.message === 'Failed to fetch' ? new Error("Can't reach the server. Check your connection.") : e;
+      lastErr =
+        e.name === 'AbortError'
+          ? new Error('ESPN is slow to respond. Retrying…')
+          : e.message === 'Failed to fetch'
+            ? new Error("Can't reach the server. Check your connection.")
+            : e;
       if (e.notFound) break;
       await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+    } finally {
+      clearTimeout(timer);
     }
   }
-  if (hit) return hit.data; // serve stale data rather than nothing
+  // On first load, stale data beats nothing. During live refreshes, report the
+  // failure instead so the page keeps its last data and shows it's out of date.
+  if (hit && !fresh) return hit.data;
   throw lastErr;
 }
 

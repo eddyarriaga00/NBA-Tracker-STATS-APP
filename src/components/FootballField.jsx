@@ -3,6 +3,8 @@ import { visibleColor } from '../lib/color';
 import { fieldGeometry } from '../lib/field';
 import { useTheme } from '../lib/theme';
 
+const GLIDE = 'transform 0.8s cubic-bezier(.2,.8,.2,1)';
+
 function useWidth() {
   const ref = useRef(null);
   const [w, setW] = useState(0);
@@ -84,18 +86,23 @@ export default function FootballField({ situation, home, away, size = 'lg' }) {
                 rx="2"
               />
             )}
-            {/* First-down line (yellow) and line of scrimmage (blue) */}
+            {/* First-down line (yellow) and line of scrimmage (blue). Moved with
+                transforms so they glide to the new spot after each play. */}
             {geo.toGain != null && geo.toGain !== geo.goal && (
-              <line x1={fx(geo.toGain)} x2={fx(geo.toGain)} y1="0" y2={H} stroke="#ffd60a" strokeWidth={lg ? 2.5 : 2} />
+              <g style={{ transform: `translateX(${fx(geo.toGain)}px)`, transition: GLIDE }}>
+                <line x1="0" x2="0" y1="0" y2={H} stroke="#ffd60a" strokeWidth={lg ? 2.5 : 2} />
+              </g>
             )}
-            <line x1={ballX} x2={ballX} y1="0" y2={H} stroke="#4da3ff" strokeWidth={lg ? 2.5 : 2} />
-            {/* Direction arrow + ball */}
-            <path
-              d={`M ${ballX + geo.dir * (lg ? 14 : 9)} ${ballY} l ${-geo.dir * (lg ? 6 : 4)} ${-(lg ? 5 : 3.5)} v ${(lg ? 10 : 7)} z`}
-              fill="#fff"
-            />
-            <ellipse cx={ballX} cy={ballY} rx={lg ? 8 : 5.5} ry={lg ? 5 : 3.6} fill="#8b4a22" stroke="#fff" strokeWidth={lg ? 1.2 : 1} />
-            {lg && <line x1={ballX - 3} x2={ballX + 3} y1={ballY} y2={ballY} stroke="#fff" strokeWidth="1" />}
+            <g style={{ transform: `translateX(${ballX}px)`, transition: GLIDE }}>
+              <line x1="0" x2="0" y1="0" y2={H} stroke="#4da3ff" strokeWidth={lg ? 2.5 : 2} />
+              {/* Direction arrow + ball */}
+              <path
+                d={`M ${geo.dir * (lg ? 14 : 9)} ${ballY} l ${-geo.dir * (lg ? 6 : 4)} ${-(lg ? 5 : 3.5)} v ${lg ? 10 : 7} z`}
+                fill="#fff"
+              />
+              <ellipse cx="0" cy={ballY} rx={lg ? 8 : 5.5} ry={lg ? 5 : 3.6} fill="#8b4a22" stroke="#fff" strokeWidth={lg ? 1.2 : 1} />
+              {lg && <line x1="-3" x2="3" y1={ballY} y2={ballY} stroke="#fff" strokeWidth="1" />}
+            </g>
           </g>
         </svg>
       )}

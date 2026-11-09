@@ -6,6 +6,8 @@ import GameCard from '../components/GameCard';
 import { Icon } from '../components/icons';
 import { Empty, ErrorState, PageTitle, SeasonPicker, Segmented, Skeleton } from '../components/ui';
 import { SORTS, sectionGames, useGameSort } from '../lib/gameSort';
+import { scoresDelay } from '../lib/livePolling';
+import Freshness from '../components/Freshness';
 import { useFavorites } from '../lib/favorites';
 import { useLeague } from '../lib/league';
 import { useData } from '../lib/useData';
@@ -119,9 +121,8 @@ function NbaScores() {
   const date = useMemo(() => fromKey(key), [key]);
   const isToday = key === toKey(new Date());
 
-  const { data: games, error, loading, reload } = useData((fresh) => getNbaScoreboard(key, { fresh }), [key], {
-    pollMs: 20_000,
-    shouldPoll: (g) => g.some((x) => x.status.state === 'in') || (isToday && g.some((x) => x.status.state === 'pre')),
+  const { data: games, error, loading, reload, updatedAt } = useData((fresh) => getNbaScoreboard(key, { fresh }), [key], {
+    pollMs: scoresDelay,
   });
 
   const select = (d) => {
@@ -148,6 +149,7 @@ function NbaScores() {
         Scores
       </PageTitle>
       <DateStrip selected={date} onSelect={select} />
+      {live > 0 && <div className="mt-2 flex justify-end px-1"><Freshness updatedAt={updatedAt} error={error} /></div>}
       <div className="mt-4">
         <GameGrid games={games} loading={loading} error={error} reload={reload} emptyTitle="No Games" emptySub="There are no NBA games on this day." />
       </div>
@@ -169,9 +171,8 @@ function NflScores() {
   const sel = w && /^\d-\d+-\d{4}$/.test(w) ? (([type, week, year]) => ({ type, week, year }))(w.split('-')) : null;
   const strip = useRef(null);
 
-  const { data, error, loading, reload } = useData((fresh) => getNflScoreboard(sel, { fresh }), [w], {
-    pollMs: 20_000,
-    shouldPoll: (d) => d.games.some((x) => x.status.state === 'in'),
+  const { data, error, loading, reload, updatedAt } = useData((fresh) => getNflScoreboard(sel, { fresh }), [w], {
+    pollMs: (d) => scoresDelay(d?.games),
   });
 
   const curKey = data ? `${data.type}-${data.week}` : null;
@@ -242,6 +243,7 @@ function NflScores() {
         </button>
       </div>
 
+      {live > 0 && <div className="mt-2 flex justify-end px-1"><Freshness updatedAt={updatedAt} error={error} /></div>}
       <div className="mt-4">
         {loading && !data ? (
           <GameGrid loading />
