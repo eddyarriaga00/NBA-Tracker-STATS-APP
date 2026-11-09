@@ -25,8 +25,8 @@ export function currentSeason(lg, now = new Date()) {
 }
 export const seasonLabel = (lg, yr) => (lg === 'nba' ? `${yr - 1}-${String(yr).slice(2)}` : String(yr));
 /** This season plus the previous `back` seasons, newest first. */
-// Oldest season every page supports: NBA 2017-18 (ESPN year 2018) and NFL 2017.
-export const FIRST_SEASON = { nba: 2018, nfl: 2017 };
+// Oldest season every page supports: NBA 2016-17 (ESPN year 2017) and NFL 2017.
+export const FIRST_SEASON = { nba: 2017, nfl: 2017 };
 
 /** Every supported season, newest first. */
 export function seasonOptions(lg) {

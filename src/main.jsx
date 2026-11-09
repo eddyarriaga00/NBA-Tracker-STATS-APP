@@ -6,8 +6,10 @@ import { LEAGUES } from './api/espn';
 import { leagueFromPath } from './lib/league';
 import { ThemeProvider } from './lib/theme';
 import { registerServiceWorker } from './lib/push';
+import { watchForUpdates } from './lib/update';
 
 registerServiceWorker(); // lets alerts arrive when the app is closed
+watchForUpdates(); // phones pick up new versions without reinstalling
 import Shell from './components/Shell';
 import Scores from './pages/Scores';
 
