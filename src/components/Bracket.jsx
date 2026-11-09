@@ -1,7 +1,8 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { currentSeason, seasonLabel } from '../api/espn';
-import { buildBracket } from '../lib/bracket';
+import { currentSeason, getPlayoffGames, seasonLabel } from '../api/espn';
+import { useData } from '../lib/useData';
+import { buildActualBracket, buildBracket } from '../lib/bracket';
 import { useLeague } from '../lib/league';
 import { Card, TeamLogo } from './ui';
 
@@ -26,7 +27,8 @@ function centers() {
   return [r0, r1, r2];
 }
 
-const winnerSide = (g, advance) => (advance && g.a?.team && g.b?.team ? (g.a.team.seed <= g.b.team.seed ? 'a' : 'b') : null);
+const winnerSide = (g, advance) =>
+  g.win !== undefined ? g.win : advance && g.a?.team && g.b?.team ? (g.a.team.seed <= g.b.team.seed ? 'a' : 'b') : null;
 
 function Slot({ s, lg, win, lose, bye }) {
   const base = 'flex items-center gap-1.5 px-2';
@@ -45,7 +47,11 @@ function Slot({ s, lg, win, lose, bye }) {
       {/* eager: lazy images inside a sideways scroller often never load */}
       <TeamLogo abbr={t.abbr} size={17} eager />
       <span className={`min-w-0 flex-1 truncate text-[13px] ${win ? 'font-bold' : 'font-semibold'}`}>{t.abbr}</span>
-      <span className="num shrink-0 text-[10px] text-label-2">{t.wins}-{t.losses}</span>
+      {s.value != null ? (
+        <span className={`num shrink-0 text-[13px] ${win ? 'font-bold' : 'font-semibold text-label-2'}`}>{s.value}</span>
+      ) : (
+        <span className="num shrink-0 text-[10px] text-label-2">{t.wins}-{t.losses}</span>
+      )}
     </Link>
   );
 }
@@ -95,7 +101,13 @@ export default function Bracket({ confs, season }) {
   const [advance, setAdvance] = useState(false);
   const scroller = useRef(null);
   const [overflowing, setOverflowing] = useState(false);
-  const b = buildBracket(lg, confs, { advance });
+  const yr = season || currentSeason(lg);
+  const games = useData((fresh) => getPlayoffGames(lg, yr, { fresh }), [lg, yr], {
+    pollMs: (g) => (g?.some((x) => x.state === 'in') ? 30_000 : 0),
+  });
+  const actual = games.data ? buildActualBracket(lg, confs, games.data) : null;
+  const real = !!actual?.started;
+  const b = real ? actual : buildBracket(lg, confs, { advance });
 
   // Official layout: West/AFC on the left, East/NFC on the right.
   const pick = (re) => b.conferences.find((c) => re.test(c.name ?? ''));
@@ -131,19 +143,27 @@ export default function Bracket({ confs, season }) {
     <div className="rise">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
         <p className="text-[12.5px] text-label-2">
-          {nowSeason ? 'If the playoffs started today, based on current seeds.' : `Seeds from the final ${seasonLabel(lg, season)} standings. Not the actual results.`}
+          {real
+            ? fw
+              ? `${seasonLabel(lg, yr)} playoffs · actual results`
+              : `${seasonLabel(lg, yr)} playoffs · in progress`
+            : games.loading && !nowSeason
+              ? 'Loading playoff results…'
+              : nowSeason
+                ? 'If the playoffs started today, based on current seeds.'
+                : `Seeds from the final ${seasonLabel(lg, season)} standings. Not the actual results.`}
         </p>
-        <button
+        {!real && <button
           role="switch"
           aria-checked={advance}
           onClick={() => setAdvance((v) => !v)}
           className={`rounded-full px-3 py-1 text-[12.5px] font-semibold transition active:scale-95 ${advance ? 'bg-accent text-white' : 'bg-fill text-label-2'}`}
         >
           {advance ? '✓ ' : ''}Higher seeds win
-        </button>
+        </button>}
       </div>
 
-      {lg === 'nba' && (
+      {lg === 'nba' && (!real || left.hasPlayIn || right.hasPlayIn) && (
         <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
           {[left, right].map((c) => (
             <div key={c.name}>
@@ -209,8 +229,13 @@ export default function Bracket({ confs, season }) {
       {overflowing && <p className="mt-1 text-center text-[11.5px] text-label-3">Swipe sideways to see the whole bracket</p>}
 
       <div className="mt-3 space-y-1 px-1 text-[11.5px] text-label-3">
-        {lg === 'nfl' && <p>The 1 seed gets a bye. In the Divisional round the 1 seed hosts the lowest seed left.</p>}
-        {advance && fw && (
+        {lg === 'nfl' && (
+          <p>
+            {left.byes === 2 ? 'The top 2 seeds got byes (before 2020, 6 teams per conference made it).' : 'The 1 seed gets a bye.'} In the Divisional round the 1 seed hosts the lowest seed left.
+          </p>
+        )}
+        {real && <p>{lg === 'nfl' ? 'Final scores shown.' : 'Series wins shown; Play-In shows final scores.'} Tap a team for its page.</p>}
+        {!real && advance && fw && (
           <p>The final goes to the better record{fa.team && fb.team && fa.team.pct === fb.team.pct ? ' (tied records go to the top team)' : ''}.</p>
         )}
         {(!left.complete || !right.complete) && <p>Seeds aren’t set for every spot yet, so some slots are empty.</p>}

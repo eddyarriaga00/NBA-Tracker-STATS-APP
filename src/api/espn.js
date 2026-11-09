@@ -1270,3 +1270,49 @@ export async function getContracts(lg, id, opts) {
   const current = seasons.find((c) => c.active) ?? seasons[0] ?? null;
   return { current, seasons };
 }
+
+// ---------- Playoff games (actual results for the bracket) ----------
+
+function normPlayoffEvent(e) {
+  const c = e.competitions?.[0] ?? {};
+  const score = (x) => {
+    const v = x.score?.displayValue ?? x.score;
+    return v == null || v === '' ? null : Number(v);
+  };
+  return {
+    id: e.id,
+    date: e.date,
+    round: c.notes?.[0]?.headline ?? '',
+    state: c.status?.type?.state ?? e.status?.type?.state ?? 'pre',
+    teams: (c.competitors ?? []).map((x) => ({ id: x.team?.id, score: score(x), winner: !!x.winner })),
+  };
+}
+
+/** Every postseason game for a season (empty until the playoffs start). */
+export async function getPlayoffGames(lg, season, opts) {
+  const past = season && season < currentSeason(lg);
+  const o = { ttl: past ? 6 * 60 * 60_000 : 60_000, ...opts };
+  const yr = season || currentSeason(lg);
+  // Nothing to fetch before the postseason starts (NBA Play-In ~mid April; NFL ~early January).
+  const postseasonStart = lg === 'nfl' ? new Date(yr + 1, 0, 5) : new Date(yr, 3, 8);
+  if (Date.now() < postseasonStart.getTime()) return [];
+  const events = [];
+  if (lg === 'nfl') {
+    const weeks = await pool([1, 2, 3, 5], 4, (w) => get(`${site(lg)}/scoreboard?seasontype=3&week=${w}&dates=${yr}`, o));
+    for (const d of weeks) for (const e of d?.events ?? []) events.push(e);
+  } else {
+    const confs = await getStandings(lg, yr, opts);
+    const ids = confs.flatMap((c) => c.teams.filter((t) => t.seed <= 10).map((t) => ({ id: t.id, seed: t.seed })));
+    const jobs = [
+      ...ids.map((t) => `${site(lg)}/teams/${t.id}/schedule?season=${yr}&seasontype=3`),
+      ...ids.filter((t) => t.seed >= 7).map((t) => `${site(lg)}/teams/${t.id}/schedule?season=${yr}&seasontype=5`),
+    ];
+    const results = await pool(jobs, 8, (u) => get(u, o));
+    for (const d of results) for (const e of d?.events ?? []) events.push(e);
+  }
+  const seen = new Set();
+  return events
+    .filter((e) => (seen.has(e.id) ? false : seen.add(e.id)))
+    .map(normPlayoffEvent)
+    .filter((g) => g.round && !/pro bowl/i.test(g.round));
+}
