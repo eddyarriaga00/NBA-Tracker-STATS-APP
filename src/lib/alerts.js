@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { getNbaScoreboard, getNflScoreboard, toKey } from '../api/espn';
 import { gameHeat } from './excitement';
 import { useFavorites } from './favorites';
-import { getSetting, useSetting } from './settings';
+import { getSetting, useAlertPrefs } from './settings';
 import { toast } from './toast';
 import { pushActive } from './push';
 
@@ -50,20 +50,26 @@ function deliver({ title, body, href }) {
 const matchup = (g) => `${g.away.abbr} at ${g.home.abbr}`;
 const scoreLine = (g) => `${g.away.abbr} ${g.away.score} – ${g.home.score} ${g.home.abbr}`;
 
-/** Decide which alerts a game should raise now. Exported for testing. */
-export function alertsFor(g, { prevState, followed, closeOn, spoilerFree, firstLook }) {
+/**
+ * Decide which alerts a game should raise now. Exported for testing.
+ * wanted: this game matches "which games" (all games, or a followed team).
+ * prefs: { start, half, final, close } moments switched on.
+ */
+export function alertsFor(g, { prevState, wanted, prefs, spoilerFree, firstLook }) {
   const out = [];
   const key = `${g.league}:${g.id}`;
   const href = `/${g.league}/game/${g.id}`;
   const state = g.status.state;
-  if (followed) {
+  if (wanted) {
     // Starts/finals that happened before we were watching are skipped (no flood on open).
-    if (state === 'in' && prevState === 'pre')
-      out.push({ id: `${key}:start`, title: `${g.league === 'nfl' ? 'Kickoff' : 'Tip-off'}: ${matchup(g)}`, body: g.broadcast ? `On ${g.broadcast}` : 'Game is live', href });
-    if (state === 'post' && prevState === 'in')
+    if (prefs.start && state === 'in' && prevState === 'pre')
+      out.push({ id: `${key}:start`, title: `${g.league === 'nfl' ? 'Kickoff' : 'Tip-off'}: ${matchup(g)}`, body: g.broadcast ? `Starting now on ${g.broadcast}` : 'Starting now', href });
+    if (prefs.half && g.status.half && prevState !== undefined)
+      out.push({ id: `${key}:half`, title: `Halftime: ${matchup(g)}`, body: spoilerFree ? 'Tap to see the score' : scoreLine(g), href });
+    if (prefs.final && state === 'post' && prevState === 'in')
       out.push({ id: `${key}:final`, title: `Final: ${matchup(g)}`, body: spoilerFree ? 'Tap to see how it ended' : scoreLine(g), href });
   }
-  if (closeOn && state === 'in') {
+  if (prefs.close && state === 'in') {
     const heat = gameHeat(g);
     if (heat?.hot)
       out.push({
@@ -78,16 +84,18 @@ export function alertsFor(g, { prevState, followed, closeOn, spoilerFree, firstL
 }
 
 export function useGameAlerts() {
-  const [followedOn] = useSetting('alertsFollowed');
-  const [closeOn] = useSetting('alertsClose');
+  const prefs = useAlertPrefs();
   const { favs } = useFavorites();
   const prev = useRef({});
-  const favKey = favs.join(',');
+  const key = JSON.stringify([prefs, favs]);
 
   useEffect(() => {
     const leagues = new Set();
-    if (closeOn) { leagues.add('nba'); leagues.add('nfl'); }
-    if (followedOn) for (const f of favs) leagues.add(f.split(':')[0]);
+    const teamMoments = prefs.start || prefs.half || prefs.final;
+    if (prefs.close || (teamMoments && prefs.scope === 'all')) {
+      leagues.add('nba');
+      leagues.add('nfl');
+    } else if (teamMoments) for (const f of favs) leagues.add(f.split(':')[0]);
     if (!leagues.size) return;
 
     let alive = true;
@@ -118,9 +126,9 @@ export function useGameAlerts() {
       for (const g of games) {
         const key = `${g.league}:${g.id}`;
         const prevState = prev.current[key];
-        const followed = followedOn && isFav(g);
-        if (g.status.state === 'in' && (followed || closeOn)) anyLive = true;
-        for (const a of alertsFor(g, { prevState, followed, closeOn, spoilerFree, firstLook: prevState === undefined })) {
+        const wanted = prefs.scope === 'all' || isFav(g);
+        if (g.status.state === 'in' && (wanted || prefs.close)) anyLive = true;
+        for (const a of alertsFor(g, { prevState, wanted, prefs, spoilerFree, firstLook: prevState === undefined })) {
           if (sent[a.id]) continue;
           sent[a.id] = Date.now();
           deliver(a);
@@ -137,5 +145,5 @@ export function useGameAlerts() {
       clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [followedOn, closeOn, favKey]);
+  }, [key]);
 }

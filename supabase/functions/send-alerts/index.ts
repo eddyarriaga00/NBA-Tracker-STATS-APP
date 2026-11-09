@@ -14,7 +14,7 @@ webpush.setVapidDetails(Deno.env.get('VAPID_SUBJECT')!, Deno.env.get('VAPID_PUBL
 
 type Team = { id: string; abbr: string; score: number; winner: boolean };
 type Game = {
-  key: string; league: 'nba' | 'nfl'; id: string; state: string; completed: boolean; start: string;
+  key: string; league: 'nba' | 'nfl'; id: string; state: string; completed: boolean; start: string; half: boolean;
   period: number; clock: string; label: string; broadcast: string; home: Team; away: Team;
 };
 
@@ -40,6 +40,7 @@ function norm(league: 'nba' | 'nfl', e: any): Game | null {
   return {
     key: `${league}:${e.id}`, league, id: String(e.id),
     state: st?.type?.state ?? 'pre', completed: st?.type?.completed === true, start: c.date ?? e.date,
+    half: st?.type?.name === 'STATUS_HALFTIME' || /^halftime$/i.test(st?.type?.shortDetail ?? ''),
     period: st?.period ?? 0, clock: String(st?.displayClock ?? ''),
     label: st?.type?.shortDetail ?? '',
     broadcast: c.broadcast || (c.broadcasts ?? []).flatMap((b: any) => b.names ?? []).join(', ') || '',
@@ -148,7 +149,7 @@ Deno.serve(async (req) => {
   if (req.headers.get('x-cron-secret') !== Deno.env.get('CRON_SECRET')) return new Response('forbidden', { status: 403 });
   const test = new URL(req.url).searchParams.get('test'); // ?test=1 sends a test alert to every device
 
-  const { data: subs } = await db.from('push_subscriptions').select('endpoint,p256dh,auth,followed,close_games,spoiler_free');
+  const { data: subs } = await db.from('push_subscriptions').select('endpoint,p256dh,auth,followed,close_games,spoiler_free,scope,starts,halftime,finals');
   const subscriptions = subs ?? [];
 
   const send = async (payload: Record<string, string>, pick: (s: any) => boolean, spoilerBody?: string) => {
@@ -175,10 +176,12 @@ Deno.serve(async (req) => {
   const games = await loadGames();
   const graded = await gradePicks(games).catch((e) => `error: ${e?.message ?? e}`);
   if (!games.length) return Response.json({ games: 0, graded, errors: loadErrors });
-  const { data: rows } = await db.from('alert_game_state').select('game_key,state,close_sent').in('game_key', games.map((g) => g.key));
+  const { data: rows } = await db.from('alert_game_state').select('game_key,state,close_sent,half_sent').in('game_key', games.map((g) => g.key));
   const prev = Object.fromEntries((rows ?? []).map((r) => [r.game_key, r]));
 
-  const followed = (g: Game) => (s: any) => (s.followed ?? []).includes(`${g.league}:${g.home.id}`) || (s.followed ?? []).includes(`${g.league}:${g.away.id}`);
+  // Which devices want this game: all games, or only games with a followed team.
+  const wants = (g: Game) => (s: any) =>
+    s.scope === 'all' || (s.followed ?? []).includes(`${g.league}:${g.home.id}`) || (s.followed ?? []).includes(`${g.league}:${g.away.id}`);
   const match = (g: Game) => `${g.away.abbr} at ${g.home.abbr}`;
   const score = (g: Game) => `${g.away.abbr} ${g.away.score} – ${g.home.score} ${g.home.abbr}`;
   const updates: any[] = [];
@@ -189,15 +192,30 @@ Deno.serve(async (req) => {
     const before = prev[g.key];
     const url = `${SITE}#/${g.league}/game/${g.id}`;
     let closeSent = before?.close_sent ?? false;
+    let halfSent = before?.half_sent ?? false;
     if (before) {
       if (before.state === 'pre' && g.state === 'in') {
         events++;
-        sent += await send({ title: `${g.league === 'nfl' ? 'Kickoff' : 'Tip-off'}: ${match(g)}`, body: g.broadcast ? `On ${g.broadcast}` : 'Game is live', url, tag: `${g.key}:start` }, followed(g));
+        sent += await send(
+          { title: `${g.league === 'nfl' ? 'Kickoff' : 'Tip-off'}: ${match(g)}`, body: g.broadcast ? `Starting now on ${g.broadcast}` : 'Starting now', url, tag: `${g.key}:start` },
+          (s) => s.starts && wants(g)(s)
+        );
+      }
+      if (g.half && !halfSent) {
+        events++;
+        halfSent = true;
+        sent += await send(
+          { title: `Halftime: ${match(g)}`, body: score(g), url, tag: `${g.key}:half` },
+          (s) => s.halftime && wants(g)(s),
+          'Tap to see the score'
+        );
       }
       if (before.state === 'in' && g.state === 'post') {
         events++;
-        sent += await send({ title: `Final: ${match(g)}`, body: score(g), url, tag: `${g.key}:final` }, followed(g), 'Tap to see how it ended');
+        sent += await send({ title: `Final: ${match(g)}`, body: score(g), url, tag: `${g.key}:final` }, (s) => s.finals && wants(g)(s), 'Tap to see how it ended');
       }
+    } else if (g.half) {
+      halfSent = true; // first look mid-halftime: don't alert late
     }
     const heat = hot(g);
     if (heat && !closeSent) {
@@ -205,8 +223,8 @@ Deno.serve(async (req) => {
       closeSent = true;
       sent += await send({ title: `🔥 ${heat}: ${match(g)}`, body: `${score(g)} · ${g.label}`, url, tag: `${g.key}:close` }, (s) => s.close_games, `${g.label} · worth tuning in`);
     }
-    if (!before || before.state !== g.state || before.close_sent !== closeSent) {
-      updates.push({ game_key: g.key, state: g.state, close_sent: closeSent, updated_at: new Date().toISOString() });
+    if (!before || before.state !== g.state || before.close_sent !== closeSent || before.half_sent !== halfSent) {
+      updates.push({ game_key: g.key, state: g.state, close_sent: closeSent, half_sent: halfSent, updated_at: new Date().toISOString() });
     }
   }
   if (updates.length) await db.from('alert_game_state').upsert(updates);

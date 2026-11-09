@@ -191,8 +191,12 @@ function pushNote(status) {
 }
 
 function Alerts() {
-  const [followed, setFollowed] = useSetting('alertsFollowed');
+  const [scope, setScope] = useSetting('alertsScope');
+  const [start, setStart] = useSetting('alertsStart');
+  const [half, setHalf] = useSetting('alertsHalf');
+  const [final, setFinal] = useSetting('alertsFinal');
   const [close, setClose] = useSetting('alertsClose');
+  const { favs } = useFavorites();
   const status = usePushStatus();
   const [test, setTest] = useState('');
   const enable = (setter) => (v) => {
@@ -213,9 +217,25 @@ function Alerts() {
       setTest(e.message);
     }
   };
+  const games = scope === 'all' ? 'every game' : 'your teams’ games';
   return (
     <Group title="Alerts" footer={pushNote(status)}>
-      <Row label="Followed teams" sub="Tip-off/kickoff and final for your teams" right={<Switch on={followed} onChange={enable(setFollowed)} label="Followed team alerts" />} />
+      <Choice label="Which games">
+        <Segmented
+          value={scope}
+          onChange={setScope}
+          options={[
+            { value: 'teams', label: 'My teams' },
+            { value: 'all', label: 'All games' },
+          ]}
+        />
+      </Choice>
+      {scope === 'teams' && favs.length === 0 && (
+        <Row label="You don’t follow any teams yet" sub="Follow teams below, or switch to All games." />
+      )}
+      <Row label="Game starts" sub={`Tip-off and kickoff for ${games}`} right={<Switch on={start} onChange={enable(setStart)} label="Game start alerts" />} />
+      <Row label="Halftime" sub={`Halftime score for ${games}`} right={<Switch on={half} onChange={enable(setHalf)} label="Halftime alerts" />} />
+      <Row label="Final scores" sub={scope === 'all' ? 'When any game ends' : 'When your teams’ games end'} right={<Switch on={final} onChange={enable(setFinal)} label="Final score alerts" />} />
       <Row label="Close games" sub="Any game that’s close late, or goes to overtime" right={<Switch on={close} onChange={enable(setClose)} label="Close game alerts" />} />
       {status?.reason === 'on' && <Row label="Send a test alert" sub={test || 'Check alerts reach this device'} onClick={runTest} />}
     </Group>

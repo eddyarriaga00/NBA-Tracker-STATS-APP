@@ -3,7 +3,7 @@
 // subscription and alert choices to Supabase. A server job sends the alerts.
 import { useEffect, useState } from 'react';
 import { useFavorites } from './favorites';
-import { useSetting } from './settings';
+import { useAlertPrefs, useSetting } from './settings';
 import { commentsEnabled, ensureUser, getClient } from './supabase';
 
 const VAPID = import.meta.env.VITE_VAPID_PUBLIC_KEY;
@@ -42,24 +42,23 @@ export function usePushStatus() {
 
 /** Keeps this device's saved alert choices in sync with settings and followed teams. */
 export function usePushSync() {
-  const [followedOn] = useSetting('alertsFollowed');
-  const [closeOn] = useSetting('alertsClose');
+  const prefs = useAlertPrefs();
   const [spoiler] = useSetting('spoilerFree');
   const { favs } = useFavorites();
   const [status, setStatus] = useState(null);
-  const favKey = favs.join(',');
+  const key = JSON.stringify([prefs, spoiler, favs]);
   useEffect(() => {
     if (!pushConfigured) return;
     let alive = true;
     const run = () =>
-      syncPush({ followed: favs, followedOn, closeOn, spoiler })
+      syncPush({ followed: favs, ...prefs, spoiler })
         .then((r) => alive && (setStatus(r), publish(r)))
         .catch((e) => {
           const r = { ok: false, reason: 'error', message: e?.message };
           if (alive) (setStatus(r), publish(r));
         });
     const t = setTimeout(run, 400); // settle rapid toggles
-    // Re-sync once notification permission is granted from the settings toggle.
+    // Re-sync once notification permission is granted from a settings switch.
     window.addEventListener('notification-permission', run);
     return () => {
       alive = false;
@@ -67,7 +66,7 @@ export function usePushSync() {
       window.removeEventListener('notification-permission', run);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [followedOn, closeOn, spoiler, favKey]);
+  }, [key]);
   return status;
 }
 
@@ -92,13 +91,13 @@ const urlB64ToUint8 = (b64) => {
 
 /**
  * Turn server alerts on/off for this device and save its choices.
- * prefs: { followed: ['nba:13', ...], followedOn, closeOn, spoiler }
+ * prefs: { followed: ['nba:13', ...], scope, start, half, final, close, any, spoiler }
  * Returns { ok, reason } so the settings menu can explain what happened.
  */
 export async function syncPush(prefs) {
   if (!pushConfigured) return { ok: false, reason: 'not-configured' };
   if (!pushSupported()) return { ok: false, reason: 'unsupported' };
-  const wantAny = prefs.followedOn || prefs.closeOn;
+  const wantAny = prefs.any;
   const reg = (await navigator.serviceWorker.getRegistration('./')) || (await registerServiceWorker());
   if (!reg) return { ok: false, reason: 'unsupported' };
   let sub = await reg.pushManager.getSubscription();
@@ -132,9 +131,13 @@ export async function syncPush(prefs) {
     p_endpoint: json.endpoint,
     p_p256dh: json.keys?.p256dh,
     p_auth: json.keys?.auth,
-    p_followed: prefs.followedOn ? prefs.followed : [],
-    p_close: !!prefs.closeOn,
+    p_followed: prefs.followed,
+    p_close: !!prefs.close,
     p_spoiler: !!prefs.spoiler,
+    p_scope: prefs.scope === 'all' ? 'all' : 'teams',
+    p_starts: !!prefs.start,
+    p_halftime: !!prefs.half,
+    p_finals: !!prefs.final,
   });
   if (error) {
     setActive(false);

@@ -110,6 +110,7 @@ function normStatus(status, date, timeValid = true) {
     period: status?.period ?? 0,
     clock: status?.displayClock ?? '',
     postponed: ['STATUS_POSTPONED', 'STATUS_CANCELED', 'STATUS_SUSPENDED'].includes(t.name),
+    half: t.name === 'STATUS_HALFTIME' || /^halftime$/i.test(t.shortDetail ?? ''),
   };
 }
 

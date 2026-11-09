@@ -3,14 +3,56 @@ import { useEffect, useState } from 'react';
 // Small persisted settings (per device). Every hook instance stays in sync.
 const DEFAULTS = { spoilerFree: false, alertsFollowed: false, alertsClose: false, defaultLeague: 'last' };
 
+// Alert moments started out as one "Followed teams" switch; until changed,
+// each moment follows that old switch. Which games defaults to "all" unless
+// you follow teams.
+const fallback = (key) => {
+  if (key === 'alertsStart' || key === 'alertsHalf' || key === 'alertsFinal') return read('alertsFollowed');
+  if (key === 'alertsScope') {
+    try {
+      return JSON.parse(localStorage.getItem('favoriteTeams') || '[]').length ? 'teams' : 'all';
+    } catch {
+      return 'all';
+    }
+  }
+  return DEFAULTS[key];
+};
+
 const read = (key) => {
   try {
     const v = localStorage.getItem(`setting:${key}`);
-    return v == null ? DEFAULTS[key] : JSON.parse(v);
+    return v == null ? fallback(key) : JSON.parse(v);
   } catch {
-    return DEFAULTS[key];
+    return fallback(key);
   }
 };
+
+/** All alert choices at once. */
+export function alertPrefs() {
+  const p = {
+    scope: read('alertsScope'),
+    start: read('alertsStart'),
+    half: read('alertsHalf'),
+    final: read('alertsFinal'),
+    close: read('alertsClose'),
+  };
+  return { ...p, any: p.start || p.half || p.final || p.close };
+}
+
+/** Live version of alertPrefs() for components. */
+export function useAlertPrefs() {
+  const [p, setP] = useState(alertPrefs);
+  useEffect(() => {
+    const on = () => setP(alertPrefs());
+    window.addEventListener('settings', on);
+    window.addEventListener('favorites', on);
+    return () => {
+      window.removeEventListener('settings', on);
+      window.removeEventListener('favorites', on);
+    };
+  }, []);
+  return p;
+}
 
 export function getSetting(key) {
   return read(key);
