@@ -9,6 +9,8 @@ import ErrorBoundary from './ErrorBoundary';
 import { BioProvider } from './BioSheet';
 import Search from './Search';
 import Toaster from './Toaster';
+import { AccountRow, AccountSheet } from './Account';
+import { openAccount } from '../lib/account';
 import { useGameAlerts } from '../lib/alerts';
 import { isIOS, isStandalone, pushConfigured, pushSupported, usePushSync } from '../lib/push';
 
@@ -91,6 +93,13 @@ function SettingsMenu({ pushStatus }) {
       </button>
       {open && (
         <div className="rise absolute right-0 top-11 z-50 max-h-[80dvh] w-72 overflow-y-auto rounded-xl border border-sep bg-card/95 p-1 shadow-[0_12px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+          <AccountRow
+            onOpen={() => {
+              setOpen(false);
+              openAccount();
+            }}
+          />
+          <div className="my-1 h-px bg-sep" />
           <div className="px-3 pb-1 pt-2 text-[12px] font-medium text-label-2">Appearance</div>
           {THEMES.map((t) => (
             <button
@@ -264,6 +273,7 @@ export default function Shell() {
 
         <Search open={searchOpen} onClose={closeSearch} league={league} />
         <Toaster />
+        <AccountSheet />
       </div>
       </BioProvider>
     </LeagueCtx.Provider>

@@ -22,6 +22,8 @@ export function useNickname() {
   const save = (n) => {
     try { localStorage.setItem('nickname', n); } catch { /* ignore */ }
     window.dispatchEvent(new Event('nickname'));
+    // Signed-in users keep their nickname on every device.
+    import('../lib/account').then((m) => m.saveNickname(n)).catch(() => {});
   };
   return [name, save];
 }

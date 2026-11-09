@@ -1,0 +1,22 @@
+# Supabase project settings pushed with `npx supabase config push --remote=<ref>`.
+# Only the login (auth) settings are managed here; everything else is left alone.
+project_id = "nba-tracker"
+
+[auth]
+# Where sign-in links and Google return to.
+site_url = "https://eddyarriaga00.github.io/NBA-Tracker-STATS-APP/"
+additional_redirect_urls = [
+  "https://eddyarriaga00.github.io/NBA-Tracker-STATS-APP/",
+  "http://localhost:5173/",
+  "http://localhost:4173/",
+]
+enable_signup = true
+# Everyone starts with a guest account (comments, picks, alerts work right away)…
+enable_anonymous_sign_ins = true
+# …and can upgrade it to Google or email later, keeping their history.
+enable_manual_linking = true
+
+[auth.email]
+enabled = true
+# Friends-only app: accounts work immediately, no confirmation email needed.
+enable_confirmations = false

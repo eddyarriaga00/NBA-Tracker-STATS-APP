@@ -10,6 +10,10 @@ import { loadPage, watchForUpdates } from './lib/update';
 
 registerServiceWorker(); // alerts when the app is closed + offline copy
 clearAlertBadgeOnOpen();
+// Coming back from Google sign-in.
+if (/[?&](code|error)=/.test(location.search) || /error_code=/.test(location.hash)) {
+  import('./lib/account').then((m) => m.handleAuthRedirect());
+}
 watchForUpdates(); // phones pick up new versions without reinstalling
 import Shell from './components/Shell';
 import Scores from './pages/Scores';

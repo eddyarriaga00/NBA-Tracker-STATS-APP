@@ -10,7 +10,10 @@ let clientPromise = null;
 export function getClient() {
   if (!commentsEnabled) return Promise.resolve(null);
   clientPromise ??= import('@supabase/supabase-js').then(({ createClient }) =>
-    createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true } })
+    createClient(url, key, {
+      // PKCE keeps Google's return (?code=…) out of the #/route the app uses; account.js finishes it.
+      auth: { persistSession: true, autoRefreshToken: true, flowType: 'pkce', detectSessionInUrl: false },
+    })
   );
   return clientPromise;
 }

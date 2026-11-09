@@ -5,6 +5,7 @@ import { Chips, Empty, ErrorState, PageTitle, SectionTitle, Skeleton } from '../
 import { useLeague } from '../lib/league';
 import { isLocked, usePicks } from '../lib/picks';
 import { useData } from '../lib/useData';
+import { openAccount, useAccount } from '../lib/account';
 
 const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 // Games refresh every minute so cards lock and show results on their own.
@@ -83,6 +84,21 @@ function NflSlate({ name }) {
   );
 }
 
+/** Guests can lose their picks if they clear the browser; suggest an account. */
+function GuestNote() {
+  const acct = useAccount();
+  if (!acct?.guest) return null;
+  return (
+    <button onClick={openAccount} className="mb-3 flex w-full items-center gap-3 rounded-2xl bg-accent/10 px-4 py-2.5 text-left">
+      <span className="min-w-0 flex-1 text-[13px]">
+        <span className="font-semibold">Playing as a guest.</span>{' '}
+        <span className="text-label-2">Sign in with Google or email to keep your picks on every device.</span>
+      </span>
+      <span className="shrink-0 text-[13px] font-semibold text-accent">Sign in</span>
+    </button>
+  );
+}
+
 export default function Picks() {
   const league = useLeague();
   return (
@@ -92,6 +108,7 @@ export default function Picks() {
       <NameGate>
         {(name) => (
           <>
+            <GuestNote />
             <Leaderboard league={league} />
             <SectionTitle>Make your picks</SectionTitle>
             {league === 'nba' ? <NbaSlate name={name} /> : <NflSlate name={name} />}
