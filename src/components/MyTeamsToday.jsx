@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { TeamLogo } from './ui';
 import { countdownText } from './GameCard';
@@ -7,8 +8,7 @@ import { useSpoilers } from '../lib/settings';
 const ORDER = { in: 0, pre: 1, post: 2 };
 const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
 
-function line(g, me, opp, hide) {
-  const now = Date.now();
+function line(g, me, opp, hide, now) {
   const vs = `${me.homeAway === 'home' ? 'vs' : '@'} ${opp.name}`;
   if (g.status.state === 'in') {
     return {
@@ -35,6 +35,11 @@ function line(g, me, opp, hide) {
 export default function MyTeamsToday({ games, league, filter = () => true }) {
   const { isFav } = useFavorites();
   const spoilers = useSpoilers();
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 20_000); // keep the countdown moving
+    return () => clearInterval(id);
+  }, []);
   const rows = (games ?? [])
     .filter(filter)
     .flatMap((g) =>
@@ -46,7 +51,7 @@ export default function MyTeamsToday({ games, league, filter = () => true }) {
   return (
     <div className="mb-4 space-y-2">
       {rows.map(({ g, me, opp }) => {
-        const l = line(g, me, opp, spoilers.hidden(g));
+        const l = line(g, me, opp, spoilers.hidden(g), now);
         return (
           <Link
             key={`${g.id}:${me.id}`}

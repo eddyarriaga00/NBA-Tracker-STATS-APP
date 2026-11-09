@@ -124,7 +124,7 @@ function playoffFormat(lg, season, teams) {
   if (season >= 2020) return { teams, dividers: { 0: 'Division Leaders', 4: 'Wild Card', 7: 'In the Hunt' }, note: 'Seeds 1–4 are division winners, 5–7 are wild cards. Seed 1 gets a first-round bye.' };
   const leaders = season >= 2002 ? 4 : 3;
   const note = `Six teams per conference made the playoffs: ${leaders} division winners and ${6 - leaders} wild cards. The top 2 seeds got byes.`;
-  if (reliable) return { teams, dividers: { 0: 'Division Leaders', [leaders]: 'Wild Card', 6: 'In the Hunt' }, note };
+  if (reliable) return { teams, reliable, dividers: { 0: 'Division Leaders', [leaders]: 'Wild Card', 6: 'In the Hunt' }, note };
   const byRecord = [...teams].sort((a, b) => parseFloat(b.pct) - parseFloat(a.pct));
   return { teams: byRecord, dividers: {}, note: `${note} Ranked by record here (ESPN doesn’t have seeds for this season).` };
 }
@@ -140,6 +140,8 @@ export default function Standings() {
   const { data, error, loading, reload } = useData((fresh) => getStandings(lg, season, { fresh }), [lg, season]);
   const current = data?.find((c) => c.name?.startsWith(conf)) ?? data?.[0];
   const era = playoffFormat(lg, season, current?.teams ?? []);
+  // Old NFL seasons where ESPN's seed numbers are league-wide or missing: don't show them.
+  const seedsOk = lg === 'nba' || season >= 2020 || (data ?? []).every((c) => playoffFormat(lg, season, c.teams).reliable);
 
   const confOptions =
     lg === 'nfl'
@@ -176,11 +178,11 @@ export default function Standings() {
         <Bracket key={`${lg}:${season}`} confs={data} season={season} />
       ) : lg === 'nfl' && view === 'division' ? (
         <div key={conf} className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {current?.divisions.map((d) => <Table key={d.name} title={d.name} teams={d.teams} />)}
+          {current?.divisions.map((d) => <Table key={d.name} title={d.name} teams={d.teams} showSeed={seedsOk} />)}
         </div>
       ) : (
         <div key={`${conf}${view}`}>
-          <Table teams={era.teams} dividers={era.dividers} />
+          <Table teams={era.teams} dividers={era.dividers} showSeed={seedsOk} />
         </div>
       )}
       {view !== 'bracket' && <p className="mt-3 px-1 text-[12px] text-label-2">

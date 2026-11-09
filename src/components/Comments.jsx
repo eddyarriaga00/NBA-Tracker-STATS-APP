@@ -215,7 +215,7 @@ export function NamePrompt({ onSave, initial = '', onCancel }) {
       className="flex items-center gap-2 p-3"
     >
       <input
-        autoFocus
+        autoFocus={!!onCancel} // only when you tapped to change it; otherwise it yanks the page down and opens the keyboard
         value={v}
         maxLength={24}
         onChange={(e) => setV(e.target.value)}

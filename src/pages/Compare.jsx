@@ -17,7 +17,7 @@ function PlayerPicker({ lg, onPick, exclude }) {
   const [q, setQ] = useState('');
   const [hits, setHits] = useState([]);
   const ref = useRef(null);
-  useEffect(() => { ref.current?.focus(); }, []);
+  // No auto-focus: on a phone it would open the keyboard as soon as Compare opens.
   useEffect(() => {
     const term = q.trim();
     if (term.length < 2) { setHits([]); return; }

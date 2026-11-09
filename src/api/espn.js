@@ -799,6 +799,10 @@ async function getPastLeaders(lg, season, opts) {
   const entries = await Promise.all(
     Object.entries(PAST_SORT[lg]).map(async ([key, spec]) => {
       const { sort, min } = typeof spec === 'string' ? { sort: spec } : spec;
+      if (lg === 'nfl' && key === 'quarterbackRating') {
+        const rated = await pastPasserRating(base, season, opts).catch(() => []);
+        if (rated.length) return [key, rated];
+      }
       try {
         const d = await get(`${base}?season=${season}&seasontype=2&limit=${min ? 60 : 10}&sort=${sort}:desc`, { ttl: 60 * 60_000, ...opts });
         // Category names differ in case between the sort key and the response.
@@ -841,9 +845,50 @@ async function getPastLeaders(lg, season, opts) {
   // ESPN's season leaders record lists each player with the team he played for
   // that season (the rankings feed uses his last team), so it goes first; the
   // rankings feed fills anything it doesn't have.
-  const core = await getCoreLeaders(lg, await coreP, Object.keys(categories), opts).catch(() => ({}));
-  for (const k of Object.keys(categories)) if (core[k]?.length) categories[k] = core[k];
+  // (Its NFL passer rating isn't a real passer rating, so that one stays with the rankings feed.)
+  const fromCore = Object.keys(categories).filter((k) => !(lg === 'nfl' && k === 'quarterbackRating'));
+  const core = await getCoreLeaders(lg, await coreP, fromCore, opts).catch(() => ({}));
+  for (const k of fromCore) if (core[k]?.length) categories[k] = core[k];
   return { season: `${seasonLabel(lg, season)} Regular Season`, categories };
+}
+
+/**
+ * NFL passer rating, worked out from each passer's numbers with the official
+ * formula (ESPN's own rating field is wrong for past seasons). Qualifying
+ * passers need 14 attempts per team game.
+ */
+async function pastPasserRating(base, season, opts) {
+  const d = await get(`${base}?season=${season}&seasontype=2&limit=60&sort=passing.passingAttempts:desc`, { ttl: 60 * 60_000, ...opts });
+  const names = (d.categories ?? []).find((c) => c.name === 'passing')?.names ?? [];
+  const at = (x, n) => parseFloat(String((x.categories ?? []).find((c) => c.name === 'passing')?.totals?.[names.indexOf(n)] ?? '').replace(/,/g, '')) || 0;
+  const games = season >= 2021 ? 17 : season === 1987 ? 15 : season === 1982 ? 9 : 16;
+  const clamp = (v) => Math.max(0, Math.min(2.375, v));
+  return (d.athletes ?? [])
+    .map((x) => {
+      const att = at(x, 'passingAttempts');
+      const a = clamp((at(x, 'completions') / att - 0.3) * 5);
+      const b = clamp((at(x, 'passingYards') / att - 3) * 0.25);
+      const c = clamp((at(x, 'passingTouchdowns') / att) * 20);
+      const e = clamp(2.375 - (at(x, 'interceptions') / att) * 25);
+      return { x, att, rating: att ? ((a + b + c + e) / 6) * 100 : 0 };
+    })
+    .filter((p) => p.att >= 14 * games)
+    .sort((p, q) => q.rating - p.rating)
+    .slice(0, 10)
+    .map(({ x, rating }) => {
+      const a = x.athlete ?? {};
+      return {
+        id: a.id,
+        name: a.displayName,
+        first: a.firstName,
+        last: a.lastName,
+        headshot: headshotOf(a),
+        pos: a.position?.abbreviation,
+        jersey: a.jersey,
+        value: rating.toFixed(1),
+        team: { id: '', abbr: '', name: '', color: '#8e8e93' },
+      };
+    });
 }
 
 /** Season leaders from ESPN's core API (names looked up per player). */
@@ -853,7 +898,7 @@ async function getCoreLeaders(lg, d, keys, opts) {
   const cats = (d.categories ?? []).filter((c) => keys.includes(c.name));
   const refs = [...new Set(cats.flatMap((c) => (c.leaders ?? []).map((l) => secure(l.athlete?.$ref)).filter(Boolean)))];
   // Teams as they were that season (SEA, not OKC, for the 1990s Sonics).
-  const teamRefs = [...new Set(cats.flatMap((c) => (c.leaders ?? []).map((l) => secure(l.team?.$ref)).filter(Boolean)))];
+  const teamRefs = lg === 'nba' ? [...new Set(cats.flatMap((c) => (c.leaders ?? []).map((l) => secure(l.team?.$ref)).filter(Boolean)))] : [];
   const [people, teams, abbrNow] = await Promise.all([pool(refs, 10, (u) => get(u, o)), pool(teamRefs, 10, (u) => get(u, o)), teamAbbrMap(lg)]);
   const byRef = Object.fromEntries(refs.map((u, i) => [u, people[i]]));
   const abbr = { ...abbrNow };
@@ -873,7 +918,8 @@ async function getCoreLeaders(lg, d, keys, opts) {
           pos: a.position?.abbreviation,
           jersey: a.jersey,
           value: l.displayValue,
-          team: { id: tid, abbr: abbr[tid] ?? '', name: abbr[tid] ?? '', color: '#8e8e93' },
+          // NBA records keep the team from that season; NFL ones point at the player's latest team, so leave it out.
+          team: lg === 'nba' ? { id: tid, abbr: abbr[tid] ?? '', name: abbr[tid] ?? '', color: '#8e8e93' } : { id: '', abbr: '', name: '', color: '#8e8e93' },
         };
       }).filter((x) => x.name),
     ])
@@ -1038,6 +1084,11 @@ export async function getTeam(lg, id, season, opts) {
     (e, i, arr) => arr.findIndex((x) => x.id === e.id) === i
   );
   const t = r.team ?? sch.team ?? {};
+  if (!t.displayName && !t.abbreviation) {
+    const err = new Error("We couldn't find that team. The link may be wrong or out of date.");
+    err.notFound = true;
+    throw err;
+  }
 
   const toPlayer = (a) => ({
     id: a.id,

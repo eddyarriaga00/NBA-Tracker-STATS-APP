@@ -112,7 +112,9 @@ function StatLeaders({ lg, tabs }) {
       ) : error && !data ? (
         <ErrorState error={error} onRetry={reload} />
       ) : list.length === 0 ? (
-        <Card className="py-12 text-center text-label-2">No leaders yet for this category.</Card>
+        <Card className="px-4 py-12 text-center text-label-2">
+          {season === currentSeason(lg) ? 'No leaders yet for this category.' : 'ESPN isn’t returning leaders for this season right now. Try again in a bit.'}
+        </Card>
       ) : (
         <div key={key} className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1.15fr] md:items-start">
           {missing && (
