@@ -109,7 +109,7 @@ export default function Shell() {
     { to: `/${league}/standings`, label: 'Standings', icon: Icon.Standings },
     { to: `/${league}/leaders`, label: 'Leaders', icon: Icon.Leaders, match: (p) => p.startsWith(`/${league}/leaders`) || p.startsWith(`/${league}/player`) },
     { to: `/${league}/teams`, label: 'Teams', icon: Icon.Teams, match: (p) => p.startsWith(`/${league}/team`) },
-    { to: `/${league}/picks`, label: 'Friends', icon: Icon.Chat, match: (p) => p === '/chat' || p.startsWith(`/${league}/picks`) },
+    { to: '/chat', label: 'Friends', icon: Icon.Chat, match: (p) => p === '/chat' || p.startsWith(`/${league}/picks`) },
   ];
   const isActive = (t) => (t.match ? t.match(pathname) : pathname.startsWith(t.to));
 

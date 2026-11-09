@@ -26,8 +26,8 @@ export function FriendsTabs() {
   );
   return (
     <div className="mb-3 grid grid-cols-2 rounded-[10px] bg-fill p-[2px] md:max-w-xs">
-      {tab(`/${league}/picks`, 'Pick’em')}
       {tab('/chat', 'Chat')}
+      {tab(`/${league}/picks`, 'Pick’em')}
     </div>
   );
 }
