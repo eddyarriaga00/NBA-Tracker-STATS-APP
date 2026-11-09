@@ -152,7 +152,7 @@ function FollowedTeams() {
     (data?.[i] ?? []).forEach((c) => c.divisions.forEach((d) => d.teams.forEach((t) => (lookup[`${lg}:${t.id}`] = t))))
   );
   return (
-    <Group title="Followed teams" footer="Followed teams show first on Scores and get start and final alerts.">
+    <Group title="Followed teams" footer="Followed teams show first on Scores, and their games get your “My teams” alerts.">
       {favs.length === 0 && <Row label="You’re not following any teams yet" sub="Tap ☆ on a team to follow it." />}
       {favs.map((k) => {
         const [lg, id] = k.split(':');
@@ -191,10 +191,9 @@ function pushNote(status) {
 }
 
 function Alerts() {
-  const [scope, setScope] = useSetting('alertsScope');
-  const [start, setStart] = useSetting('alertsStart');
-  const [half, setHalf] = useSetting('alertsHalf');
-  const [final, setFinal] = useSetting('alertsFinal');
+  const [start, setStart] = useSetting('alertsStartFor');
+  const [half, setHalf] = useSetting('alertsHalfFor');
+  const [final, setFinal] = useSetting('alertsFinalFor');
   const [close, setClose] = useSetting('alertsClose');
   const [big, setBig] = useSetting('alertsBig');
   const { favs } = useFavorites();
@@ -203,7 +202,7 @@ function Alerts() {
   const enable = (setter) => (v) => {
     setter(v);
     // iPhone only allows the permission prompt straight from a tap.
-    if (v && 'Notification' in window && Notification.permission === 'default') {
+    if (v && v !== 'off' && 'Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission()
         .then(() => window.dispatchEvent(new Event('notification-permission')))
         .catch(() => {});
@@ -218,25 +217,24 @@ function Alerts() {
       setTest(e.message);
     }
   };
-  const games = scope === 'all' ? 'every game' : 'your teams’ games';
+  const FOR = [
+    { value: 'off', label: 'Off' },
+    { value: 'teams', label: 'My teams' },
+    { value: 'all', label: 'All games' },
+  ];
+  const needsTeams = [start, half, final].includes('teams') && favs.length === 0;
   return (
     <Group title="Alerts" footer={pushNote(status)}>
-      <Choice label="Which games">
-        <Segmented
-          value={scope}
-          onChange={setScope}
-          options={[
-            { value: 'teams', label: 'My teams' },
-            { value: 'all', label: 'All games' },
-          ]}
-        />
+      <Choice label="Game starts">
+        <Segmented value={start} onChange={enable(setStart)} options={FOR} />
       </Choice>
-      {scope === 'teams' && favs.length === 0 && (
-        <Row label="You don’t follow any teams yet" sub="Follow teams below, or switch to All games." />
-      )}
-      <Row label="Game starts" sub={`Tip-off and kickoff for ${games}`} right={<Switch on={start} onChange={enable(setStart)} label="Game start alerts" />} />
-      <Row label="Halftime" sub={`Halftime score for ${games}`} right={<Switch on={half} onChange={enable(setHalf)} label="Halftime alerts" />} />
-      <Row label="Final scores" sub={scope === 'all' ? 'When any game ends' : 'When your teams’ games end'} right={<Switch on={final} onChange={enable(setFinal)} label="Final score alerts" />} />
+      <Choice label="Halftime score">
+        <Segmented value={half} onChange={enable(setHalf)} options={FOR} />
+      </Choice>
+      <Choice label="Final scores">
+        <Segmented value={final} onChange={enable(setFinal)} options={FOR} />
+      </Choice>
+      {needsTeams && <Row label="You don’t follow any teams yet" sub="“My teams” alerts need followed teams. Add some below." />}
       <Row label="Close games" sub="Any game that’s close late, or goes to overtime" right={<Switch on={close} onChange={enable(setClose)} label="Close game alerts" />} />
       <Row
         label="Big performances"

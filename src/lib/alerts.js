@@ -52,21 +52,22 @@ const scoreLine = (g) => `${g.away.abbr} ${g.away.score} – ${g.home.score} ${g
 
 /**
  * Decide which alerts a game should raise now. Exported for testing.
- * wanted: this game matches "which games" (all games, or a followed team).
- * prefs: { start, half, final, close } moments switched on.
+ * fav: a followed team is playing.
+ * prefs: { start, half, final } each 'off' | 'teams' | 'all'; close: boolean (any game).
  */
-export function alertsFor(g, { prevState, wanted, prefs, spoilerFree, firstLook }) {
+export function alertsFor(g, { prevState, fav, prefs, spoilerFree, firstLook }) {
   const out = [];
+  const wants = (v) => v === 'all' || (v === 'teams' && fav);
   const key = `${g.league}:${g.id}`;
   const href = `/${g.league}/game/${g.id}`;
   const state = g.status.state;
-  if (wanted) {
+  {
     // Starts/finals that happened before we were watching are skipped (no flood on open).
-    if (prefs.start && state === 'in' && prevState === 'pre')
+    if (wants(prefs.start) && state === 'in' && prevState === 'pre')
       out.push({ id: `${key}:start`, title: `${g.league === 'nfl' ? 'Kickoff' : 'Tip-off'}: ${matchup(g)}`, body: g.broadcast ? `Starting now on ${g.broadcast}` : 'Starting now', href });
-    if (prefs.half && g.status.half && prevState !== undefined)
+    if (wants(prefs.half) && g.status.half && prevState !== undefined)
       out.push({ id: `${key}:half`, title: `Halftime: ${matchup(g)}`, body: spoilerFree ? 'Tap to see the score' : scoreLine(g), href });
-    if (prefs.final && state === 'post' && prevState === 'in')
+    if (wants(prefs.final) && state === 'post' && prevState === 'in')
       out.push({ id: `${key}:final`, title: `Final: ${matchup(g)}`, body: spoilerFree ? 'Tap to see how it ended' : scoreLine(g), href });
   }
   if (prefs.close && state === 'in') {
@@ -91,11 +92,11 @@ export function useGameAlerts() {
 
   useEffect(() => {
     const leagues = new Set();
-    const teamMoments = prefs.start || prefs.half || prefs.final;
-    if (prefs.close || (teamMoments && prefs.scope === 'all')) {
+    const moments = [prefs.start, prefs.half, prefs.final];
+    if (prefs.close || moments.includes('all')) {
       leagues.add('nba');
       leagues.add('nfl');
-    } else if (teamMoments) for (const f of favs) leagues.add(f.split(':')[0]);
+    } else if (moments.includes('teams')) for (const f of favs) leagues.add(f.split(':')[0]);
     if (!leagues.size) return;
 
     let alive = true;
@@ -126,9 +127,9 @@ export function useGameAlerts() {
       for (const g of games) {
         const key = `${g.league}:${g.id}`;
         const prevState = prev.current[key];
-        const wanted = prefs.scope === 'all' || isFav(g);
-        if (g.status.state === 'in' && (wanted || prefs.close)) anyLive = true;
-        for (const a of alertsFor(g, { prevState, wanted, prefs, spoilerFree, firstLook: prevState === undefined })) {
+        const fav = isFav(g);
+        if (g.status.state === 'in') anyLive = true;
+        for (const a of alertsFor(g, { prevState, fav, prefs, spoilerFree, firstLook: prevState === undefined })) {
           if (sent[a.id]) continue;
           sent[a.id] = Date.now();
           deliver(a);

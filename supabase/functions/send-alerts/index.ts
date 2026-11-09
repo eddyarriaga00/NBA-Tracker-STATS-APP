@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
   if (req.headers.get('x-cron-secret') !== Deno.env.get('CRON_SECRET')) return new Response('forbidden', { status: 403 });
   const test = new URL(req.url).searchParams.get('test'); // ?test=1 sends a test alert to every device
 
-  const { data: subs } = await db.from('push_subscriptions').select('endpoint,p256dh,auth,followed,close_games,spoiler_free,scope,starts,halftime,finals,big');
+  const { data: subs } = await db.from('push_subscriptions').select('endpoint,p256dh,auth,followed,close_games,spoiler_free,scope,starts,halftime,finals,big,start_for,half_for,final_for');
   const subscriptions = subs ?? [];
 
   const send = async (payload: Record<string, string>, pick: (s: any) => boolean, spoilerBody?: string, spoilerTitle?: string) => {
@@ -189,9 +189,13 @@ Deno.serve(async (req) => {
   const { data: rows } = await db.from('alert_game_state').select('game_key,state,close_sent,half_sent,big_sent').in('game_key', games.map((g) => g.key));
   const prev = Object.fromEntries((rows ?? []).map((r) => [r.game_key, r]));
 
-  // Which devices want this game: all games, or only games with a followed team.
-  const wants = (g: Game) => (s: any) =>
-    s.scope === 'all' || (s.followed ?? []).includes(`${g.league}:${g.home.id}`) || (s.followed ?? []).includes(`${g.league}:${g.away.id}`);
+  // Each moment has its own choice per device: 'off', 'teams' (followed teams' games) or 'all'.
+  const follows = (g: Game, s: any) => (s.followed ?? []).includes(`${g.league}:${g.home.id}`) || (s.followed ?? []).includes(`${g.league}:${g.away.id}`);
+  const wants = (g: Game, moment: 'start' | 'half' | 'final') => (s: any) => {
+    const legacy = { start: s.starts, half: s.halftime, final: s.finals }[moment] ? s.scope : 'off';
+    const v = s[`${moment}_for`] ?? legacy;
+    return v === 'all' || (v === 'teams' && follows(g, s));
+  };
   const match = (g: Game) => `${g.away.abbr} at ${g.home.abbr}`;
   const score = (g: Game) => `${g.away.abbr} ${g.away.score} – ${g.home.score} ${g.home.abbr}`;
   const updates: any[] = [];
@@ -209,7 +213,7 @@ Deno.serve(async (req) => {
         events++;
         sent += await send(
           { title: `${g.league === 'nfl' ? 'Kickoff' : 'Tip-off'}: ${match(g)}`, body: g.broadcast ? `Starting now on ${g.broadcast}` : 'Starting now', url, tag: `${g.key}:start` },
-          (s) => s.starts && wants(g)(s)
+          wants(g, 'start')
         );
       }
       if (g.half && !halfSent) {
@@ -217,13 +221,13 @@ Deno.serve(async (req) => {
         halfSent = true;
         sent += await send(
           { title: `Halftime: ${match(g)}`, body: score(g), url, tag: `${g.key}:half` },
-          (s) => s.halftime && wants(g)(s),
+          wants(g, 'half'),
           'Tap to see the score'
         );
       }
       if (before.state === 'in' && g.state === 'post') {
         events++;
-        sent += await send({ title: `Final: ${match(g)}`, body: score(g), url, tag: `${g.key}:final` }, (s) => s.finals && wants(g)(s), 'Tap to see how it ended');
+        sent += await send({ title: `Final: ${match(g)}`, body: score(g), url, tag: `${g.key}:final` }, wants(g, 'final'), 'Tap to see how it ended');
       }
     } else if (g.half) {
       halfSent = true; // first look mid-halftime: don't alert late

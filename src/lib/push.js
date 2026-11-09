@@ -134,11 +134,10 @@ export async function syncPush(prefs) {
     p_followed: prefs.followed,
     p_close: !!prefs.close,
     p_spoiler: !!prefs.spoiler,
-    p_scope: prefs.scope === 'all' ? 'all' : 'teams',
-    p_starts: !!prefs.start,
-    p_halftime: !!prefs.half,
-    p_finals: !!prefs.final,
     p_big: !!prefs.big,
+    p_start_for: prefs.start,
+    p_half_for: prefs.half,
+    p_final_for: prefs.final,
   });
   if (error) {
     setActive(false);

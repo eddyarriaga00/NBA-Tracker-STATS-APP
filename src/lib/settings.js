@@ -10,6 +10,10 @@ const fallback = (key) => {
   if (key === 'alertsStart' || key === 'alertsHalf' || key === 'alertsFinal') return read('alertsFollowed');
   // New: on by default for anyone who already turned alerts on.
   if (key === 'alertsBig') return read('alertsFollowed') || read('alertsClose');
+  // Each moment now picks its own games: 'off' | 'teams' | 'all'.
+  // Until changed, it follows the earlier on/off switch + "Which games".
+  const was = { alertsStartFor: 'alertsStart', alertsHalfFor: 'alertsHalf', alertsFinalFor: 'alertsFinal' }[key];
+  if (was) return read(was) ? read('alertsScope') : 'off';
   if (key === 'alertsScope') {
     try {
       return JSON.parse(localStorage.getItem('favoriteTeams') || '[]').length ? 'teams' : 'all';
@@ -32,14 +36,14 @@ const read = (key) => {
 /** All alert choices at once. */
 export function alertPrefs() {
   const p = {
-    scope: read('alertsScope'),
-    start: read('alertsStart'),
-    half: read('alertsHalf'),
-    final: read('alertsFinal'),
-    close: read('alertsClose'),
-    big: read('alertsBig'),
+    start: read('alertsStartFor'), // 'off' | 'teams' | 'all'
+    half: read('alertsHalfFor'),
+    final: read('alertsFinalFor'),
+    close: read('alertsClose'), // any game
+    big: read('alertsBig'), // any game
   };
-  return { ...p, any: p.start || p.half || p.final || p.close || p.big };
+  const on = (v) => v === 'teams' || v === 'all';
+  return { ...p, any: on(p.start) || on(p.half) || on(p.final) || p.close || p.big };
 }
 
 /** Live version of alertPrefs() for components. */
