@@ -6,7 +6,7 @@ import { LEAGUES } from './api/espn';
 import { leagueFromPath } from './lib/league';
 import { ThemeProvider } from './lib/theme';
 import { registerServiceWorker } from './lib/push';
-import { watchForUpdates } from './lib/update';
+import { loadPage, watchForUpdates } from './lib/update';
 
 registerServiceWorker(); // lets alerts arrive when the app is closed
 watchForUpdates(); // phones pick up new versions without reinstalling
@@ -14,14 +14,14 @@ import Shell from './components/Shell';
 import Scores from './pages/Scores';
 
 // Scores is the landing page; everything else loads when first opened.
-const Game = lazy(() => import('./pages/Game'));
-const Standings = lazy(() => import('./pages/Standings'));
-const Leaders = lazy(() => import('./pages/Leaders'));
-const Player = lazy(() => import('./pages/Player'));
-const Team = lazy(() => import('./pages/Team'));
-const Teams = lazy(() => import('./pages/Teams'));
-const Chat = lazy(() => import('./pages/Chat'));
-const Compare = lazy(() => import('./pages/Compare'));
+const Game = lazy(loadPage(() => import('./pages/Game')));
+const Standings = lazy(loadPage(() => import('./pages/Standings')));
+const Leaders = lazy(loadPage(() => import('./pages/Leaders')));
+const Player = lazy(loadPage(() => import('./pages/Player')));
+const Team = lazy(loadPage(() => import('./pages/Team')));
+const Teams = lazy(loadPage(() => import('./pages/Teams')));
+const Chat = lazy(loadPage(() => import('./pages/Chat')));
+const Compare = lazy(loadPage(() => import('./pages/Compare')));
 const DevField = import.meta.env.DEV ? lazy(() => import('./pages/DevField')) : null;
 
 // Only "nba" and "nfl" are valid league segments; anything else goes home.

@@ -33,3 +33,35 @@ export function watchForUpdates() {
   window.addEventListener('focus', maybe);
   setInterval(maybe, CHECK_EVERY);
 }
+
+// After a new version is published, an app that was already open can ask for
+// a page file from the old version. Reload once onto the new version instead
+// of showing an error.
+const CHUNK_RELOAD = 'chunkReloadAt';
+export function reloadForNewVersion() {
+  try {
+    const last = Number(sessionStorage.getItem(CHUNK_RELOAD) || 0);
+    if (Date.now() - last < 60_000) return false; // already tried: let the error show
+    sessionStorage.setItem(CHUNK_RELOAD, String(Date.now()));
+  } catch {
+    return false;
+  }
+  location.reload();
+  return true;
+}
+
+/** Like import(), but a missing file from an old version reloads the app. */
+export function loadPage(load) {
+  return () =>
+    load().catch((err) => {
+      if (reloadForNewVersion()) return new Promise(() => {}); // keep the spinner until the reload
+      throw err;
+    });
+}
+
+if (typeof window !== 'undefined') {
+  // Vite raises this for any other lazily loaded file (comments, charts…).
+  window.addEventListener('vite:preloadError', (e) => {
+    if (reloadForNewVersion()) e.preventDefault();
+  });
+}
