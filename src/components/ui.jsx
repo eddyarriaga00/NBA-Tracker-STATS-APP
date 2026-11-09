@@ -10,7 +10,7 @@ export function TeamLogo({ abbr, size = 32, className = '', league, eager = fals
   const [failed, setFailed] = useState(0); // 0 ok, 1 dark variant failed, 2 both failed
   useEffect(() => setFailed(0), [abbr, dark]);
   const src = logoUrl(league ?? ctx, abbr, dark && failed === 0);
-  if (!abbr || abbr === 'TBD' || failed >= 2) {
+  if (!abbr || abbr === 'TBD' || abbr.endsWith('\u200b') || failed >= 2) {
     return (
       <span
         aria-hidden

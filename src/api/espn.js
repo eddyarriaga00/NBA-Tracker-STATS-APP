@@ -105,6 +105,11 @@ export const fromKey = (k) => new Date(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.sl
 export const logoUrl = (lg, abbr, dark = false) =>
   abbr ? `https://a.espncdn.com/i/teamlogos/${lg}/500${dark ? '-dark' : ''}/${abbr.toLowerCase()}.png` : '';
 
+// The 1990s Houston Oilers share "HOU" with today's Texans (a different
+// franchise). Tag it invisibly so the Texans logo isn't shown for them.
+export const NO_LOGO = '\u200b';
+const teamAbbr = (t) => (t?.abbreviation === 'HOU' && /oilers/i.test(t?.displayName ?? t?.name ?? '') ? `HOU${NO_LOGO}` : t?.abbreviation);
+
 const headshotOf = (a) => (typeof a?.headshot === 'string' ? a.headshot : a?.headshot?.href);
 const hex = (c, fallback = '#888888') => (c ? `#${c}` : fallback);
 
@@ -138,7 +143,7 @@ function normCompetitor(c) {
   return {
     tbd,
     id: t.id,
-    abbr: t.abbreviation,
+    abbr: teamAbbr(t),
     name: t.shortDisplayName ?? t.name,
     location: t.location,
     full: t.displayName,
@@ -682,7 +687,7 @@ function normEntry(e) {
   }
   return {
     id: e.team?.id,
-    abbr: e.team?.abbreviation,
+    abbr: teamAbbr(e.team),
     name: e.team?.shortDisplayName ?? e.team?.name,
     color: hex(e.team?.color),
     seed: Number(stat.playoffSeed) || 99,
@@ -1034,6 +1039,8 @@ export async function getPlayer(lg, id, opts) {
         totals: c.totals ?? [],
         rows: c.statistics.map((r) => ({
           season: r.season?.displayName ?? '',
+          year: r.season?.year,
+          teamId: r.teamId,
           team: teams[r.teamId] ?? '',
           stats: r.stats ?? [],
         })),
@@ -1132,7 +1139,7 @@ export async function getTeam(lg, id, season, opts) {
       state: c.status?.type?.state ?? 'pre',
       label: c.status?.type?.shortDetail ?? '',
       home: me.homeAway === 'home',
-      opp: { id: opp.team?.id, abbr: opp.team?.abbreviation, name: opp.team?.shortDisplayName ?? opp.team?.displayName },
+      opp: { id: opp.team?.id, abbr: teamAbbr(opp.team), name: opp.team?.shortDisplayName ?? opp.team?.displayName },
       us: score(me),
       them: score(opp),
       win: me.winner,
@@ -1147,7 +1154,7 @@ export async function getTeam(lg, id, season, opts) {
   return {
     league: lg,
     id: t.id ?? id,
-    abbr: t.abbreviation,
+    abbr: teamAbbr(t),
     name: t.displayName,
     short: t.shortDisplayName ?? t.name,
     color: hex(t.color),
@@ -1530,4 +1537,56 @@ export async function getPlayoffGames(lg, season, opts) {
     .filter((e) => (seen.has(e.id) ? false : seen.add(e.id)))
     .map(normPlayoffEvent)
     .filter((g) => g.round && !/pro bowl/i.test(g.round));
+}
+
+// ---------- On this day ----------
+
+/**
+ * The best individual performance on this date in each of the past `years`
+ * seasons (NBA: points; NFL: passing, rushing or receiving yards, scaled so a
+ * 150-yard rusher counts like a 350-yard passer). Old dates never change, so
+ * these are cached for a day.
+ */
+export async function getOnThisDay(lg, date = new Date(), years = 15) {
+  const o = { ttl: 24 * 60 * 60_000 };
+  const mmdd = toKey(date).slice(4);
+  const first = firstSeason(lg, 'leaders');
+  const list = Array.from({ length: years }, (_, i) => date.getFullYear() - 1 - i).filter((y) => y >= first - 1);
+  const days = await pool(list, 4, (y) => get(`${site(lg)}/scoreboard?dates=${y}${mmdd}`, o).then((d) => ({ y, d })));
+  const scale = { points: 1, passingYards: 1 / 350, rushingYards: 1 / 150, receivingYards: 1 / 150 };
+  const unit = { points: 'PTS', passingYards: 'pass yds', rushingYards: 'rush yds', receivingYards: 'rec yds' };
+  const out = [];
+  for (const day of days) {
+    if (!day) continue;
+    let best = null;
+    for (const e of day.d?.events ?? []) {
+      const c = e.competitions?.[0] ?? {};
+      if (c.status?.type?.state !== 'post') continue;
+      const comps = c.competitors ?? [];
+      const leaders = lg === 'nba' ? comps.flatMap((x) => (x.leaders ?? []).map((l) => ({ ...l, team: x.team }))) : (c.leaders ?? []);
+      for (const cat of leaders) {
+        if (!(cat.name in scale)) continue;
+        const l = cat.leaders?.[0];
+        if (!l?.athlete) continue;
+        const score = (Number(l.value) || 0) * scale[cat.name];
+        if (!best || score > best.score) {
+          const home = comps.find((x) => x.homeAway === 'home') ?? comps[0];
+          const away = comps.find((x) => x.homeAway === 'away') ?? comps[1];
+          const teamId = l.team?.id ?? l.athlete?.team?.id ?? cat.team?.id;
+          best = {
+            score,
+            year: day.y,
+            gameId: e.id,
+            player: { id: l.athlete.id, name: (l.athlete.displayName ?? '').length > 17 ? l.athlete.shortName ?? l.athlete.displayName : l.athlete.displayName, headshot: headshotOf(l.athlete) },
+            stat: `${Math.round(Number(l.value))} ${unit[cat.name]}`,
+            teamAbbr: [home, away].find((x) => x?.team?.id === teamId)?.team?.abbreviation ?? cat.team?.abbreviation ?? '',
+            line: `${away?.team?.abbreviation} ${away?.score} · ${home?.team?.abbreviation} ${home?.score}`,
+          };
+        }
+      }
+    }
+    // Only real highlights: 25+ points, or a big yardage day.
+    if (best && best.score >= (lg === 'nba' ? 25 : 0.75)) out.push(best);
+  }
+  return out;
 }

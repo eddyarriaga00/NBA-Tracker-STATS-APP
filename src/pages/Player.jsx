@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { currentSeason, getGamelog, getPlayer, seasonLabel } from '../api/espn';
+import { currentSeason, firstSeason, getGamelog, getPlayer, seasonLabel } from '../api/espn';
 import { Icon } from '../components/icons';
 import { BioButton } from '../components/BioSheet';
 import { BackButton, Card, Chips, ErrorState, SeasonPicker, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
@@ -286,6 +286,10 @@ function Splits({ splits }) {
   );
 }
 
+function SeasonCell({ to, className, children }) {
+  return to ? <Link to={to} className={`${className} text-accent active:opacity-60`}>{children}</Link> : <span className={className}>{children}</span>;
+}
+
 function Career({ career, lg }) {
   const [key, setKey] = useState(career?.[0]?.key);
   const cat = career?.find((c) => c.key === key) ?? career?.[0];
@@ -299,18 +303,24 @@ function Career({ career, lg }) {
         <SimpleTable
           head={['Team', ...cat.labels]}
           rows={[
-            ...[...cat.rows].reverse().map((r, i) => (
+            ...[...cat.rows].reverse().map((r, i) => {
+              // Tap a season to open that team's page for that year.
+              const to = r.teamId && r.year >= firstSeason(lg, 'team') ? `/${lg}/team/${r.teamId}?season=${r.year}` : null;
+              return (
               <tr key={`${r.season}${r.team}${i}`} className="border-t border-sep">
-                <td className="sticky left-0 z-10 bg-card py-2 pl-4 pr-3 font-semibold">{r.season}</td>
+                <td className="sticky left-0 z-10 bg-card py-2 pl-4 pr-3 font-semibold">
+                  <SeasonCell to={to} className="block whitespace-nowrap">{r.season}</SeasonCell>
+                </td>
                 <td className="px-2.5">
-                  <span className="flex items-center gap-1.5 text-[12px] font-semibold">
+                  <SeasonCell to={to} className="flex items-center gap-1.5 text-[12px] font-semibold">
                     {r.team && <TeamLogo abbr={r.team} size={18} league={lg} />}
                     {r.team}
-                  </span>
+                  </SeasonCell>
                 </td>
                 {r.stats.map((s, j) => <td key={j} className="px-2.5 text-center text-label-2">{s}</td>)}
               </tr>
-            )),
+              );
+            }),
             cat.totals?.length ? (
               <tr key="totals" className="border-t-2 border-sep font-semibold">
                 <td className="sticky left-0 z-10 bg-card py-2.5 pl-4">Career</td>

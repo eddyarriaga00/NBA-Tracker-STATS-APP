@@ -4,6 +4,7 @@ import { currentSeason, fromKey, getNbaScoreboard, getNflScoreboard, seasonOptio
 import { useCommentCounts } from '../components/Comments';
 import GameCard from '../components/GameCard';
 import MyTeamsToday from '../components/MyTeamsToday';
+import OnThisDay from '../components/OnThisDay';
 import { CardExtras, useNextGames, useStreaks } from '../lib/cardExtras';
 import { Icon } from '../components/icons';
 import { Empty, ErrorState, PageTitle, SeasonPicker, Segmented, Skeleton } from '../components/ui';
@@ -161,6 +162,7 @@ function NbaScores() {
         <CardExtras.Provider value={extras}>
           <GameGrid games={games} loading={loading} error={error} reload={reload} emptyTitle="No Games" emptySub="There are no NBA games on this day." />
         </CardExtras.Provider>
+        {isToday && <OnThisDay lg="nba" />}
       </div>
     </div>
   );
@@ -275,6 +277,7 @@ function NflScores() {
             <CardExtras.Provider value={extras}>
               <GameGrid games={data.games} byDay />
             </CardExtras.Provider>
+            {thisWeek && <OnThisDay lg="nfl" />}
           </>
         )}
         {data?.byes?.length > 0 && (
