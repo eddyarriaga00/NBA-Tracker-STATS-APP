@@ -196,6 +196,7 @@ function Alerts() {
   const [half, setHalf] = useSetting('alertsHalf');
   const [final, setFinal] = useSetting('alertsFinal');
   const [close, setClose] = useSetting('alertsClose');
+  const [big, setBig] = useSetting('alertsBig');
   const { favs } = useFavorites();
   const status = usePushStatus();
   const [test, setTest] = useState('');
@@ -237,6 +238,11 @@ function Alerts() {
       <Row label="Halftime" sub={`Halftime score for ${games}`} right={<Switch on={half} onChange={enable(setHalf)} label="Halftime alerts" />} />
       <Row label="Final scores" sub={scope === 'all' ? 'When any game ends' : 'When your teams’ games end'} right={<Switch on={final} onChange={enable(setFinal)} label="Final score alerts" />} />
       <Row label="Close games" sub="Any game that’s close late, or goes to overtime" right={<Switch on={close} onChange={enable(setClose)} label="Close game alerts" />} />
+      <Row
+        label="Big performances"
+        sub="Any player, any game: 15+ in a quarter, 30/40/50-point nights, triple-doubles, 8+ threes, 400-yard passers, 150-yard receivers and more"
+        right={<Switch on={big} onChange={enable(setBig)} label="Big performance alerts" />}
+      />
       {status?.reason === 'on' && <Row label="Send a test alert" sub={test || 'Check alerts reach this device'} onClick={runTest} />}
     </Group>
   );

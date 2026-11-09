@@ -8,6 +8,8 @@ const DEFAULTS = { spoilerFree: false, alertsFollowed: false, alertsClose: false
 // you follow teams.
 const fallback = (key) => {
   if (key === 'alertsStart' || key === 'alertsHalf' || key === 'alertsFinal') return read('alertsFollowed');
+  // New: on by default for anyone who already turned alerts on.
+  if (key === 'alertsBig') return read('alertsFollowed') || read('alertsClose');
   if (key === 'alertsScope') {
     try {
       return JSON.parse(localStorage.getItem('favoriteTeams') || '[]').length ? 'teams' : 'all';
@@ -35,8 +37,9 @@ export function alertPrefs() {
     half: read('alertsHalf'),
     final: read('alertsFinal'),
     close: read('alertsClose'),
+    big: read('alertsBig'),
   };
-  return { ...p, any: p.start || p.half || p.final || p.close };
+  return { ...p, any: p.start || p.half || p.final || p.close || p.big };
 }
 
 /** Live version of alertPrefs() for components. */

@@ -138,6 +138,7 @@ export async function syncPush(prefs) {
     p_starts: !!prefs.start,
     p_halftime: !!prefs.half,
     p_finals: !!prefs.final,
+    p_big: !!prefs.big,
   });
   if (error) {
     setActive(false);

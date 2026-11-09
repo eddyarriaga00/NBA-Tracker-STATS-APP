@@ -3,6 +3,7 @@
 // Each alert goes out once per game, tracked in alert_game_state.
 import webpush from 'npm:web-push@3.6.7';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { bigMoments, worthSending } from './big.js';
 
 const SITE = 'https://eddyarriaga00.github.io/NBA-Tracker-STATS-APP/';
 const ESPN = 'https://site.api.espn.com/apis/site/v2/sports';
@@ -149,16 +150,17 @@ Deno.serve(async (req) => {
   if (req.headers.get('x-cron-secret') !== Deno.env.get('CRON_SECRET')) return new Response('forbidden', { status: 403 });
   const test = new URL(req.url).searchParams.get('test'); // ?test=1 sends a test alert to every device
 
-  const { data: subs } = await db.from('push_subscriptions').select('endpoint,p256dh,auth,followed,close_games,spoiler_free,scope,starts,halftime,finals');
+  const { data: subs } = await db.from('push_subscriptions').select('endpoint,p256dh,auth,followed,close_games,spoiler_free,scope,starts,halftime,finals,big');
   const subscriptions = subs ?? [];
 
-  const send = async (payload: Record<string, string>, pick: (s: any) => boolean, spoilerBody?: string) => {
+  const send = async (payload: Record<string, string>, pick: (s: any) => boolean, spoilerBody?: string, spoilerTitle?: string) => {
     let sent = 0;
     await Promise.allSettled(
       subscriptions.filter(pick).map(async (s) => {
         const body = s.spoiler_free && spoilerBody != null ? spoilerBody : payload.body;
+        const title = s.spoiler_free && spoilerTitle != null ? spoilerTitle : payload.title;
         try {
-          await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify({ ...payload, body }), { TTL: 600, urgency: 'high' });
+          await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify({ ...payload, title, body }), { TTL: 600, urgency: 'high' });
           sent++;
         } catch (e: any) {
           if (e?.statusCode === 404 || e?.statusCode === 410) await db.from('push_subscriptions').delete().eq('endpoint', s.endpoint); // device unsubscribed
@@ -168,6 +170,14 @@ Deno.serve(async (req) => {
     return sent;
   };
 
+  // ?preview=nba:<gameId> lists the big-performance alerts a game would send (sends nothing).
+  const preview = new URL(req.url).searchParams.get('preview');
+  if (preview) {
+    const [lg, id] = preview.split(':') as ['nba' | 'nfl', string];
+    const summary = await json(`${ESPN}/${PATH[lg]}/summary?event=${id}`);
+    return Response.json({ preview, alerts: worthSending(bigMoments(lg, summary)) });
+  }
+
   if (test) {
     const sent = await send({ title: 'NBA Tracker alerts are on', body: 'You’ll get alerts even when the app is closed.', url: SITE, tag: 'test' }, () => true);
     return Response.json({ test: true, devices: subscriptions.length, sent });
@@ -176,7 +186,7 @@ Deno.serve(async (req) => {
   const games = await loadGames();
   const graded = await gradePicks(games).catch((e) => `error: ${e?.message ?? e}`);
   if (!games.length) return Response.json({ games: 0, graded, errors: loadErrors });
-  const { data: rows } = await db.from('alert_game_state').select('game_key,state,close_sent,half_sent').in('game_key', games.map((g) => g.key));
+  const { data: rows } = await db.from('alert_game_state').select('game_key,state,close_sent,half_sent,big_sent').in('game_key', games.map((g) => g.key));
   const prev = Object.fromEntries((rows ?? []).map((r) => [r.game_key, r]));
 
   // Which devices want this game: all games, or only games with a followed team.
@@ -187,6 +197,7 @@ Deno.serve(async (req) => {
   const updates: any[] = [];
   let events = 0;
   let sent = 0;
+  const anyBig = subscriptions.some((s) => s.big);
 
   for (const g of games) {
     const before = prev[g.key];
@@ -217,14 +228,43 @@ Deno.serve(async (req) => {
     } else if (g.half) {
       halfSent = true; // first look mid-halftime: don't alert late
     }
+    // Big performances (any game, any player): check the live box score.
+    let bigSent: string[] | null = before?.big_sent ?? null;
+    let bigChanged = false;
+    const finishing = before?.state === 'in' && g.state === 'post'; // catch the last minute's stats
+    if (anyBig && (g.state === 'in' || finishing)) {
+      const summary = await json(`${ESPN}/${PATH[g.league]}/summary?event=${g.id}`).catch(() => null);
+      if (summary) {
+        const moments = bigMoments(g.league, summary);
+        const known = new Set(bigSent ?? []);
+        const fresh = moments.filter((m: any) => !known.has(m.key));
+        // The first look at a game only records what already happened (no late flood).
+        if (bigSent) {
+          for (const m of worthSending(fresh)) {
+            events++;
+            sent += await send(
+              { title: m.title, body: `${m.body} · ${match(g)} ${g.label}`, url, tag: `${g.key}:big:${m.key}` },
+              (s) => s.big,
+              'Tap to watch',
+              `🔥 Big performance in ${match(g)}`
+            );
+          }
+        }
+        if (fresh.length || !bigSent) {
+          bigSent = [...known, ...fresh.map((m: any) => m.key)];
+          bigChanged = true;
+        }
+      }
+    }
     const heat = hot(g);
     if (heat && !closeSent) {
       events++;
       closeSent = true;
       sent += await send({ title: `🔥 ${heat}: ${match(g)}`, body: `${score(g)} · ${g.label}`, url, tag: `${g.key}:close` }, (s) => s.close_games, `${g.label} · worth tuning in`);
     }
-    if (!before || before.state !== g.state || before.close_sent !== closeSent || before.half_sent !== halfSent) {
-      updates.push({ game_key: g.key, state: g.state, close_sent: closeSent, half_sent: halfSent, updated_at: new Date().toISOString() });
+    if (!before || bigChanged || before.state !== g.state || before.close_sent !== closeSent || before.half_sent !== halfSent) {
+      // Every column every time: a bulk upsert fills missing ones with defaults.
+      updates.push({ game_key: g.key, state: g.state, close_sent: closeSent, half_sent: halfSent, big_sent: bigSent, updated_at: new Date().toISOString() });
     }
   }
   if (updates.length) await db.from('alert_game_state').upsert(updates);
