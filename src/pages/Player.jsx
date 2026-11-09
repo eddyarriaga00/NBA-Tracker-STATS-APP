@@ -38,6 +38,12 @@ function Hero({ bio, lg }) {
               </Link>
             )}
             <BioButton lg={lg} id={bio.id} className="!py-1.5 !text-[13px]" />
+            <Link
+              to={`/${lg}/compare?a=${bio.id}`}
+              className="shrink-0 rounded-full bg-fill px-2.5 py-1.5 text-[13px] font-semibold text-accent transition hover:bg-fill-strong active:scale-95"
+            >
+              Compare
+            </Link>
           </div>
           {bio.injury && (
             <div className="mt-2">

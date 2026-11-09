@@ -4,6 +4,7 @@ import { getGame } from '../api/espn';
 import Comments, { useCommentCounts } from '../components/Comments';
 import Preview from '../components/Preview';
 import Highlights from '../components/Highlights';
+import ShotChart from '../components/ShotChart';
 import { HeatBadge } from '../components/GameCard';
 import { Icon } from '../components/icons';
 import { downloadICS, gameUrl } from '../lib/calendar';
@@ -699,14 +700,16 @@ export default function Game() {
                     onChange={setTab}
                     options={[
                       { value: 'box', label: 'Box Score' },
-                      { value: 'team', label: 'Team Stats' },
+                      { value: 'team', label: lg === 'nba' ? 'Team' : 'Team Stats' },
                       { value: 'plays', label: lg === 'nfl' ? 'Drives' : 'Plays' },
+                      ...(lg === 'nba' ? [{ value: 'shots', label: 'Shots' }] : []),
                     ]}
                   />
                   <div className="mt-3">
                     {tab === 'box' && <BoxScore g={g} />}
                     {tab === 'team' && <TeamStats g={g} />}
                     {tab === 'plays' && (lg === 'nfl' ? <Drives g={g} /> : <Plays g={g} />)}
+                    {tab === 'shots' && lg === 'nba' && <ShotChart g={g} />}
                   </div>
                 </>
               )}

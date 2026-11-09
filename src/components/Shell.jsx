@@ -10,6 +10,7 @@ import { BioProvider } from './BioSheet';
 import Search from './Search';
 import Toaster from './Toaster';
 import { useGameAlerts } from '../lib/alerts';
+import { isIOS, isStandalone, pushConfigured, pushSupported, usePushSync } from '../lib/push';
 
 const THEMES = [
   { value: 'system', label: 'System', icon: Icon.Auto },
@@ -36,7 +37,17 @@ function Toggle({ on, onChange, label, sub }) {
   );
 }
 
-function SettingsMenu() {
+function pushNote(status) {
+  if (!pushConfigured || !pushSupported()) return 'Alerts work while the app is open.';
+  if (status?.reason === 'on') return '✓ Alerts reach this device even when the app is closed.';
+  if (status?.reason === 'ios-home-screen' || (isIOS() && !isStandalone()))
+    return 'On iPhone: tap Share → Add to Home Screen, open it from there, and turn alerts on to get them when the app is closed.';
+  if (status?.reason === 'denied') return 'Notifications are blocked for this site. Allow them in your browser or phone settings.';
+  if (status?.reason === 'save-failed' || status?.reason === 'error') return 'Couldn’t turn on closed-app alerts right now. In-app alerts still work.';
+  return 'Turn on an alert to get notified even when the app is closed.';
+}
+
+function SettingsMenu({ pushStatus }) {
   const { pref, setPref } = useTheme();
   const [spoilerFree, setSpoilerFree] = useSetting('spoilerFree');
   const [alertsFollowed, setAlertsFollowed] = useSetting('alertsFollowed');
@@ -59,7 +70,12 @@ function SettingsMenu() {
   // Turning on alerts asks for notification permission (falls back to in-app banners).
   const enableAlerts = (setter) => (v) => {
     setter(v);
-    if (v && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+    // Must be requested right from the tap (iPhone requires it).
+    if (v && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+        .then(() => window.dispatchEvent(new Event('notification-permission')))
+        .catch(() => {});
+    }
   };
 
   return (
@@ -93,9 +109,7 @@ function SettingsMenu() {
           <div className="px-3 pb-1 pt-1 text-[12px] font-medium text-label-2">Alerts</div>
           <Toggle on={alertsFollowed} onChange={enableAlerts(setAlertsFollowed)} label="Followed teams" sub="Start and final of your teams’ games" />
           <Toggle on={alertsClose} onChange={enableAlerts(setAlertsClose)} label="Close games" sub="Any game that’s close late" />
-          <p className="px-3 pb-2 pt-1 text-[11px] leading-snug text-label-3">
-            Alerts work while the app is open. Allow notifications to get them when it’s in the background.
-          </p>
+          <p className={`px-3 pb-2 pt-1 text-[11px] leading-snug ${pushStatus?.reason === 'on' ? 'text-win' : 'text-label-3'}`}>{pushNote(pushStatus)}</p>
         </div>
       )}
     </div>
@@ -142,6 +156,7 @@ export default function Shell() {
   const league = leagueFromPath(pathname);
   const [searchOpen, setSearchOpen] = useState(false);
   useGameAlerts(); // follows your teams and close games while the app is open
+  const pushStatus = usePushSync(); // and lets the server alert this device when it's closed
   const closeSearch = useCallback(() => setSearchOpen(false), []);
 
   useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
@@ -195,7 +210,7 @@ export default function Shell() {
               >
                 <Icon.Search className="h-[20px] w-[20px]" />
               </button>
-              <SettingsMenu />
+              <SettingsMenu pushStatus={pushStatus} />
             </div>
           </div>
         </header>

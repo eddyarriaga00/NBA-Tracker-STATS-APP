@@ -476,6 +476,25 @@ export async function getGame(lg, id, opts) {
     league: lg,
     quarters,
     preview: normPreview(lg, s, away, home),
+    // NBA shot locations (feet; x across the court 0-50, y out from the hoop).
+    shots:
+      lg === 'nba'
+        ? (s.plays ?? [])
+            .filter((p) => p.shootingPlay && !/free throw/i.test(p.type?.text ?? '') && p.coordinate)
+            .map((p) => ({
+              id: p.id,
+              x: Number(p.coordinate.x),
+              y: Number(p.coordinate.y),
+              made: !!p.scoringPlay,
+              three: p.pointsAttempted === 3 || /three point/i.test(p.text ?? ''),
+              teamId: p.team?.id,
+              playerId: p.participants?.[0]?.athlete?.id,
+              period: p.period?.number ?? 0,
+              clock: p.clock?.displayValue ?? '',
+              text: p.text ?? '',
+            }))
+            .filter((sh) => sh.x >= -2 && sh.x <= 52 && sh.y >= -6 && sh.y <= 94)
+        : [],
     videos: (s.videos ?? [])
       .map((v) => ({
         id: String(v.id ?? v.links?.web?.href ?? ''),

@@ -4,6 +4,7 @@ import { gameHeat } from './excitement';
 import { useFavorites } from './favorites';
 import { getSetting, useSetting } from './settings';
 import { toast } from './toast';
+import { pushActive } from './push';
 
 // Watches today's NBA games and this week's NFL games while the app is open and
 // raises alerts for followed teams (start + final) and close games late.
@@ -27,6 +28,8 @@ function saveSent(sent) {
 }
 
 function deliver({ title, body, href }) {
+  // This device gets the same alerts from the server; don't double up.
+  if (pushActive()) return;
   toast({ title, body, href, ms: 8000 });
   // System notification only when the app isn't on screen (banner covers the rest).
   if (document.visibilityState === 'visible') return;

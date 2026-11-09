@@ -5,6 +5,9 @@ import './index.css';
 import { LEAGUES } from './api/espn';
 import { leagueFromPath } from './lib/league';
 import { ThemeProvider } from './lib/theme';
+import { registerServiceWorker } from './lib/push';
+
+registerServiceWorker(); // lets alerts arrive when the app is closed
 import Shell from './components/Shell';
 import Scores from './pages/Scores';
 
@@ -16,6 +19,7 @@ const Player = lazy(() => import('./pages/Player'));
 const Team = lazy(() => import('./pages/Team'));
 const Teams = lazy(() => import('./pages/Teams'));
 const Chat = lazy(() => import('./pages/Chat'));
+const Compare = lazy(() => import('./pages/Compare'));
 const DevField = import.meta.env.DEV ? lazy(() => import('./pages/DevField')) : null;
 
 // Only "nba" and "nfl" are valid league segments; anything else goes home.
@@ -48,6 +52,7 @@ createRoot(document.getElementById('root')).render(
             <Route path=":lg/leaders" element={guard(<Leaders />)} />
             <Route path=":lg/player/:id" element={guard(<Keyed Page={Player} />)} />
             <Route path=":lg/teams" element={guard(<Teams />)} />
+            <Route path=":lg/compare" element={guard(<Compare />)} />
             <Route path=":lg/team/:id" element={guard(<Keyed Page={Team} />)} />
             <Route path="game/:id" element={<LegacyGame />} />
             <Route path="*" element={<Navigate to="/" replace />} />
