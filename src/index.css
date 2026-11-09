@@ -55,6 +55,9 @@
 }
 
 html, body { background: var(--bg); }
+/* Never let anything make the page wider than the screen (stops sideways zoom/scroll on phones). */
+html, body { max-width: 100%; overflow-x: hidden; }
+@supports (overflow: clip) { html, body { overflow-x: clip; } }
 body {
   color: var(--label);
   font-family: var(--font-sans);

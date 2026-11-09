@@ -185,7 +185,7 @@ export function Chips({ options, value, onChange, className = '' }) {
     }
   }, [value, options.length]);
   return (
-    <div ref={ref} className={`no-scrollbar relative -mx-4 flex gap-2 overflow-x-auto px-4 ${className}`}>
+    <div ref={ref} className={`no-scrollbar relative -mx-3 flex gap-2 overflow-x-auto px-3 md:-mx-4 md:px-4 ${className}`}>
       {options.map((o) => (
         <button
           key={o.value}

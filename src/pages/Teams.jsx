@@ -32,7 +32,7 @@ export default function Teams() {
     <div>
       <PageTitle eyebrow={lg.toUpperCase()}>Teams</PageTitle>
       {loading && !data ? (
-        <div className="grid gap-3 md:grid-cols-2">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-[260px] !rounded-2xl" />)}</div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-[260px] !rounded-2xl" />)}</div>
       ) : error && !data ? (
         <ErrorState error={error} onRetry={reload} />
       ) : (
@@ -48,7 +48,7 @@ export default function Teams() {
         {data.map((conf) => (
           <section key={conf.name} className="mb-6">
             <h2 className="mb-2 px-1 font-display text-[19px] font-bold tracking-tight md:text-[22px]">{conf.name}</h2>
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {conf.divisions.map((d) => (
                 <Card key={d.name} className="rise overflow-hidden">
                   <div className="px-4 pb-1 pt-3 text-[13px] font-semibold uppercase tracking-wide text-label-2">{d.name}</div>

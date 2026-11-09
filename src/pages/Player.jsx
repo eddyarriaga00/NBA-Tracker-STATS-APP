@@ -237,7 +237,7 @@ function Career({ career, lg }) {
 function News({ news }) {
   if (!news.length) return <Card className="py-10 text-center text-label-2">No recent news.</Card>;
   return (
-    <div className="grid gap-3 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       {news.map((n) => (
         <a key={n.id} href={n.url} target="_blank" rel="noreferrer" className="block transition active:scale-[0.99]">
           <Card className="flex h-full gap-3 overflow-hidden p-3 hover:bg-card-2">

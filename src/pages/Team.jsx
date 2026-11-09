@@ -151,7 +151,7 @@ export default function Team() {
             </div>
           </Card>
 
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
             {next && (
               <Link to={`/${lg}/game/${next.id}`}>
                 <Card className="flex h-full items-center gap-3 px-4 py-3 transition hover:bg-card-2">

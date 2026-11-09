@@ -57,7 +57,7 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
     );
   } else if (status.state !== 'pre' && g.leaders.length) {
     footer = (
-      <div className={`grid gap-x-3 gap-y-0.5 ${g.league === 'nba' && g.leaders.length > 1 ? 'grid-cols-2' : ''}`}>
+      <div className={`grid gap-x-3 gap-y-0.5 ${g.league === 'nba' && g.leaders.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
         {g.leaders.map((l, i) => (
           <div key={i} className="truncate">
             <span className="font-semibold text-label">{l.primary}</span> · {l.secondary}

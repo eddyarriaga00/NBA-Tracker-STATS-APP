@@ -70,7 +70,7 @@ export default function Leaders() {
       ) : list.length === 0 ? (
         <Card className="py-12 text-center text-label-2">No leaders yet for this category.</Card>
       ) : (
-        <div key={key} className="grid gap-3 md:grid-cols-[1fr_1.15fr] md:items-start">
+        <div key={key} className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1.15fr] md:items-start">
           <Hero p={list[0]} cat={cat} />
           <Card className="rise divide-y divide-sep" style={{ animationDelay: '60ms' }}>
             {list.slice(1).map((p, i) => (

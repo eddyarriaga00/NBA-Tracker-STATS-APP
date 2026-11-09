@@ -137,7 +137,7 @@ export default function Standings() {
       ) : error && !data ? (
         <ErrorState error={error} onRetry={reload} />
       ) : lg === 'nfl' && view === 'division' ? (
-        <div key={conf} className="grid gap-3 lg:grid-cols-2">
+        <div key={conf} className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {current?.divisions.map((d) => <Table key={d.name} title={d.name} teams={d.teams} />)}
         </div>
       ) : (

@@ -170,7 +170,7 @@ function GameLeaders({ g }) {
         {rows.map(([k, label]) => (
           <div key={k} className="flex items-center gap-3 px-4 py-3">
             <Player p={A[k]} />
-            <div className="w-16 shrink-0 text-center text-[11px] font-semibold uppercase tracking-wide text-label-2">{label}</div>
+            <div className="w-14 shrink-0 text-center text-[10.5px] font-semibold uppercase tracking-wide text-label-2 md:w-16 md:text-[11px]">{label}</div>
             <Player p={H[k]} right />
           </div>
         ))}
@@ -583,7 +583,7 @@ export default function Game() {
             </>
           )}
 
-          <div className="grid gap-x-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-x-4 md:grid-cols-2">
             <div>{comments}</div>
             <div>
               <GameLeaders g={g} />

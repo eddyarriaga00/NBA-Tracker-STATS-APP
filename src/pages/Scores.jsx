@@ -19,14 +19,14 @@ function GameGrid({ games, loading, error, reload, emptyTitle, emptySub }) {
   const sorted = games ? [...games.filter(fav), ...games.filter((g) => !fav(g))] : games;
   if (loading && !games)
     return (
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-[156px] !rounded-2xl" />)}
       </div>
     );
   if (error && !games) return <ErrorState error={error} onRetry={reload} />;
   if (!games.length) return <Empty title={emptyTitle} subtitle={emptySub} />;
   return (
-    <div className="grid gap-2.5 md:grid-cols-2 md:gap-3">
+    <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 md:gap-3">
       {sorted.map((g, i) => <GameCard key={g.id} g={g} index={i} favorite={fav(g)} comments={counts[`${g.league}:game:${g.id}`] ?? 0} />)}
     </div>
   );
