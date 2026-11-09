@@ -43,7 +43,7 @@ function ago(iso) {
   return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-function Avatar({ name, size = 28 }) {
+export function Avatar({ name, size = 28 }) {
   return (
     <div
       className="grid shrink-0 place-items-center rounded-full font-semibold text-white"
@@ -204,7 +204,7 @@ function useThread(room) {
   return { comments, reactions, status, me, post, remove, toggleReaction };
 }
 
-function NamePrompt({ onSave, initial = '', onCancel }) {
+export function NamePrompt({ onSave, initial = '', onCancel }) {
   const [v, setV] = useState(initial);
   const ok = v.trim().length >= 1 && v.trim().length <= 24;
   return (

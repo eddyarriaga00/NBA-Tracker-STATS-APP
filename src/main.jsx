@@ -5,10 +5,11 @@ import './index.css';
 import { LEAGUES } from './api/espn';
 import { leagueFromPath } from './lib/league';
 import { ThemeProvider } from './lib/theme';
-import { registerServiceWorker } from './lib/push';
+import { clearAlertBadgeOnOpen, registerServiceWorker } from './lib/push';
 import { loadPage, watchForUpdates } from './lib/update';
 
-registerServiceWorker(); // lets alerts arrive when the app is closed
+registerServiceWorker(); // alerts when the app is closed + offline copy
+clearAlertBadgeOnOpen();
 watchForUpdates(); // phones pick up new versions without reinstalling
 import Shell from './components/Shell';
 import Scores from './pages/Scores';
@@ -22,6 +23,7 @@ const Team = lazy(loadPage(() => import('./pages/Team')));
 const Teams = lazy(loadPage(() => import('./pages/Teams')));
 const Chat = lazy(loadPage(() => import('./pages/Chat')));
 const Compare = lazy(loadPage(() => import('./pages/Compare')));
+const Picks = lazy(loadPage(() => import('./pages/Picks')));
 const DevField = import.meta.env.DEV ? lazy(() => import('./pages/DevField')) : null;
 
 // Only "nba" and "nfl" are valid league segments; anything else goes home.
@@ -55,6 +57,7 @@ createRoot(document.getElementById('root')).render(
             <Route path=":lg/player/:id" element={guard(<Keyed Page={Player} />)} />
             <Route path=":lg/teams" element={guard(<Teams />)} />
             <Route path=":lg/compare" element={guard(<Compare />)} />
+            <Route path=":lg/picks" element={guard(<Picks />)} />
             <Route path=":lg/team/:id" element={guard(<Keyed Page={Team} />)} />
             <Route path="game/:id" element={<LegacyGame />} />
             <Route path="*" element={<Navigate to="/" replace />} />

@@ -53,9 +53,13 @@ export function usePushSync() {
 }
 
 export async function registerServiceWorker() {
-  if (!pushSupported()) return null;
+  // Registered everywhere service workers exist (offline copy), not just where push works.
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return null;
   try {
-    return await navigator.serviceWorker.register('./sw.js', { scope: './' });
+    // The build id in the URL makes phones install each new version's worker,
+    // which saves that version for offline use. Alerts stay subscribed.
+    const v = import.meta.env.DEV ? 'dev' : __BUILD_ID__;
+    return await navigator.serviceWorker.register(`./sw.js?v=${v}`, { scope: './' });
   } catch {
     return null;
   }
@@ -119,4 +123,20 @@ export async function syncPush(prefs) {
   }
   setActive(true);
   return { ok: true, reason: 'on' };
+}
+
+/** Opening the app counts alerts as read: clears the number on the app icon. */
+export function clearAlertBadgeOnOpen() {
+  if (typeof document === 'undefined') return;
+  const clear = () => {
+    if (document.visibilityState !== 'visible') return;
+    try {
+      navigator.clearAppBadge?.().catch(() => {});
+      navigator.serviceWorker?.controller?.postMessage('read-alerts');
+    } catch {
+      /* badges not supported */
+    }
+  };
+  clear();
+  document.addEventListener('visibilitychange', clear);
 }

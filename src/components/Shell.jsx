@@ -151,6 +151,27 @@ function LeagueSwitch({ league }) {
   );
 }
 
+/** Shown when there's no connection: the app keeps working from saved data. */
+function OfflineNotice() {
+  const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine !== false);
+  useEffect(() => {
+    const on = () => setOnline(navigator.onLine !== false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', on);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', on);
+    };
+  }, []);
+  if (online) return null;
+  return (
+    <div role="status" className="mb-3 flex items-center justify-center gap-2 rounded-full bg-fill px-4 py-1.5 text-[12.5px] font-semibold text-label-2">
+      <span className="h-2 w-2 rounded-full bg-[#ff9f0a]" aria-hidden />
+      Offline · showing your last saved scores
+    </div>
+  );
+}
+
 export default function Shell() {
   const { pathname } = useLocation();
   const league = leagueFromPath(pathname);
@@ -175,7 +196,7 @@ export default function Shell() {
     { to: `/${league}/standings`, label: 'Standings', icon: Icon.Standings },
     { to: `/${league}/leaders`, label: 'Leaders', icon: Icon.Leaders, match: (p) => p.startsWith(`/${league}/leaders`) || p.startsWith(`/${league}/player`) },
     { to: `/${league}/teams`, label: 'Teams', icon: Icon.Teams, match: (p) => p.startsWith(`/${league}/team`) },
-    { to: '/chat', label: 'Chat', icon: Icon.Chat },
+    { to: `/${league}/picks`, label: 'Friends', icon: Icon.Chat, match: (p) => p === '/chat' || p.startsWith(`/${league}/picks`) },
   ];
   const isActive = (t) => (t.match ? t.match(pathname) : pathname.startsWith(t.to));
 
@@ -216,6 +237,7 @@ export default function Shell() {
         </header>
 
         <main className="mx-auto max-w-5xl px-3 pb-[calc(84px+env(safe-area-inset-bottom))] pt-3 md:px-4 md:pt-4 lg:pb-16">
+          <OfflineNotice />
           <ErrorBoundary resetKey={pathname}>
             <Suspense fallback={<div className="skeleton mt-2 h-[240px] rounded-2xl" />}>
               <Outlet />

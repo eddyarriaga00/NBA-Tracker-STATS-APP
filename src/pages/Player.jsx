@@ -57,19 +57,70 @@ function Hero({ bio, lg }) {
   );
 }
 
-function SummaryTiles({ bio, lg }) {
+// Which Leaders list each "This Season" tile opens. Stats without a leaders
+// list (yards per catch, interceptions thrown…) open the game log instead.
+const TILE_TO_LEADERS = {
+  nba: {
+    avgPoints: 'pointsPerGame',
+    avgRebounds: 'reboundsPerGame',
+    avgAssists: 'assistsPerGame',
+    avgSteals: 'stealsPerGame',
+    avgBlocks: 'blocksPerGame',
+    fieldGoalPct: 'fieldGoalPercentage',
+    threePointFieldGoalPct: '3PointPct',
+    freeThrowPct: 'FreeThrowPct',
+  },
+  nfl: {
+    passingYards: 'passingYards',
+    passingTouchdowns: 'passingTouchdowns',
+    QBRating: 'quarterbackRating',
+    adjQBR: 'quarterbackRating',
+    rushingYards: 'rushingYards',
+    rushingTouchdowns: 'rushingTouchdowns',
+    receivingYards: 'receivingYards',
+    receptions: 'receptions',
+    receivingTouchdowns: 'receivingTouchdowns',
+    sacks: 'sacks',
+    totalTackles: 'totalTackles',
+  },
+};
+
+function SummaryTiles({ bio, lg, id, onGameLog }) {
   if (!bio.summary.length) return null;
+  const passer = bio.summary.some((s) => s.stat === 'passingYards'); // a QB's INT means thrown, not caught
+  const target = (s) => {
+    if (lg === 'nfl' && s.stat === 'interceptions' && !passer) return 'interceptions';
+    return TILE_TO_LEADERS[lg][s.stat] ?? null;
+  };
+  const inner = (s, cat) => (
+    <>
+      <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-label-2 md:text-[12px]">
+        {s.label}
+        <Icon.ChevronRight className="h-3.5 w-3.5 text-label-3" />
+      </div>
+      <div className="num mt-1 font-display text-[24px] font-bold leading-none tracking-tight md:text-[30px]">{s.value}</div>
+      <div className="mt-1 text-[11px] text-label-2 md:mt-1.5 md:text-[12px]">
+        {s.rank ? `${s.rank} in ${lg.toUpperCase()}` : cat ? 'See leaders' : 'See game log'}
+      </div>
+    </>
+  );
+  const cls = 'block rounded-2xl bg-card px-3.5 py-2.5 text-left transition hover:bg-fill/40 active:scale-[0.98] md:px-4 md:py-3';
   return (
     <>
       <SectionTitle right={<span className="text-[12px] text-label-2">{bio.summaryTitle}</span>}>This Season</SectionTitle>
       <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-3">
-        {bio.summary.map((s) => (
-          <Card key={s.label} className="px-3.5 py-2.5 md:px-4 md:py-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-label-2 md:text-[12px]">{s.label}</div>
-            <div className="num mt-1 font-display text-[24px] font-bold leading-none tracking-tight md:text-[30px]">{s.value}</div>
-            {s.rank && <div className="mt-1 text-[11px] text-label-2 md:mt-1.5 md:text-[12px]">{s.rank} in {lg.toUpperCase()}</div>}
-          </Card>
-        ))}
+        {bio.summary.map((s) => {
+          const cat = target(s);
+          return cat ? (
+            <Link key={s.label} to={`/${lg}/leaders?cat=${encodeURIComponent(cat)}&hl=${id}&name=${encodeURIComponent(bio.name ?? '')}${s.rank ? `&rank=${encodeURIComponent(s.rank)}` : ''}`} className={cls}>
+              {inner(s, cat)}
+            </Link>
+          ) : (
+            <button key={s.label} onClick={onGameLog} className={cls}>
+              {inner(s, null)}
+            </button>
+          );
+        })}
       </div>
     </>
   );
@@ -324,9 +375,19 @@ export default function Player() {
       ) : (
         <div className="rise" key={`${lg}:${id}`}>
           <Hero bio={p.bio} lg={lg} />
-          <SummaryTiles bio={p.bio} lg={lg} />
+          <SummaryTiles
+            bio={p.bio}
+            lg={lg}
+            id={id}
+            onGameLog={() => {
+              setTab('log');
+              document.getElementById('player-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+          />
           <Facts bio={p.bio} />
-          <Segmented className="mt-7" value={tab} onChange={setTab} options={tabs} />
+          <div id="player-tabs" className="scroll-mt-20">
+            <Segmented className="mt-7" value={tab} onChange={setTab} options={tabs} />
+          </div>
           <div className="mt-3">
             {tab === 'log' && <SeasonGameLog initial={p.gamelog} lg={lg} id={id} />}
             {tab === 'splits' && <Splits splits={p.splits} />}

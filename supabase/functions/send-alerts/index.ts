@@ -12,10 +12,10 @@ const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SE
 });
 webpush.setVapidDetails(Deno.env.get('VAPID_SUBJECT')!, Deno.env.get('VAPID_PUBLIC_KEY')!, Deno.env.get('VAPID_PRIVATE_KEY')!);
 
-type Team = { id: string; abbr: string; score: number };
+type Team = { id: string; abbr: string; score: number; winner: boolean };
 type Game = {
-  key: string; league: 'nba' | 'nfl'; id: string; state: string; period: number; clock: string;
-  label: string; broadcast: string; home: Team; away: Team;
+  key: string; league: 'nba' | 'nfl'; id: string; state: string; completed: boolean; start: string;
+  period: number; clock: string; label: string; broadcast: string; home: Team; away: Team;
 };
 
 // ---- same "close game" rules as the app (src/lib/excitement.js) ----
@@ -33,12 +33,14 @@ function norm(league: 'nba' | 'nfl', e: any): Game | null {
   if (!c) return null;
   const side = (h: string): Team => {
     const x = c.competitors.find((t: any) => t.homeAway === h);
-    return { id: x?.team?.id, abbr: x?.team?.abbreviation, score: Number(x?.score) || 0 };
+    const score = typeof x?.score === 'object' ? x?.score?.value : x?.score;
+    return { id: x?.team?.id ?? x?.id, abbr: x?.team?.abbreviation, score: Number(score) || 0, winner: x?.winner === true };
   };
   const st = e.status ?? c.status;
   return {
-    key: `${league}:${e.id}`, league, id: e.id,
-    state: st?.type?.state ?? 'pre', period: st?.period ?? 0, clock: String(st?.displayClock ?? ''),
+    key: `${league}:${e.id}`, league, id: String(e.id),
+    state: st?.type?.state ?? 'pre', completed: st?.type?.completed === true, start: c.date ?? e.date,
+    period: st?.period ?? 0, clock: String(st?.displayClock ?? ''),
     label: st?.type?.shortDetail ?? '',
     broadcast: c.broadcast || (c.broadcasts ?? []).flatMap((b: any) => b.names ?? []).join(', ') || '',
     home: side('home'), away: side('away'),
@@ -95,6 +97,53 @@ async function loadGames(): Promise<Game[]> {
   return out;
 }
 
+const PATH = { nba: 'basketball/nba', nfl: 'football/nfl' };
+
+/** One game from its summary (for picks on games no longer on today's scoreboard). */
+async function loadOne(league: 'nba' | 'nfl', id: string): Promise<Game | null> {
+  const d = await json(`${ESPN}/${PATH[league]}/summary?event=${id}`);
+  const c = d.header?.competitions?.[0];
+  if (!c) return null;
+  return norm(league, { id, competitions: [c], status: c.status, date: c.date });
+}
+
+// ---- Pick'em grading ----
+// A pick wins if its team won, pushes on an NFL tie, and is void if it was
+// made or changed after the scheduled start (or the game was cancelled).
+async function gradePicks(games: Game[]) {
+  const nowIso = new Date().toISOString();
+  const { data: pending } = await db.from('picks').select('league,game_id').is('result', null).lte('game_start', nowIso).limit(2000);
+  const keys = [...new Set((pending ?? []).map((p) => `${p.league}:${p.game_id}`))];
+  const loaded = new Map(games.map((g) => [g.key, g]));
+  let graded = 0;
+  let lookups = 0;
+  for (const k of keys) {
+    let g = loaded.get(k);
+    if (g && g.state !== 'post') continue; // still to play or in progress
+    if (!g) {
+      if (lookups++ >= 12) continue; // the rest wait for the next minute
+      const [lg, id] = k.split(':') as ['nba' | 'nfl', string];
+      g = (await loadOne(lg, id).catch(() => null)) ?? undefined;
+      if (!g || g.state !== 'post') continue;
+    }
+    const start = Date.parse(g.start);
+    const winner = g.home.winner ? g.home.id : g.away.winner ? g.away.id : null;
+    const { data: picks } = await db.from('picks').select('user_id,team_id,updated_at').eq('league', g.league).eq('game_id', g.id).is('result', null);
+    const by: Record<string, string[]> = { win: [], loss: [], push: [], void: [] };
+    for (const p of picks ?? []) {
+      const late = Number.isFinite(start) && Date.parse(p.updated_at) > start;
+      const result = !g.completed || late ? 'void' : !winner ? 'push' : p.team_id === winner ? 'win' : 'loss';
+      by[result].push(p.user_id);
+    }
+    for (const [result, users] of Object.entries(by)) {
+      if (!users.length) continue;
+      await db.from('picks').update({ result }).eq('league', g.league).eq('game_id', g.id).is('result', null).in('user_id', users);
+      graded += users.length;
+    }
+  }
+  return graded;
+}
+
 Deno.serve(async (req) => {
   if (req.headers.get('x-cron-secret') !== Deno.env.get('CRON_SECRET')) return new Response('forbidden', { status: 403 });
   const test = new URL(req.url).searchParams.get('test'); // ?test=1 sends a test alert to every device
@@ -124,7 +173,8 @@ Deno.serve(async (req) => {
   }
 
   const games = await loadGames();
-  if (!games.length) return Response.json({ games: 0, errors: loadErrors });
+  const graded = await gradePicks(games).catch((e) => `error: ${e?.message ?? e}`);
+  if (!games.length) return Response.json({ games: 0, graded, errors: loadErrors });
   const { data: rows } = await db.from('alert_game_state').select('game_key,state,close_sent').in('game_key', games.map((g) => g.key));
   const prev = Object.fromEntries((rows ?? []).map((r) => [r.game_key, r]));
 
@@ -161,5 +211,5 @@ Deno.serve(async (req) => {
   }
   if (updates.length) await db.from('alert_game_state').upsert(updates);
   await db.from('alert_game_state').delete().lt('updated_at', new Date(Date.now() - 4 * 86400_000).toISOString());
-  return Response.json({ games: games.length, devices: subscriptions.length, events, sent });
+  return Response.json({ games: games.length, devices: subscriptions.length, events, sent, graded });
 });

@@ -11,6 +11,7 @@ import { downloadICS, gameUrl } from '../lib/calendar';
 import { useSpoilers } from '../lib/settings';
 import { toast } from '../lib/toast';
 import WinProbability from '../components/WinProbability';
+import { GamePick } from '../components/Picks';
 import FootballField from '../components/FootballField';
 import { BackButton, Card, ErrorState, Headshot, LiveBadge, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
 import { visibleColor } from '../lib/color';
@@ -678,6 +679,9 @@ export default function Game() {
         <div className="rise">
           <Hero g={g} hide={hide} onReveal={reveal} />
           <Actions g={g} />
+          <div className="mt-3">
+            <GamePick g={g} />
+          </div>
           {hide ? (
             <>
               <HiddenNotice onReveal={reveal} />

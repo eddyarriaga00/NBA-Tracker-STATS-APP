@@ -10,8 +10,11 @@ const BUILD_ID = String(Date.now());
 const versionFile = () => ({
   name: 'version-file',
   apply: 'build',
-  generateBundle() {
-    this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ id: BUILD_ID }) });
+  // Also lists every built file so the service worker can save the whole app
+  // for instant, offline starts.
+  generateBundle(_, bundle) {
+    const assets = Object.keys(bundle).filter((f) => f.startsWith('assets/')).sort();
+    this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ id: BUILD_ID, assets }) });
   },
 });
 

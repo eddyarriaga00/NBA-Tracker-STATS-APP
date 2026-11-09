@@ -25,3 +25,4 @@ yarn-error.log*
 # vite
 /dist
 .env.push.local
+supabase/.temp/

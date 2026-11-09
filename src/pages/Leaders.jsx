@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { LEADER_CATS, currentSeason, getLeaders, seasonOptions } from '../api/espn';
 import { Card, Chips, ErrorState, Headshot, PageTitle, SeasonPicker, Segmented, Skeleton, TeamLogo } from '../components/ui';
 import { BioButton } from '../components/BioSheet';
@@ -43,7 +43,10 @@ function Hero({ p, cat }) {
 
 export default function Leaders() {
   const lg = useLeague();
+  const [params] = useSearchParams();
+  const fromPlayer = params.get('cat');
   const [view, setView] = useState(() => {
+    if (fromPlayer) return 'stats'; // opened from a player's stat tile
     try { return localStorage.getItem('leadersView') === 'awards' ? 'awards' : 'stats'; } catch { return 'stats'; }
   });
   const pickView = (v) => {
@@ -65,7 +68,14 @@ export default function Leaders() {
 
 function StatLeaders({ lg, tabs }) {
   const cats = LEADER_CATS[lg];
-  const [picked, setKey] = useState(cats[0].key);
+  const [params] = useSearchParams();
+  // A player's stat tile links here with ?cat=…&hl=<player id>&name=…&rank=…
+  const hl = params.get('hl');
+  const [picked, setKey] = useState(() => params.get('cat') || cats[0].key);
+  const linkedCat = params.get('cat');
+  useEffect(() => {
+    if (linkedCat) setKey(linkedCat);
+  }, [linkedCat]);
   const key = cats.some((c) => c.key === picked) ? picked : cats[0].key;
   const [pickedSeason, setSeason] = useState(null);
   const season = pickedSeason && seasonOptions(lg).some((o) => o.value === pickedSeason) ? pickedSeason : currentSeason(lg);
@@ -74,6 +84,12 @@ function StatLeaders({ lg, tabs }) {
   const list = data?.categories[key] ?? [];
   const num = (v) => parseFloat(String(v).replace(/,/g, '')) || 0;
   const max = Math.max(...list.map((p) => num(p.value)), 1);
+  const showHl = hl && key === params.get('cat') && season === currentSeason(lg);
+  const hlRef = useRef(null);
+  useEffect(() => {
+    if (showHl && list.length) hlRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [showHl, list.length]);
+  const missing = showHl && list.length > 0 && !list.some((p) => p.id === hl);
 
   return (
     <div>
@@ -99,10 +115,28 @@ function StatLeaders({ lg, tabs }) {
         <Card className="py-12 text-center text-label-2">No leaders yet for this category.</Card>
       ) : (
         <div key={key} className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1.15fr] md:items-start">
-          <Hero p={list[0]} cat={cat} />
+          {missing && (
+            <Card className="px-4 py-3 text-[13.5px] md:col-span-2">
+              <span className="font-semibold">{params.get('name') || 'This player'}</span>
+              <span className="text-label-2">
+                {' '}isn’t in the top {list.length} for {cat.label.toLowerCase()}
+                {params.get('rank') ? ` · ranked ${params.get('rank')} in ${lg.toUpperCase()}` : ''}.
+              </span>
+            </Card>
+          )}
+          <div ref={showHl && list[0].id === hl ? hlRef : undefined} className={showHl && list[0].id === hl ? 'rounded-2xl ring-2 ring-accent' : ''}>
+            <Hero p={list[0]} cat={cat} />
+          </div>
           <Card className="rise divide-y divide-sep" style={{ animationDelay: '60ms' }}>
             {list.slice(1).map((p, i) => (
-              <Link key={p.id} to={`/${lg}/player/${p.id}`} className="flex items-center gap-2.5 px-3.5 py-2 transition hover:bg-fill/40 md:gap-3 md:px-4 md:py-2.5">
+              <Link
+                key={p.id}
+                ref={showHl && p.id === hl ? hlRef : undefined}
+                to={`/${lg}/player/${p.id}`}
+                className={`flex items-center gap-2.5 px-3.5 py-2 transition hover:bg-fill/40 md:gap-3 md:px-4 md:py-2.5 ${
+                  showHl && p.id === hl ? 'bg-accent/12 shadow-[inset_3px_0_0_var(--accent)]' : ''
+                }`}
+              >
                 <span className="num w-5 text-right text-[13px] font-semibold text-label-2">{i + 2}</span>
                 <Headshot src={p.headshot} size={36} className="md:h-[42px] md:w-[42px]" />
                 <div className="min-w-0 flex-1">

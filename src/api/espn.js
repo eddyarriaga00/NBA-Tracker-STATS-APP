@@ -896,6 +896,7 @@ export async function getPlayer(lg, id, opts) {
     summary: (a.statsSummary?.statistics ?? []).map((x) => ({
       label: x.shortDisplayName ?? x.abbreviation,
       name: x.displayName,
+      stat: x.name,
       value: x.displayValue,
       rank: x.rankDisplayValue ?? '',
     })),
@@ -1302,6 +1303,25 @@ export async function getContracts(lg, id, opts) {
     })
     .filter((c) => c.season)
     .sort((a, b) => b.season - a.season);
+  // ESPN tags every contract season with the player's current team (Brunson's
+  // Dallas years show as Knicks), so past seasons use the team from his career
+  // stats. A season he missed (injury) takes the team of the next one he played.
+  const now = currentSeason(lg);
+  const stats = await get(`${web(lg)}/athletes/${id}/stats`, o).catch(() => null);
+  const played = {}; // season -> team id (the last team if traded mid-season)
+  for (const r of stats?.categories?.[0]?.statistics ?? []) {
+    if (r.season?.year && r.teamId) played[r.season.year] = String(r.teamId);
+  }
+  const years = Object.keys(played).map(Number).sort((a, b) => a - b);
+  for (const c of seasons) {
+    if (c.season > now || !years.length) continue;
+    const yr = played[c.season] ? c.season : years.find((y) => y > c.season);
+    const tid = yr && played[yr];
+    if (tid && abbr[tid]) {
+      c.teamId = tid;
+      c.teamAbbr = abbr[tid];
+    }
+  }
   const current = seasons.find((c) => c.active) ?? seasons[0] ?? null;
   return { current, seasons };
 }
