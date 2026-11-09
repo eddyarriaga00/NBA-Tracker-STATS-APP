@@ -7,6 +7,7 @@ import { visibleColor } from '../lib/color';
 import { useLeague } from '../lib/league';
 import { useTheme } from '../lib/theme';
 import { useData } from '../lib/useData';
+import { formatLine, sumLines } from '../lib/quarterStats';
 
 const periodName = (n) => (n <= 4 ? `Q${n}` : n === 5 ? 'OT' : `${n - 4}OT`);
 const titleCase = (s) => s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
@@ -229,7 +230,7 @@ function StatTable({ labels, groups, totals, lg, highlight }) {
           {totals?.some(Boolean) && (
             <tr className="border-t-2 border-sep font-semibold">
               <td className="sticky left-0 z-10 bg-card py-2.5 pl-4">Team</td>
-              {totals.map((t, i) => <td key={i} className="px-2.5 text-center">{t}</td>)}
+              {totals.map((t, i) => <td key={i} className="whitespace-nowrap px-2.5 text-center">{t}</td>)}
             </tr>
           )}
         </tbody>
@@ -273,20 +274,75 @@ function BoxScore({ g }) {
   return (
     <div>
       {picker}
-      <Card className="overflow-hidden">
-        <StatTable
-          lg={lg}
-          labels={box.labels}
-          totals={box.totals}
-          highlight={box.labels.indexOf('PTS')}
-          groups={[
-            { title: 'Starters', list: box.athletes.filter((a) => a.starter) },
-            { title: 'Bench', list: box.athletes.filter((a) => !a.starter && !a.dnp) },
-            { title: 'Did Not Play', list: box.athletes.filter((a) => !a.starter && a.dnp) },
-          ]}
-        />
-      </Card>
+      <NbaBox g={g} box={box} lg={lg} />
     </div>
+  );
+}
+
+function NbaBox({ g, box, lg }) {
+  const q = g.quarters;
+  const [period, setPeriod] = useState('game');
+  const periods = q?.periods ?? [];
+  const sel = period !== 'game' && periods.includes(period) ? period : 'game';
+
+  let labels = box.labels;
+  let totals = box.totals;
+  let groups;
+  if (sel === 'game') {
+    groups = [
+      { title: 'Starters', list: box.athletes.filter((a) => a.starter) },
+      { title: 'Bench', list: box.athletes.filter((a) => !a.starter && !a.dnp) },
+      { title: 'Did Not Play', list: box.athletes.filter((a) => !a.starter && a.dnp) },
+    ];
+  } else {
+    const st = q.stats[sel] ?? {};
+    // Quarter rows use the engine's column order, which matches ESPN's box score.
+    const rows = box.athletes
+      .filter((a) => st[a.id] && (st[a.id].sec > 0 || st[a.id].active))
+      .map((a) => ({ ...a, dnp: false, stats: formatLine(st[a.id]), sec: st[a.id].sec }))
+      .sort((x, y) => y.sec - x.sec);
+    const t = formatLine(sumLines(rows.map((a) => st[a.id])));
+    t[0] = ''; // team minutes and +/- aren't meaningful as sums
+    t[t.length - 1] = '';
+    totals = t;
+    groups = [
+      { title: 'Started the game', list: rows.filter((a) => a.starter) },
+      { title: 'Bench', list: rows.filter((a) => !a.starter) },
+    ];
+    if (!rows.length) groups = [];
+  }
+
+  return (
+    <>
+      {periods.length > 0 && (
+        <div className="no-scrollbar -mx-3 mb-3 flex items-center gap-1.5 overflow-x-auto px-3 md:mx-0 md:px-0">
+          {['game', ...periods].map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              className={`shrink-0 rounded-full px-3.5 py-1 text-[13px] font-semibold transition active:scale-95 ${
+                sel === p ? 'bg-label text-bg' : 'bg-card text-label-2 hover:text-label'
+              }`}
+            >
+              {p === 'game' ? 'Full Game' : periodName(p)}
+              {p === q.livePeriod && <span className="live-dot ml-1.5 inline-block h-[6px] w-[6px] rounded-full bg-live align-middle" />}
+            </button>
+          ))}
+        </div>
+      )}
+      <Card className="overflow-hidden">
+        {groups.length ? (
+          <StatTable lg={lg} labels={labels} totals={totals} highlight={labels.indexOf('PTS')} groups={groups} />
+        ) : (
+          <div className="py-10 text-center text-[14px] text-label-2">No stats for this quarter yet.</div>
+        )}
+      </Card>
+      {sel !== 'game' && (
+        <p className="mt-2 px-1 text-[11.5px] text-label-3">
+          {sel === q.livePeriod ? `${periodName(sel)} in progress · ` : ''}Quarter stats are built from play-by-play and match the official box score.
+        </p>
+      )}
+    </>
   );
 }
 

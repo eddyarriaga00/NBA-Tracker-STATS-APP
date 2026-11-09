@@ -1,3 +1,4 @@
+import { buildQuarterStats } from '../lib/quarterStats';
 // Data layer for ESPN's public NBA and NFL feeds (no API key, CORS-enabled).
 // Every function returns plain, normalized objects so components never
 // touch the raw ESPN shapes.
@@ -396,10 +397,27 @@ export async function getGame(lg, id, opts) {
     } catch { /* situation is optional */ }
   }
 
+  // NBA only: per-quarter player stats built from the play-by-play.
+  let quarters = null;
+  if (lg === 'nba' && s.plays?.length && s.boxscore?.players?.length) {
+    try {
+      quarters = buildQuarterStats(
+        s.plays,
+        s.boxscore.players.map((p) => ({
+          teamId: p.team?.id,
+          athletes: (p.statistics?.[0]?.athletes ?? []).map((a) => ({ id: a.athlete?.id, starter: !!a.starter })),
+        }))
+      );
+    } catch {
+      quarters = null; // never let this break the rest of the game page
+    }
+  }
+
   const info = s.gameInfo ?? {};
   return {
     id,
     league: lg,
+    quarters,
     date: comp.date,
     status: normStatus(comp.status, comp.date, comp.timeValid ?? s.header?.timeValid),
     timeValid: (comp.timeValid ?? s.header?.timeValid) !== false,
