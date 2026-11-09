@@ -10,7 +10,10 @@ export const SORTS = {
 export const DEFAULT_SORT = 'live';
 
 // "Live first": which group comes first, and how each group is ordered.
-const GROUP_ORDER = ['in', 'post', 'pre'];
+// While games are live: live, then finals, then upcoming.
+// When nothing is live: upcoming first (what's next), then finals.
+const GROUP_ORDER_LIVE = ['in', 'post', 'pre'];
+const GROUP_ORDER_IDLE = ['pre', 'post'];
 const GROUP_TITLE = { in: 'Live', post: 'Final', pre: 'Upcoming' };
 const byStart = (a, b) => new Date(a.date) - new Date(b.date);
 const WITHIN = {
@@ -43,7 +46,8 @@ export function sectionGames(games, mode, { byDay = false, isFav = () => false }
   }
 
   const sections = [];
-  for (const state of GROUP_ORDER) {
+  const anyLive = games.some((g) => stateOf(g) === 'in');
+  for (const state of anyLive ? GROUP_ORDER_LIVE : GROUP_ORDER_IDLE) {
     const list = games.filter((g) => stateOf(g) === state).sort(favFirst(WITHIN[state]));
     if (!list.length) continue;
     if (!byDay || state === 'in') {
