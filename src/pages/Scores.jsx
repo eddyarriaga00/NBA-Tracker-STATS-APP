@@ -227,7 +227,7 @@ function NflScores() {
               </button>
             )}
             <SeasonPicker
-              options={seasonOptions('nfl')}
+              options={seasonOptions('nfl', 'scores')}
               value={Number(data?.year ?? sel?.year ?? currentSeason('nfl'))}
               onChange={(yr) => setParams(yr === currentSeason('nfl') ? {} : { w: `2-1-${yr}` }, { replace: true })}
             />

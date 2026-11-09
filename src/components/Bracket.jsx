@@ -1,8 +1,8 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { currentSeason, getPlayoffGames, seasonLabel } from '../api/espn';
+import { currentSeason, firstSeason, getPlayoffGames, seasonLabel } from '../api/espn';
 import { useData } from '../lib/useData';
-import { buildActualBracket, buildBracket } from '../lib/bracket';
+import { bracketComplete, buildActualBracket, buildBracket, playoffResults } from '../lib/bracket';
 import { useLeague } from '../lib/league';
 import { Card, TeamLogo } from './ui';
 
@@ -96,6 +96,48 @@ function side(conf, first, lg, advance, dir) {
 }
 
 /** Two-sided playoff bracket ("if the playoffs started today"). */
+function ResultsList({ lg, yr, rounds }) {
+  const champ = rounds.find((r) => r.name === 'NBA Finals' || r.name === 'Super Bowl')?.items[0];
+  return (
+    <div className="rise">
+      <p className="mb-3 px-1 text-[12.5px] text-label-2">
+        {seasonLabel(lg, yr)} playoffs · ESPN doesn’t have full seeding for this season, so here are the results by round.
+      </p>
+      {champ?.won && (
+        <Card className="mb-4 flex items-center gap-3 px-4 py-3">
+          <span className="text-[24px]" aria-hidden>🏆</span>
+          <TeamLogo abbr={champ.a.abbr} size={32} />
+          <span className="min-w-0">
+            <span className="block text-[12px] font-semibold uppercase tracking-wide text-label-2">Champion</span>
+            <span className="block text-[17px] font-bold">{champ.a.abbr}</span>
+          </span>
+        </Card>
+      )}
+      {rounds.map((r) => (
+        <section key={r.name} className="mb-4">
+          <h3 className="mb-1.5 px-1 text-[12px] font-semibold uppercase tracking-wide text-label-2">{r.name}</h3>
+          <Card className="divide-y divide-sep">
+            {r.items.map((it) => (
+              <Link key={it.key} to={lg === 'nfl' ? `/${lg}/game/${it.gameId}` : `/${lg}/team/${it.a.id}?season=${yr}`} className="flex items-center gap-2.5 px-4 py-2.5 active:bg-fill">
+                {it.side && <span className="w-9 shrink-0 text-[11px] font-semibold uppercase text-label-3">{it.side}</span>}
+                <TeamLogo abbr={it.a.abbr} size={22} />
+                <span className={`w-12 text-[14.5px] ${it.incomplete ? 'font-semibold' : 'font-bold'}`}>{it.a.abbr}</span>
+                <span className={`num whitespace-nowrap text-[14.5px] font-semibold ${it.incomplete ? 'text-label-3' : ''}`}>{it.a.value ?? ''}–{it.b.value ?? ''}</span>
+                {it.incomplete && <span className="whitespace-nowrap rounded-full bg-fill px-1.5 py-0.5 text-[10px] font-semibold text-label-3">incomplete</span>}
+                <span className="flex min-w-0 flex-1 items-center justify-end gap-2.5 text-label-2">
+                  <span className="text-[14.5px]">{it.b.abbr}</span>
+                  <TeamLogo abbr={it.b.abbr} size={22} />
+                </span>
+              </Link>
+            ))}
+          </Card>
+        </section>
+      ))}
+      <p className="px-1 text-[11.5px] text-label-3">{lg === 'nfl' ? 'Final scores shown.' : 'Series wins shown.'} ESPN’s records for some older seasons are missing games; those series are marked incomplete.</p>
+    </div>
+  );
+}
+
 export default function Bracket({ confs, season }) {
   const lg = useLeague();
   const [advance, setAdvance] = useState(false);
@@ -107,6 +149,9 @@ export default function Bracket({ confs, season }) {
   });
   const actual = games.data ? buildActualBracket(lg, confs, games.data) : null;
   const real = !!actual?.started;
+  const pastSeason = !!season && season !== currentSeason(lg);
+  // Old seasons where ESPN's seeds are missing: list the results instead of a broken bracket.
+  const asList = pastSeason && games.data?.length > 0 && !bracketComplete(lg, actual);
   const b = real ? actual : buildBracket(lg, confs, { advance });
 
   // Official layout: West/AFC on the left, East/NFC on the right.
@@ -122,6 +167,16 @@ export default function Bracket({ confs, season }) {
     if (over) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2; // start centered on the final
   }, [lg]);
 
+  if (pastSeason && yr < firstSeason(lg, 'bracket'))
+    return (
+      <Card className="rise px-4 py-6 text-center">
+        <div className="text-[15px] font-semibold">No playoff results for {seasonLabel(lg, yr)}</div>
+        <p className="mx-auto mt-1 max-w-sm text-[13px] text-label-2">
+          ESPN’s playoff records start with {seasonLabel(lg, firstSeason(lg, 'bracket'))}. Standings for this season are still here.
+        </p>
+      </Card>
+    );
+  if (asList) return <ResultsList lg={lg} yr={yr} rounds={playoffResults(lg, confs, games.data, yr)} />;
   if (!left || !right) return null;
   const firstOf = (c) => (lg === 'nfl' ? c.treeFirst : c.rounds[1].games);
   const L = side(left, firstOf(left), lg, advance, 1);

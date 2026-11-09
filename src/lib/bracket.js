@@ -116,10 +116,56 @@ export function buildBracket(lg, confs, { advance = false } = {}) {
 
 const pairKey = (a, b) => [a, b].sort().join('-');
 
+/**
+ * Before ~2008 ESPN labels every NBA playoff game just "PLAYOFFS" (and the
+ * Finals "FINALS"). Work out each series' round from the seeds instead, so the
+ * bracket can be drawn the same way. First rounds were best-of-5 until 2003,
+ * so a series is won by whoever won more games (these seasons are all over).
+ */
+function labelOldNbaRounds(confs, games) {
+  if (games.some((g) => /1st round|semifinals|play-in/i.test(g.round))) return { games, need: {} };
+  const series = {};
+  for (const g of games) {
+    if (g.teams.length !== 2) continue;
+    const k = pairKey(g.teams[0].id, g.teams[1].id);
+    const s = (series[k] ??= { key: k, ids: g.teams.map((t) => t.id), first: g.date, wins: {} });
+    if (g.date < s.first) s.first = g.date;
+    const w = g.teams.find((t) => t.winner);
+    if (w) s.wins[w.id] = (s.wins[w.id] ?? 0) + 1;
+  }
+  // A team's first series is round 1, its second round 2, and so on.
+  const byTeam = {};
+  for (const s of Object.values(series)) for (const id of s.ids) (byTeam[id] ??= []).push(s);
+  for (const list of Object.values(byTeam)) list.sort((a, b) => (a.first < b.first ? -1 : 1)).forEach((s, i) => (s.round = Math.max(s.round ?? 0, i + 1)));
+  const confOf = (id) => confs.findIndex((c) => c.teams.some((t) => t.id === id));
+  const label = {};
+  const need = {};
+  for (const s of Object.values(series)) {
+    const [a, b] = s.ids.map(confOf);
+    const tag = /east/i.test(confs[a]?.name ?? '') ? 'East' : 'West';
+    label[s.key] = a !== b || s.round >= 4 ? 'NBA Finals' : `${tag} ${['1st Round', 'Semifinals', 'Finals'][s.round - 1]}`;
+    // These seasons are over: whoever won more games won the series (first rounds were best-of-5 until 2003).
+    need[`series|${s.key}`] = Math.max(...Object.values(s.wins), 1);
+  }
+  const out = games.map((g) => {
+    const k = g.teams.length === 2 ? pairKey(g.teams[0].id, g.teams[1].id) : '';
+    return label[k] ? { ...g, round: label[k] } : g;
+  });
+  return { games: out, need };
+}
+
 /** NBA: series by round; NFL: single games. Returns the same shape as buildBracket, with results. */
-export function buildActualBracket(lg, confs, games) {
+export function buildActualBracket(lg, confs, gamesIn) {
+  // Old NFL seasons number seeds across the whole league (1-16); re-rank within each conference.
+  if (lg === 'nfl' && confs.some((c) => c.teams.some((t) => t.seed > 7 && t.seed < 99) && !c.teams.some((t) => t.seed === 1))) {
+    confs = confs.map((c) => {
+      const order = [...c.teams].sort((a, b) => a.seed - b.seed);
+      return { ...c, teams: c.teams.map((t) => ({ ...t, seed: t.seed < 99 ? order.indexOf(t) + 1 : t.seed })) };
+    });
+  }
   const byId = {};
   for (const c of confs) for (const t of c.teams) byId[t.id] = { ...t };
+  const { games, need: oldNeed } = lg === 'nba' ? labelOldNbaRounds(confs, gamesIn) : { games: gamesIn, need: {} };
   const slotFor = (id, value, seedOverride) =>
     byId[id] ? { team: { ...byId[id], seed: seedOverride ?? byId[id].seed }, value } : { label: 'TBD' };
 
@@ -129,9 +175,14 @@ export function buildActualBracket(lg, confs, games) {
     if (g.teams.length !== 2) continue;
     const [x, y] = g.teams;
     // "East 1st Round - Game 3" -> series name. ESPN mixes dash styles (- – —), so accept any.
-    const round = g.round.replace(/\s*[-\u2013\u2014]\s*Game\s*\d+\s*$/i, '').replace(/\s+/g, ' ').trim().toLowerCase(); // labels vary in case too
-    const key = `${round}|${pairKey(x.id, y.id)}`;
-    const m = (matchups[key] ??= { round, ids: [x.id, y.id], wins: { [x.id]: 0, [y.id]: 0 }, scores: {}, live: false, played: 0 });
+    const round = g.round.replace(/\s*[-\u2013\u2014]\s*Game\s*\d+\s*$/i, '').replace(/\s+/g, ' ').trim().toLowerCase() // labels vary in case too
+      .replace(/\b(east|west)ern conference\b/, '$1') // 2008-16: "Eastern Conference 1st Round"
+      .replace(/\bfirst round\b/, '1st round');
+    // Outside the Play-In two teams meet at most once a postseason, so a series is
+    // keyed by the pair alone (2007-08 changes label mid-series).
+    const key = lg === 'nba' && !/play-in|place|seed game/.test(round) ? `series|${pairKey(x.id, y.id)}` : `${round}|${pairKey(x.id, y.id)}`;
+    const m = (matchups[key] ??= { round, ids: [x.id, y.id], wins: { [x.id]: 0, [y.id]: 0 }, scores: {}, live: false, played: 0, need: oldNeed[key] });
+    if (m.round === 'playoffs' && round !== 'playoffs') m.round = round; // keep the specific label
     if (g.state === 'post') {
       m.played++;
       const w = g.teams.find((t) => t.winner);
@@ -153,7 +204,7 @@ export function buildActualBracket(lg, confs, games) {
     // NFL and Play-In games show the score; NBA series show games won.
     const val = (id) => (lg === 'nfl' || /play-in/i.test(m.round) ? m.scores[id] : m.wins[id]);
     const single = lg === 'nfl' || /play-in/i.test(m.round);
-    const need = single ? 1 : needed;
+    const need = single ? 1 : m.need || needed;
     const done = Math.max(m.wins[a], m.wins[b]) >= need;
     const win = done ? (m.wins[a] >= need ? 'a' : 'b') : null;
     return {
@@ -198,7 +249,11 @@ export function buildActualBracket(lg, confs, games) {
       const eight = g8?.winnerId;
       const seedOf = (id) => (id === seven ? 7 : id === eight ? 8 : undefined);
       const order = [[seedTeam(1)], [seedTeam(4), seedTeam(5)], [seedTeam(3), seedTeam(6)], [seedTeam(2)]];
-      const r1 = order.map((ids) => game(find(new RegExp(`${tag} 1st Round`, 'i'), ids.filter(Boolean)), seedOf) ?? tbd());
+      const firstRe = new RegExp(`${tag} 1st Round`, 'i');
+      const r1m = order.map((ids) => (ids.some(Boolean) ? find(firstRe, ids.filter(Boolean)) : null));
+      // Old seasons can be missing seeds: place any series not found by seed in the empty slots.
+      const spare = list.filter((m) => firstRe.test(m.round) && !r1m.includes(m));
+      const r1 = r1m.map((m) => game(m ?? spare.shift(), seedOf) ?? tbd());
       const top = [r1[0], r1[1]].flatMap((g) => [g.a?.team?.id, g.b?.team?.id]).filter(Boolean);
       const bottom = [r1[2], r1[3]].flatMap((g) => [g.a?.team?.id, g.b?.team?.id]).filter(Boolean);
       const r2 = [
@@ -263,4 +318,84 @@ export function buildActualBracket(lg, confs, games) {
   };
   final.winner = fg?.win ? fg[fg.win] : null;
   return { conferences, final, actual: true, started: games.some((x) => x.state !== 'pre' && x.teams.every((t) => byId[t.id])) };
+}
+
+// ---------- Plain results list (old seasons whose seeds ESPN doesn't have) ----------
+
+/** True when an actual bracket has every spot filled and a champion. */
+export function bracketComplete(lg, b) {
+  if (!b?.final?.winner) return false;
+  const filled = (g) => g?.bye || (g?.a?.team && g?.b?.team && g.win);
+  return b.conferences.every((c) =>
+    lg === 'nfl'
+      ? [...c.treeFirst, ...c.rounds.slice(1).flatMap((r) => r.games)].every(filled)
+      : c.rounds.filter((r) => c.hasPlayIn || !/play-in/i.test(r.name)).every((r) => r.games.every(filled))
+  );
+}
+
+/**
+ * Playoff results grouped by round, newest round first, without needing seeds.
+ * NBA rows are series (games won); NFL rows are games (final score).
+ */
+export function playoffResults(lg, confs, gamesIn, season) {
+  const abbrOf = {};
+  for (const c of confs) for (const t of c.teams) abbrOf[t.id] = t.abbr;
+  const games = (lg === 'nba' ? labelOldNbaRounds(confs, gamesIn).games : gamesIn).filter((g) => g.teams.length === 2 && g.state === 'post');
+  const NFL_ROUNDS = ['Wild Card', 'Divisional Round', 'Conference Championships', 'Super Bowl'];
+  // NFL rounds without a label: count weekends back from the Super Bowl.
+  const weekends = [...new Set(games.map((g) => Math.floor((Date.parse(g.date) - 4 * 864e5) / (7 * 864e5))))].sort((a, b) => a - b);
+  const nflRound = (g) => {
+    const r = g.round;
+    if (/super bowl/i.test(r)) return 'Super Bowl';
+    if (/championship/i.test(r)) return 'Conference Championships';
+    if (/divisional/i.test(r)) return 'Divisional Round';
+    if (/wild ?card/i.test(r)) return 'Wild Card';
+    const wk = Math.floor((Date.parse(g.first ?? g.date) - 4 * 864e5) / (7 * 864e5));
+    return NFL_ROUNDS[NFL_ROUNDS.length - (weekends.length - weekends.indexOf(wk))] ?? 'Playoffs';
+  };
+  const nbaRound = (r) => {
+    const x = r.toLowerCase().replace(/\b(east|west)ern conference\b/, '$1').replace(/first round/, '1st round');
+    if (/nba finals|^finals?$/.test(x)) return 'NBA Finals';
+    const side = /east/.test(x) ? 'East' : /west/.test(x) ? 'West' : '';
+    const name = /1st round/.test(x) ? 'First Round' : /semifinal/.test(x) ? 'Semifinals' : /finals/.test(x) ? 'Conference Finals' : /play-in|place|seed game/.test(x) ? 'Play-In' : 'Playoffs';
+    return { name, side };
+  };
+  const rows = {};
+  for (const g of games) {
+    const [x, y] = g.teams;
+    const key = lg === 'nba' && !/play-in|place|seed game/i.test(g.round) ? pairKey(x.id, y.id) : g.id;
+    const r = (rows[key] ??= { key, first: g.date, ids: [x.id, y.id], wins: { [x.id]: 0, [y.id]: 0 }, scores: {}, round: g.round, id: g.id });
+    if (/^playoffs$/i.test(r.round) && !/^playoffs$/i.test(g.round)) r.round = g.round;
+    if (g.date < r.first) r.first = g.date;
+    const w = g.teams.find((t) => t.winner);
+    if (w) r.wins[w.id]++;
+    for (const t of g.teams) r.scores[t.id] = t.score;
+  }
+  const order = lg === 'nfl' ? NFL_ROUNDS : ['Play-In', 'First Round', 'Semifinals', 'Conference Finals', 'NBA Finals'];
+  const groups = {};
+  for (const r of Object.values(rows)) {
+    const rn = lg === 'nfl' ? nflRound(r) : nbaRound(r.round);
+    const name = typeof rn === 'string' ? rn : rn.name;
+    const [p, q] = r.ids;
+    const val = (id) => (lg === 'nfl' || name === 'Play-In' ? r.scores[id] : r.wins[id]);
+    // A series that never reached the wins needed is missing games in ESPN's records.
+    const needWins = lg === 'nfl' || name === 'Play-In' ? 1 : name === 'First Round' && season < 2003 ? 3 : 4;
+    const complete = lg === 'nfl' || name === 'Play-In' || Math.max(r.wins[p], r.wins[q]) >= needWins;
+    const winner = !complete || val(p) === val(q) ? null : val(p) > val(q) ? p : q;
+    const [a, b] = winner === q || (!winner && (val(q) ?? 0) > (val(p) ?? 0)) ? [q, p] : [p, q];
+    if (!abbrOf[a] || !abbrOf[b]) continue; // ESPN sometimes lists a game against an unknown team
+    (groups[name] ??= []).push({
+      key: r.key,
+      gameId: r.id,
+      first: r.first,
+      side: typeof rn === 'string' ? '' : rn.side,
+      a: { id: a, abbr: abbrOf[a] ?? '', value: val(a) },
+      b: { id: b, abbr: abbrOf[b] ?? '', value: val(b) },
+      won: !!winner,
+      incomplete: !complete,
+    });
+  }
+  return Object.entries(groups)
+    .sort(([x], [y]) => order.indexOf(y) - order.indexOf(x))
+    .map(([name, items]) => ({ name, items: items.sort((u, v) => u.side.localeCompare(v.side) || (u.first < v.first ? -1 : 1)) }));
 }

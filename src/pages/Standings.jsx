@@ -106,6 +106,29 @@ function Table({ teams, dividers = {}, showSeed = true, title }) {
   );
 }
 
+/**
+ * Playoff lines change by era: the NBA Play-In started in 2020-21 (before that
+ * the top 8 made it); the NFL took 7 per conference from 2020, 6 before (4
+ * division winners from 2002, 3 before that). Some old NFL seasons have no
+ * usable seeds in ESPN's data, so those are just ranked by record.
+ */
+function playoffFormat(lg, season, teams) {
+  if (lg === 'nba') {
+    return season >= 2021
+      ? { teams, dividers: { 0: 'Playoffs', 6: 'Play-In', 10: 'Lottery' }, note: 'Seeds 1–6 make the playoffs. Seeds 7–10 play in the Play-In Tournament.' }
+      : { teams, dividers: { 0: 'Playoffs', 8: 'Lottery' }, note: 'The top 8 in each conference made the playoffs (the Play-In started in 2020-21).' };
+  }
+  const n = teams.length;
+  const seeded = teams.filter((t) => t.seed < 99).map((t) => t.seed).sort((a, b) => a - b);
+  const reliable = seeded.length === n && seeded.every((x, i) => x === i + 1);
+  if (season >= 2020) return { teams, dividers: { 0: 'Division Leaders', 4: 'Wild Card', 7: 'In the Hunt' }, note: 'Seeds 1–4 are division winners, 5–7 are wild cards. Seed 1 gets a first-round bye.' };
+  const leaders = season >= 2002 ? 4 : 3;
+  const note = `Six teams per conference made the playoffs: ${leaders} division winners and ${6 - leaders} wild cards. The top 2 seeds got byes.`;
+  if (reliable) return { teams, dividers: { 0: 'Division Leaders', [leaders]: 'Wild Card', 6: 'In the Hunt' }, note };
+  const byRecord = [...teams].sort((a, b) => parseFloat(b.pct) - parseFloat(a.pct));
+  return { teams: byRecord, dividers: {}, note: `${note} Ranked by record here (ESPN doesn’t have seeds for this season).` };
+}
+
 export default function Standings() {
   const lg = useLeague();
   const [conf, setConf] = usePref(`conf:${lg}`, lg === 'nfl' ? 'American' : 'East');
@@ -113,9 +136,10 @@ export default function Standings() {
   const valid = lg === 'nfl' ? ['division', 'playoff', 'bracket'] : ['table', 'bracket'];
   const view = valid.includes(rawView) ? rawView : valid[0];
   const [pickedSeason, setSeason] = useState(null);
-  const season = pickedSeason && seasonOptions(lg).some((o) => o.value === pickedSeason) ? pickedSeason : currentSeason(lg);
+  const season = pickedSeason && seasonOptions(lg, 'standings').some((o) => o.value === pickedSeason) ? pickedSeason : currentSeason(lg);
   const { data, error, loading, reload } = useData((fresh) => getStandings(lg, season, { fresh }), [lg, season]);
   const current = data?.find((c) => c.name?.startsWith(conf)) ?? data?.[0];
+  const era = playoffFormat(lg, season, current?.teams ?? []);
 
   const confOptions =
     lg === 'nfl'
@@ -126,7 +150,7 @@ export default function Standings() {
     <div>
       <PageTitle
         eyebrow={`${lg.toUpperCase()} · ${seasonLabel(lg, season)}`}
-        right={<SeasonPicker options={seasonOptions(lg)} value={season} onChange={setSeason} />}
+        right={<SeasonPicker options={seasonOptions(lg, 'standings')} value={season} onChange={setSeason} />}
       >
         Standings
       </PageTitle>
@@ -156,20 +180,11 @@ export default function Standings() {
         </div>
       ) : (
         <div key={`${conf}${view}`}>
-          <Table
-            teams={current?.teams ?? []}
-            dividers={
-              lg === 'nfl'
-                ? { 0: 'Division Leaders', 4: 'Wild Card', 7: 'In the Hunt' }
-                : { 0: 'Playoffs', 6: 'Play-In', 10: 'Lottery' }
-            }
-          />
+          <Table teams={era.teams} dividers={era.dividers} />
         </div>
       )}
       {view !== 'bracket' && <p className="mt-3 px-1 text-[12px] text-label-2">
-        {lg === 'nfl'
-          ? 'Seeds 1–4 are division winners, 5–7 are wild cards. Seed 1 gets a first-round bye.'
-          : 'Seeds 1–6 make the playoffs. Seeds 7–10 play in the Play-In Tournament.'}
+        {era.note}
       </p>}
     </div>
   );

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { currentSeason, getTeam, getTeamStats, seasonLabel, seasonOptions } from '../api/espn';
 import { BackButton, Card, ErrorState, Headshot, SeasonPicker, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
 import { visibleColor } from '../lib/color';
@@ -181,8 +181,9 @@ export default function Team() {
   const [tab, setTab] = useState('schedule');
   const [spoilerFree] = useSetting('spoilerFree');
   const { isFav, toggle } = useFavorites();
-  const [pickedSeason, setSeason] = useState(null);
-  const season = pickedSeason && seasonOptions(lg).some((o) => o.value === pickedSeason) ? pickedSeason : currentSeason(lg);
+  const [params] = useSearchParams();
+  const [pickedSeason, setSeason] = useState(() => Number(params.get('season')) || null); // links from old playoff results
+  const season = pickedSeason && seasonOptions(lg, 'team').some((o) => o.value === pickedSeason) ? pickedSeason : currentSeason(lg);
   const { data: t, error, loading, reload } = useData((fresh) => getTeam(lg, id, season, { fresh }), [lg, id, season]);
 
   const form = useMemo(() => (t ? t.schedule.filter((e) => e.state === 'post').slice(-5) : []), [t]);
@@ -275,7 +276,7 @@ export default function Team() {
               onChange={setTab}
               options={[{ value: 'schedule', label: 'Schedule' }, { value: 'stats', label: 'Stats' }, { value: 'roster', label: 'Roster' }]}
             />
-            <SeasonPicker options={seasonOptions(lg)} value={season} onChange={setSeason} />
+            <SeasonPicker options={seasonOptions(lg, 'team')} value={season} onChange={setSeason} />
           </div>
           <div className="mt-4">
             {tab === 'schedule' && <Schedule t={t} lg={lg} />}

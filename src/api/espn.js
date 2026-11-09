@@ -25,33 +25,45 @@ export function currentSeason(lg, now = new Date()) {
 }
 export const seasonLabel = (lg, yr) => (lg === 'nba' ? `${yr - 1}-${String(yr).slice(2)}` : String(yr));
 /** This season plus the previous `back` seasons, newest first. */
-// Oldest season every page supports: NBA 2016-17 (ESPN year 2017) and NFL 2017.
-export const FIRST_SEASON = { nba: 2017, nfl: 2017 };
+// Oldest season with complete, correct data in ESPN's records, per feature
+// (checked against known history: best records, scoring leaders, champions).
+// NBA years are the year a season ends (1986 = 1985-86).
+//   standings/leaders: NBA from 1985-86, NFL leaders from 1985, standings from 1993
+//   team schedules and playoff results: NBA from 1993-94 (earlier ones are
+//   missing games or shifted a year), NFL from 1993; NFL weekly scores from 1999.
+export const FIRST_SEASON = {
+  nba: { standings: 1986, leaders: 1986, awards: 1994, team: 1994, bracket: 1994, scores: 1994 },
+  nfl: { standings: 1993, leaders: 1985, awards: 1993, team: 1993, bracket: 1993, scores: 1999 },
+};
+export const firstSeason = (lg, feature = 'team') => FIRST_SEASON[lg][feature] ?? FIRST_SEASON[lg].team;
 
-/** Every supported season, newest first. */
-export function seasonOptions(lg) {
+/** Every supported season for a feature, newest first. */
+export function seasonOptions(lg, feature = 'team') {
   const cur = currentSeason(lg);
-  const n = Math.max(1, cur - FIRST_SEASON[lg] + 1);
+  const n = Math.max(1, cur - firstSeason(lg, feature) + 1);
   return Array.from({ length: n }, (_, i) => ({ value: cur - i, label: seasonLabel(lg, cur - i) }));
 }
 
 const inflight = new Map();
 
-async function get(url, { ttl = 15_000, fresh = false } = {}) {
+// ESPN's history service often answers old seasons with a few 503s before it
+// warms up, so those requests pass `patient` to retry longer.
+async function get(url, { ttl = 15_000, fresh = false, patient = false } = {}) {
   const hit = cache.get(url);
   if (!fresh && hit && Date.now() - hit.at < ttl) return hit.data;
   // Share one request when several parts of the page ask for the same URL.
   const key = `${fresh ? 'F' : 'C'}${url}`;
   if (inflight.has(key)) return inflight.get(key);
-  const p = fetchWithRetry(url, fresh, hit).finally(() => inflight.delete(key));
+  const p = fetchWithRetry(url, fresh, hit, patient).finally(() => inflight.delete(key));
   inflight.set(key, p);
   return p;
 }
 
-async function fetchWithRetry(url, fresh, hit) {
+async function fetchWithRetry(url, fresh, hit, patient = false) {
   let lastErr;
-  // Retry transient failures twice with a short backoff.
-  for (let attempt = 0; attempt < 3; attempt++) {
+  // Retry transient failures with a short backoff (longer for old seasons).
+  const tries = patient ? 5 : 3;
+  for (let attempt = 0; attempt < tries; attempt++) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 8000); // a stuck request must not stall live updates
     try {
@@ -75,7 +87,7 @@ async function fetchWithRetry(url, fresh, hit) {
             ? new Error("Can't reach the server. Check your connection.")
             : e;
       if (e.notFound) break;
-      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      if (attempt < tries - 1) await new Promise((r) => setTimeout(r, (patient ? 1500 : 400) * (attempt + 1)));
     } finally {
       clearTimeout(timer);
     }
@@ -782,6 +794,8 @@ const PAST_SORT = {
 
 async function getPastLeaders(lg, season, opts) {
   const base = `https://site.web.api.espn.com/apis/common/v3/sports/${LEAGUES[lg].path}/statistics/byathlete`;
+  // Ask the backup source at the same time so a failing rankings feed doesn't add a wait.
+  const coreP = get(`${CORE(lg)}/seasons/${season}/types/2/leaders?limit=10`, { ttl: 6 * 60 * 60_000, patient: true, ...opts }).catch(() => null);
   const entries = await Promise.all(
     Object.entries(PAST_SORT[lg]).map(async ([key, spec]) => {
       const { sort, min } = typeof spec === 'string' ? { sort: spec } : spec;
@@ -813,7 +827,8 @@ async function getPastLeaders(lg, season, opts) {
               pos: a.position?.abbreviation,
               jersey: a.jersey,
               value: value(x),
-              team: { id: a.teamId, abbr: a.teamShortName, name: a.teamShortName, color: '#8e8e93' },
+              // This feed gives a player's latest team, not that season's, so it's left out.
+              team: { id: '', abbr: '', name: '', color: '#8e8e93' },
             };
           });
         return [key, list];
@@ -822,7 +837,47 @@ async function getPastLeaders(lg, season, opts) {
       }
     })
   );
-  return { season: `${seasonLabel(lg, season)} Regular Season`, categories: Object.fromEntries(entries) };
+  const categories = Object.fromEntries(entries);
+  // ESPN's season leaders record lists each player with the team he played for
+  // that season (the rankings feed uses his last team), so it goes first; the
+  // rankings feed fills anything it doesn't have.
+  const core = await getCoreLeaders(lg, await coreP, Object.keys(categories), opts).catch(() => ({}));
+  for (const k of Object.keys(categories)) if (core[k]?.length) categories[k] = core[k];
+  return { season: `${seasonLabel(lg, season)} Regular Season`, categories };
+}
+
+/** Season leaders from ESPN's core API (names looked up per player). */
+async function getCoreLeaders(lg, d, keys, opts) {
+  if (!d) return {};
+  const o = { ttl: 6 * 60 * 60_000, patient: true, ...opts };
+  const cats = (d.categories ?? []).filter((c) => keys.includes(c.name));
+  const refs = [...new Set(cats.flatMap((c) => (c.leaders ?? []).map((l) => secure(l.athlete?.$ref)).filter(Boolean)))];
+  // Teams as they were that season (SEA, not OKC, for the 1990s Sonics).
+  const teamRefs = [...new Set(cats.flatMap((c) => (c.leaders ?? []).map((l) => secure(l.team?.$ref)).filter(Boolean)))];
+  const [people, teams, abbrNow] = await Promise.all([pool(refs, 10, (u) => get(u, o)), pool(teamRefs, 10, (u) => get(u, o)), teamAbbrMap(lg)]);
+  const byRef = Object.fromEntries(refs.map((u, i) => [u, people[i]]));
+  const abbr = { ...abbrNow };
+  teams.forEach((t) => t?.id && t.abbreviation && (abbr[String(t.id)] = t.abbreviation));
+  return Object.fromEntries(
+    cats.map((c) => [
+      c.name,
+      (c.leaders ?? []).slice(0, 10).map((l) => {
+        const a = byRef[secure(l.athlete?.$ref)] ?? {};
+        const tid = refId(l.team?.$ref, 'teams');
+        return {
+          id: a.id ?? refId(l.athlete?.$ref, 'athletes'),
+          name: a.displayName ?? '',
+          first: a.firstName,
+          last: a.lastName,
+          headshot: headshotOf(a),
+          pos: a.position?.abbreviation,
+          jersey: a.jersey,
+          value: l.displayValue,
+          team: { id: tid, abbr: abbr[tid] ?? '', name: abbr[tid] ?? '', color: '#8e8e93' },
+        };
+      }).filter((x) => x.name),
+    ])
+  );
 }
 
 export async function getLeaders(lg, season, opts) {
@@ -1128,7 +1183,7 @@ const TEAM_STATS = {
 
 export async function getTeamStats(lg, id, season, opts) {
   const past = season && season !== currentSeason(lg);
-  const d = await get(`${site(lg)}/teams/${id}/statistics${past ? `?season=${season}` : ''}`, { ttl: 10 * 60_000, ...opts });
+  const d = await get(`${site(lg)}/teams/${id}/statistics${past ? `?season=${season}` : ''}`, { ttl: 10 * 60_000, patient: past, ...opts });
   const cats = d.results?.stats?.categories ?? [];
   const find = (cat, name) => cats.find((c) => c.name === cat)?.stats?.find((x) => x.name === name);
   const sections = TEAM_STATS[lg]
@@ -1228,7 +1283,7 @@ async function teamAbbrMap(lg) {
 
 /** Awards for a season; returns null when that season has none yet. */
 export async function getAwards(lg, season, opts) {
-  const o = { ttl: 6 * 60 * 60_000, ...opts };
+  const o = { ttl: 6 * 60 * 60_000, patient: true, ...opts };
   const list = await get(`${CORE(lg)}/seasons/${season}/awards?limit=50`, o);
   const refs = (list.items ?? []).map((x) => secure(x.$ref));
   if (!refs.length) return null;
@@ -1345,7 +1400,8 @@ function normPlayoffEvent(e) {
   return {
     id: e.id,
     date: e.date,
-    round: c.notes?.[0]?.headline ?? '',
+    // Old seasons have no round label; the bracket works the round out from the seeds.
+    round: c.notes?.[0]?.headline || (e.seasonType?.type === 3 ? 'PLAYOFFS' : ''),
     state: c.status?.type?.state ?? e.status?.type?.state ?? 'pre',
     teams: (c.competitors ?? []).map((x) => ({ id: x.team?.id, score: score(x), winner: !!x.winner })),
   };
@@ -1361,14 +1417,22 @@ export async function getPlayoffGames(lg, season, opts) {
   if (Date.now() < postseasonStart.getTime()) return [];
   const events = [];
   if (lg === 'nfl') {
-    const weeks = await pool([1, 2, 3, 5], 4, (w) => get(`${site(lg)}/scoreboard?seasontype=3&week=${w}&dates=${yr}`, o));
+    const weeks = await pool([1, 2, 3, 4, 5], 5, (w) => get(`${site(lg)}/scoreboard?seasontype=3&week=${w}&dates=${yr}`, o));
     for (const d of weeks) for (const e of d?.events ?? []) events.push(e);
+    // Old seasons: the weekly feed may only have the Super Bowl; each team's schedule has the rest.
+    if (events.length < 9) {
+      const confs = await getStandings(lg, yr, opts);
+      const ids = confs.flatMap((c) => c.teams.map((t) => t.id));
+      const results = await pool(ids, 8, (id) => get(`${site(lg)}/teams/${id}/schedule?season=${yr}&seasontype=3`, o));
+      for (const d of results) for (const e of d?.events ?? []) events.push(e);
+    }
   } else {
     const confs = await getStandings(lg, yr, opts);
-    const ids = confs.flatMap((c) => c.teams.filter((t) => t.seed <= 10).map((t) => ({ id: t.id, seed: t.seed })));
+    // Before the Play-In (2021) ESPN's old seeds aren't reliable, so check every team.
+    const ids = confs.flatMap((c) => c.teams.filter((t) => yr < 2021 || t.seed <= 10).map((t) => ({ id: t.id, seed: t.seed })));
     const jobs = [
       ...ids.map((t) => `${site(lg)}/teams/${t.id}/schedule?season=${yr}&seasontype=3`),
-      ...ids.filter((t) => t.seed >= 7).map((t) => `${site(lg)}/teams/${t.id}/schedule?season=${yr}&seasontype=5`),
+      ...ids.filter((t) => yr >= 2021 && t.seed >= 7).map((t) => `${site(lg)}/teams/${t.id}/schedule?season=${yr}&seasontype=5`),
     ];
     const results = await pool(jobs, 8, (u) => get(u, o));
     for (const d of results) for (const e of d?.events ?? []) events.push(e);

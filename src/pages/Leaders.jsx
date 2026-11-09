@@ -29,8 +29,8 @@ function Hero({ p, cat }) {
             <div className="mt-1.5 text-[13px] text-label-2 md:mt-2 md:text-[15px]">{p.first}</div>
             <div className="font-display text-[24px] font-bold leading-[1.1] tracking-tight [overflow-wrap:anywhere] md:text-[28px]">{p.last}</div>
             <div className="mt-1.5 flex items-center gap-1.5 whitespace-nowrap text-[13px] text-label-2">
-              <TeamLogo abbr={p.team.abbr} size={18} />
-              {p.team.abbr} · {p.pos}
+              {p.team.abbr && <TeamLogo abbr={p.team.abbr} size={18} />}
+              {[p.team.abbr, p.pos].filter(Boolean).join(' · ')}
             </div>
             <div className="num mt-3 font-display text-[42px] font-bold leading-none tracking-tight md:mt-4 md:text-[52px]">{p.value}</div>
             <div className="mt-1 text-[13px] font-semibold text-label-2">{cat.unit}</div>
@@ -78,7 +78,7 @@ function StatLeaders({ lg, tabs }) {
   }, [linkedCat]);
   const key = cats.some((c) => c.key === picked) ? picked : cats[0].key;
   const [pickedSeason, setSeason] = useState(null);
-  const season = pickedSeason && seasonOptions(lg).some((o) => o.value === pickedSeason) ? pickedSeason : currentSeason(lg);
+  const season = pickedSeason && seasonOptions(lg, 'leaders').some((o) => o.value === pickedSeason) ? pickedSeason : currentSeason(lg);
   const { data, error, loading, reload } = useData((fresh) => getLeaders(lg, season, { fresh }), [lg, season]);
   const cat = cats.find((c) => c.key === key);
   const list = data?.categories[key] ?? [];
@@ -93,7 +93,7 @@ function StatLeaders({ lg, tabs }) {
 
   return (
     <div>
-      <PageTitle eyebrow={data?.season || lg.toUpperCase()} right={<SeasonPicker options={seasonOptions(lg)} value={season} onChange={setSeason} />}>
+      <PageTitle eyebrow={data?.season || lg.toUpperCase()} right={<SeasonPicker options={seasonOptions(lg, 'leaders')} value={season} onChange={setSeason} />}>
         Leaders
       </PageTitle>
       {tabs}
@@ -142,7 +142,7 @@ function StatLeaders({ lg, tabs }) {
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[14px] font-semibold md:text-[15px]">{p.name}</div>
                   <div className="mt-1 flex items-center gap-2">
-                    <TeamLogo abbr={p.team.abbr} size={14} />
+                    {p.team.abbr && <TeamLogo abbr={p.team.abbr} size={14} />}
                     <div className="h-[4px] flex-1 overflow-hidden rounded-full bg-fill">
                       <div className="h-full rounded-full bg-accent transition-all duration-700" style={{ width: `${(num(p.value) / max) * 100}%` }} />
                     </div>

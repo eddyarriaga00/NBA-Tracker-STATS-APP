@@ -54,7 +54,7 @@ export default function Awards() {
       <div className="mb-3 flex items-center justify-between gap-2 px-1">
         <span className="text-[13px] text-label-2">{season ? `${seasonLabel(lg, season)} season` : ' '}</span>
         <SeasonPicker
-          options={seasonOptions(lg)}
+          options={seasonOptions(lg, 'awards')}
           value={season ?? cur - 1}
           onChange={setPicked}
         />
