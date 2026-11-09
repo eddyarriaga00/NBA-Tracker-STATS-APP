@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { currentSeason, fromKey, getNbaScoreboard, getNflScoreboard, seasonOptions, toKey } from '../api/espn';
 import { useCommentCounts } from '../components/Comments';
 import GameCard from '../components/GameCard';
+import MyTeamsToday from '../components/MyTeamsToday';
+import { CardExtras, useNextGames, useStreaks } from '../lib/cardExtras';
 import { Icon } from '../components/icons';
 import { Empty, ErrorState, PageTitle, SeasonPicker, Segmented, Skeleton } from '../components/ui';
 import { SORTS, sectionGames, useGameSort } from '../lib/gameSort';
@@ -130,6 +132,10 @@ function NbaScores() {
     setParams(k === toKey(new Date()) ? {} : { d: k }, { replace: true });
   };
   const live = games?.filter((g) => g.status.state === 'in').length ?? 0;
+  const streaks = useStreaks('nba', isToday);
+  const anyFinal = isToday && !!games?.some((g) => g.status.state === 'post');
+  const next = useNextGames('nba', { on: anyFinal, dateKey: key });
+  const extras = useMemo(() => (isToday ? { streaks, next } : null), [isToday, streaks, next]);
 
   return (
     <div>
@@ -151,7 +157,10 @@ function NbaScores() {
       <DateStrip selected={date} onSelect={select} />
       {live > 0 && <div className="mt-2 flex justify-end px-1"><Freshness updatedAt={updatedAt} error={error} /></div>}
       <div className="mt-4">
-        <GameGrid games={games} loading={loading} error={error} reload={reload} emptyTitle="No Games" emptySub="There are no NBA games on this day." />
+        {isToday && <MyTeamsToday games={games} league="nba" />}
+        <CardExtras.Provider value={extras}>
+          <GameGrid games={games} loading={loading} error={error} reload={reload} emptyTitle="No Games" emptySub="There are no NBA games on this day." />
+        </CardExtras.Provider>
       </div>
     </div>
   );
@@ -195,6 +204,15 @@ function NflScores() {
   const current = chips.find((c) => c.key === curKey);
   const live = data?.games.filter((g) => g.status.state === 'in').length ?? 0;
   const idx = chips.findIndex((c) => c.key === curKey);
+  const thisWeek = !w && !!data;
+  const streaks = useStreaks('nfl', thisWeek);
+  const after = chips[idx + 1];
+  const nextWeek = useMemo(() => (after ? { type: after.type, week: after.week, year: data.year } : null), [after?.key, data?.year]); // eslint-disable-line react-hooks/exhaustive-deps
+  const anyFinal = thisWeek && data.games.some((g) => g.status.state === 'post');
+  const next = useNextGames('nfl', { on: anyFinal && !!nextWeek, nextWeek });
+  const extras = useMemo(() => (thisWeek ? { streaks, next } : null), [thisWeek, streaks, next]);
+  // Finished games stay in the banner for the day they were played.
+  const recent = (g) => g.status.state !== 'post' || new Date(g.date).toDateString() === new Date().toDateString();
 
   return (
     <div>
@@ -252,7 +270,12 @@ function NflScores() {
         ) : !data.games.length ? (
           <Empty title="No Games" subtitle="There are no NFL games this week." />
         ) : (
-          <GameGrid games={data.games} byDay />
+          <>
+            {thisWeek && <MyTeamsToday games={data.games} league="nfl" filter={recent} />}
+            <CardExtras.Provider value={extras}>
+              <GameGrid games={data.games} byDay />
+            </CardExtras.Provider>
+          </>
         )}
         {data?.byes?.length > 0 && (
           <p className="mt-2 px-1 text-[13px] text-label-2">

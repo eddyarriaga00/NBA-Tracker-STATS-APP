@@ -5,8 +5,41 @@ import { Icon } from './icons';
 import FootballField from './FootballField';
 import { gameHeat } from '../lib/excitement';
 import { useSpoilers } from '../lib/settings';
+import { nextLabel, useCardExtras, usePregame } from '../lib/cardExtras';
 
-function TeamRow({ t, state, dim, hasBall, redZone, hide }) {
+const lastName = (n = '') => n.split(' ').slice(1).join(' ') || n;
+
+function Streak({ s }) {
+  return <span className={`font-semibold ${s[0] === 'W' ? 'text-[#30a46c]' : s[0] === 'L' ? 'text-live' : ''}`}>{s}</span>;
+}
+
+function Form({ form }) {
+  return (
+    <span className="inline-flex items-center gap-[3px]" title={`Last ${form.length}: ${form.join(' ')}`}>
+      {form.map((r, i) => (
+        <span key={i} className={`h-[7px] w-[7px] rounded-full ${r === 'W' ? 'bg-[#30a46c]' : 'border-[1.5px] border-live'}`} />
+      ))}
+    </span>
+  );
+}
+
+function Injuries({ inj }) {
+  const outs = inj.out ?? [];
+  const gtd = inj.gtd ?? [];
+  const list = outs.length ? outs : gtd;
+  if (!list.length) return null;
+  const out = outs.length > 0;
+  const label = list.length === 1 ? `${lastName(list[0].name)} ${out ? 'out' : 'GTD'}` : `${list.length} ${out ? 'out' : 'GTD'}`;
+  const all = [...outs.map((i) => `${i.name}: ${i.status}`), ...gtd.map((i) => `${i.name}: ${i.status}`)].join('\n');
+  return (
+    <span title={all} className="flex max-w-[45%] shrink-0 items-center gap-1 text-[11px] font-semibold text-label-2">
+      <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${out ? 'bg-live' : 'bg-[#ff9f0a]'}`} />
+      <span className="truncate">{label}</span>
+    </span>
+  );
+}
+
+function TeamRow({ t, state, dim, hasBall, redZone, hide, extra }) {
   const showScore = state !== 'pre' && t.score != null && !hide;
   return (
     <div className="flex items-center gap-3">
@@ -22,8 +55,18 @@ function TeamRow({ t, state, dim, hasBall, redZone, hide }) {
           )}
         </div>
         {/* Records update after a game ends, so they'd spoil the result. */}
-        <div className="text-[11px] text-label-2 num md:text-[12px]">{hide ? '\u00a0' : t.record}</div>
+        <div className="flex items-center gap-1.5 truncate text-[11px] text-label-2 num md:text-[12px]">
+          {hide ? '\u00a0' : (
+            <>
+              <span>{t.record}</span>
+              {extra?.streak && <><span className="text-label-3">·</span><Streak s={extra.streak} /></>}
+              {extra?.form?.length > 0 && <Form form={extra.form} />}
+              {extra?.next && <><span className="text-label-3">·</span><span className="truncate">Next {nextLabel(extra.next)}</span></>}
+            </>
+          )}
+        </div>
       </div>
+      {state === 'pre' && extra?.inj && <Injuries inj={extra.inj} />}
       {showScore && (
         <div className="flex items-center gap-1.5">
           <span
@@ -104,6 +147,17 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
   const final = status.state === 'post' && !hide;
   const live = status.state === 'in';
   const poss = live && !hide ? situation?.possession : null;
+  const ctx = useCardExtras();
+  const pre = usePregame(g, !!ctx);
+  const extraFor = (t) =>
+    ctx && !hide
+      ? {
+          streak: ctx.streaks?.[t.id],
+          form: pre?.[t.id]?.form,
+          inj: pre?.[t.id],
+          next: status.state === 'post' ? ctx.next?.[t.id] : null,
+        }
+      : null;
 
   let footer = null;
   if (hide) {
@@ -172,8 +226,8 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
         </div>
         {g.note && <div className="truncate px-4 pt-1 text-[12px] font-medium text-accent">{g.note}</div>}
         <div className="space-y-2 px-3.5 pb-3 pt-2.5 md:space-y-3 md:px-4 md:pb-3.5 md:pt-3">
-          <TeamRow t={away} state={status.state} dim={final && !away.winner} hasBall={poss && poss === away.id} redZone={situation?.redZone} hide={hide} />
-          <TeamRow t={home} state={status.state} dim={final && !home.winner} hasBall={poss && poss === home.id} redZone={situation?.redZone} hide={hide} />
+          <TeamRow t={away} state={status.state} dim={final && !away.winner} hasBall={poss && poss === away.id} redZone={situation?.redZone} hide={hide} extra={extraFor(away)} />
+          <TeamRow t={home} state={status.state} dim={final && !home.winner} hasBall={poss && poss === home.id} redZone={situation?.redZone} hide={hide} extra={extraFor(home)} />
         </div>
         {live && !hide && g.league === 'nfl' && situation && (
           <div className="px-3.5 pb-2.5 md:px-4">

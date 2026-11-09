@@ -531,6 +531,12 @@ export async function getGame(lg, id, opts) {
 
 // ---------- Preview (odds, predictor, injuries, form, series) ----------
 
+/** Just the pre-game preview (injuries, recent form). Shares the game page's request. */
+export async function getPregame(lg, id, opts) {
+  const s = await get(`${site(lg)}/summary?event=${id}`, { ttl: 10 * 60_000, ...opts });
+  return normPreview(lg, s) ?? {};
+}
+
 function normPreview(lg, s, away, home) {
   const pc = (s.pickcenter ?? [])[0];
   const odds = pc
