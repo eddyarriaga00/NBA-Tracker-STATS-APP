@@ -25,9 +25,14 @@ export function currentSeason(lg, now = new Date()) {
 }
 export const seasonLabel = (lg, yr) => (lg === 'nba' ? `${yr - 1}-${String(yr).slice(2)}` : String(yr));
 /** This season plus the previous `back` seasons, newest first. */
-export function seasonOptions(lg, back = 4) {
+// Oldest season every page supports: NBA 2017-18 (ESPN year 2018) and NFL 2017.
+export const FIRST_SEASON = { nba: 2018, nfl: 2017 };
+
+/** Every supported season, newest first. */
+export function seasonOptions(lg) {
   const cur = currentSeason(lg);
-  return Array.from({ length: back + 1 }, (_, i) => ({ value: cur - i, label: seasonLabel(lg, cur - i) }));
+  const n = Math.max(1, cur - FIRST_SEASON[lg] + 1);
+  return Array.from({ length: n }, (_, i) => ({ value: cur - i, label: seasonLabel(lg, cur - i) }));
 }
 
 const inflight = new Map();
@@ -1172,6 +1177,12 @@ async function pool(items, size, fn) {
   return out;
 }
 
+// Coach of the Year winners for seasons where ESPN's award record has no name.
+// (ESPN's per-season coach lookup returns today's coach, so it can't be used.)
+const COACH_OF_YEAR = {
+  nfl: { 2017: 'Sean McVay', 2019: 'John Harbaugh', 2020: 'Kevin Stefanski', 2022: 'Brian Daboll', 2023: 'Kevin Stefanski' },
+};
+
 // Display order for award cards; anything else follows.
 const AWARD_ORDER = {
   nba: ['33', '43', '39', '35', '40', '36', '297', '53', '377', '218', '217', '77', '44', '45', '46', '49', '50', '47', '48', '378'],
@@ -1217,7 +1228,12 @@ export async function getAwards(lg, season, opts) {
         const tid = refId(w.team?.$ref, 'teams');
         return {
           id: pid,
-          name: p.displayName ?? p.fullName ?? [p.firstName, p.lastName].filter(Boolean).join(' '),
+          name:
+            p.displayName ??
+            p.fullName ??
+            ([p.firstName, p.lastName].filter(Boolean).join(' ') ||
+              // ESPN lists only the team for some Coach of the Year awards.
+              (/coach/i.test(a.name ?? '') ? COACH_OF_YEAR[lg]?.[season] ?? (abbr[tid] ? `${abbr[tid]} head coach` : 'Head coach') : '')),
           headshot: p.headshot?.href ?? (pid ? `https://a.espncdn.com/i/headshots/${lg}/players/full/${pid}.png` : ''),
           pos: p.position?.abbreviation ?? '',
           isCoach: /coach/i.test(a.name ?? ''), // coaches have no player page or contract

@@ -234,7 +234,11 @@ export default function Bracket({ confs, season }) {
             {left.byes === 2 ? 'The top 2 seeds got byes (before 2020, 6 teams per conference made it).' : 'The 1 seed gets a bye.'} In the Divisional round the 1 seed hosts the lowest seed left.
           </p>
         )}
-        {real && <p>{lg === 'nfl' ? 'Final scores shown.' : 'Series wins shown; Play-In shows final scores.'} Tap a team for its page.</p>}
+        {real && (
+          <p>
+            {lg === 'nfl' ? 'Final scores shown.' : left.hasPlayIn || right.hasPlayIn ? 'Series wins shown; Play-In shows final scores.' : 'Series wins shown. (The Play-In started in 2020-21.)'} Tap a team for its page.
+          </p>
+        )}
         {!real && advance && fw && (
           <p>The final goes to the better record{fa.team && fb.team && fa.team.pct === fb.team.pct ? ' (tied records go to the top team)' : ''}.</p>
         )}

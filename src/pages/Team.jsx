@@ -226,7 +226,8 @@ export default function Team() {
                 <h1 className="font-display text-[22px] font-bold leading-tight tracking-tight md:text-[34px]">{t.name}</h1>
                 <div className="mt-0.5 text-[14px] font-semibold md:mt-1 md:text-[15px]">{t.record || seasonRecord}</div>
                 <div className="text-[13px] text-label-2">{t.standing}</div>
-                {t.coach && <div className="mt-1 text-[12px] text-label-2">Head coach: {t.coach}</div>}
+                {/* ESPN only knows today's coach, so don't show it on past seasons. */}
+                {t.coach && t.isCurrent && <div className="mt-1 text-[12px] text-label-2">Head coach: {t.coach}</div>}
               </div>
             </div>
           </Card>
