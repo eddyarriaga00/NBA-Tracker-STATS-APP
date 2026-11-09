@@ -30,6 +30,7 @@ const Chat = lazy(loadPage(() => import('./pages/Chat')));
 const Compare = lazy(loadPage(() => import('./pages/Compare')));
 const Picks = lazy(loadPage(() => import('./pages/Picks')));
 const Settings = lazy(loadPage(() => import('./pages/Settings')));
+const About = lazy(loadPage(() => import('./pages/About')));
 const DevField = import.meta.env.DEV ? lazy(() => import('./pages/DevField')) : null;
 
 // Only "nba" and "nfl" are valid league segments; anything else goes home.
@@ -56,6 +57,7 @@ createRoot(document.getElementById('root')).render(
             <Route index element={<Home />} />
             <Route path="chat" element={<Chat />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="about" element={<About />} />
             {import.meta.env.DEV && <Route path="dev/field" element={<DevField />} />}
             <Route path=":lg" element={guard(<Scores />)} />
             <Route path=":lg/game/:id" element={guard(<Keyed Page={Game} />)} />

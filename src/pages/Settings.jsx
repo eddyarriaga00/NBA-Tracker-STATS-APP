@@ -329,6 +329,7 @@ function AppSection() {
 
   return (
     <Group title="App" footer="Scores, stats and news from ESPN. Made for you and your friends.">
+      <Row label="About" sub="The vision, and who made it" to="/about" />
       {isIOS() && !isStandalone() && (
         <Row label="Add to Home Screen" sub="In Safari tap Share → Add to Home Screen. It opens full screen and can send alerts." />
       )}

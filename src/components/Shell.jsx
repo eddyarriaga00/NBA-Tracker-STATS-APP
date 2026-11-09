@@ -16,7 +16,7 @@ import { usePushSync } from '../lib/push';
 function SettingsButton() {
   const [spoilerFree] = useSetting('spoilerFree');
   const { pathname } = useLocation();
-  const active = pathname === '/settings';
+  const active = pathname === '/settings' || pathname === '/about';
   return (
     <NavLink
       to="/settings"
