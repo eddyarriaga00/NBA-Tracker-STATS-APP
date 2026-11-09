@@ -1,0 +1,1 @@
+function c(n){const e=n.replace("#","");if(e.length<6)return .5;const[r,o,u]=[0,2,4].map(t=>parseInt(e.slice(t,t+2),16)/255);return .2126*r+.7152*o+.0722*u}function i(n,e){const r=c(n||"#888888");return e&&r<.12||!e&&r>.85?"#8e8e93":n}export{i as v};
