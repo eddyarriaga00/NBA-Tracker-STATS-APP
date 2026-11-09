@@ -495,6 +495,7 @@ export async function getGame(lg, id, opts) {
     league: lg,
     quarters,
     preview: normPreview(lg, s, away, home),
+    round: await playoffRound(lg, s, id, home?.id).catch(() => ''),
     // NBA shot locations (feet; x across the court 0-50, y out from the hoop).
     shots:
       lg === 'nba'
@@ -1145,12 +1146,16 @@ export async function getTeam(lg, id, season, opts) {
       win: me.winner,
       week: e.week?.text ?? '',
       seasonType: e.seasonType?.abbreviation ?? '',
-      playoff: e.seasonType?.type === 3 || e.seasonType?.abbreviation === 'post',
+      playoff: e.seasonType?.type === 3 || e.seasonType?.abbreviation === 'post' || e.seasonType?.type === 5,
+      playIn: e.seasonType?.type === 5,
+      note: c.notes?.[0]?.headline ?? '',
+      weekNum: e.week?.number,
       broadcast: c.broadcasts?.[0]?.media?.shortName ?? '',
     };
   });
 
   schedule.sort((a, b) => new Date(a.date) - new Date(b.date));
+  labelPlayoffGames(lg, schedule);
   return {
     league: lg,
     id: t.id ?? id,
@@ -1167,6 +1172,63 @@ export async function getTeam(lg, id, season, opts) {
     groups,
     schedule,
   };
+}
+
+/** "Finals · Game 7" for a playoff game page ('' otherwise). */
+async function playoffRound(lg, s, id, teamId) {
+  const type = s.header?.season?.type;
+  if (type !== 3 && type !== 5) return '';
+  if (type === 5) return 'Play-In';
+  const yr = s.header?.season?.year;
+  const d = await get(`${site(lg)}/teams/${teamId}/schedule?season=${yr}&seasontype=3`, { ttl: 60 * 60_000 });
+  const games = (d.events ?? [])
+    .map((e) => {
+      const c = e.competitions?.[0] ?? {};
+      const opp = (c.competitors ?? []).find((x) => x.team?.id !== String(teamId)) ?? {};
+      return { id: e.id, date: e.date, opp: { id: opp.team?.id }, note: c.notes?.[0]?.headline ?? '', playoff: true, playIn: false, weekNum: e.week?.number };
+    })
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+  labelPlayoffGames(lg, games);
+  return games.find((g) => g.id === String(id))?.round ?? '';
+}
+
+/**
+ * "Finals · Game 7" style labels for a team's playoff games. Uses ESPN's note
+ * when it has one; old seasons have none, so the round comes from the order of
+ * opponents (each new opponent is the next round) and the game number from the
+ * games against that opponent.
+ */
+function labelPlayoffGames(lg, schedule) {
+  const po = schedule.filter((e) => e.playoff);
+  if (lg === 'nba') {
+    const series = [];
+    for (const e of po.filter((x) => !x.playIn)) {
+      const last = series[series.length - 1];
+      if (last && last.opp === e.opp.id) last.games.push(e);
+      else series.push({ opp: e.opp.id, games: [e] });
+    }
+    const ROUNDS = ['First Round', 'Conf. Semis', 'Conf. Finals', 'Finals'];
+    series.forEach((sr, i) =>
+      sr.games.forEach((e, g) => {
+        const n = e.note.match(/game\s*(\d+)/i)?.[1] ?? g + 1;
+        const x = e.note.toLowerCase();
+        const round = /nba finals|^finals/.test(x) ? 'Finals' : /conference finals|\bfinals\b/.test(x) ? 'Conf. Finals' : /semifinal/.test(x) ? 'Conf. Semis' : /1st round|first round/.test(x) ? 'First Round' : ROUNDS[i] ?? 'Playoffs';
+        e.round = `${round} · Game ${n}`;
+      })
+    );
+    for (const e of po.filter((x) => x.playIn)) e.round = 'Play-In';
+    return;
+  }
+  const BY_WEEK = { 1: 'Wild Card', 2: 'Divisional', 3: 'Conf. Championship', 4: 'Super Bowl', 5: 'Super Bowl' };
+  po.forEach((e, i) => {
+    const x = e.note.toLowerCase();
+    e.round = /super bowl/.test(x)
+      ? e.note.replace(/^.*?(super bowl.*)$/i, '$1').replace(/^super bowl/i, 'Super Bowl')
+      : /championship/.test(x) ? 'Conf. Championship'
+      : /divisional|second round/.test(x) ? 'Divisional'
+      : /wild ?card|first round/.test(x) ? 'Wild Card'
+      : BY_WEEK[e.weekNum] ?? (i === po.length - 1 && new Date(e.date).getMonth() === 1 ? 'Super Bowl' : 'Playoffs');
+  });
 }
 
 /** A past season's roster from its player stats, with each player's main number. */

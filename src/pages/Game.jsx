@@ -677,11 +677,17 @@ export default function Game() {
         <ErrorState error={error} onRetry={reload} />
       ) : (
         <div className="rise">
+          {g.round && (
+            <div className="mb-2 px-1 text-[12.5px] font-semibold uppercase tracking-wide text-accent">Playoffs · {g.round}</div>
+          )}
           <Hero g={g} hide={hide} onReveal={reveal} />
           <Actions g={g} />
-          <div className="mt-3">
-            <GamePick g={g} />
-          </div>
+          {/* Pick'em is for upcoming and recent games, not ones from years ago. */}
+          {Date.now() - Date.parse(g.date) < 3 * 864e5 && (
+            <div className="mt-3">
+              <GamePick g={g} />
+            </div>
+          )}
           {hide ? (
             <>
               <HiddenNotice onReveal={reveal} />

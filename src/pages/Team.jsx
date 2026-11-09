@@ -25,10 +25,13 @@ function GameRow({ e, lg }) {
   const hide = spoilerFree && e.state !== 'pre' && isRecent(e);
   return (
     <Link to={`/${lg}/game/${e.id}`} className="flex items-center gap-3 px-4 py-2.5 transition hover:bg-fill/40">
-      <div className="w-[80px] shrink-0 md:w-[88px]">
+      <div className="w-[108px] shrink-0 md:w-[120px]">
         <div className="text-[13px] font-semibold">{fmtDate(e.date)}</div>
         {(e.week || e.playoff) && (
-          <div className={`text-[11px] ${e.playoff ? 'font-semibold text-accent' : 'text-label-2'}`}>{e.playoff ? 'Playoffs' : e.week}</div>
+          <div className={`text-[11px] leading-tight ${e.playoff ? 'font-semibold text-accent' : 'text-label-2'}`}>
+            {e.playoff ? 'Playoffs' : e.week}
+            {e.playoff && e.round && e.round !== 'Playoffs' && <span className="block whitespace-nowrap font-medium">{e.round}</span>}
+          </div>
         )}
       </div>
       <span className="w-5 shrink-0 text-center text-[12px] text-label-2">{e.home ? 'vs' : '@'}</span>
