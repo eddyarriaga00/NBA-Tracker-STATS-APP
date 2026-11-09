@@ -24,7 +24,11 @@ function describe(user) {
     email: user.email || '',
     provider: google ? 'Google' : user.email ? 'Email' : 'Guest',
     nickname: user.user_metadata?.nickname || user.user_metadata?.full_name?.split(' ')[0] || '',
-    avatar: user.user_metadata?.avatar_url || '',
+    // A guest who links Google keeps their old profile, so the photo lives on the Google identity.
+    avatar:
+      user.user_metadata?.avatar_url ||
+      user.identities?.map((i) => i.identity_data?.avatar_url || i.identity_data?.picture).find(Boolean) ||
+      '',
   };
 }
 
