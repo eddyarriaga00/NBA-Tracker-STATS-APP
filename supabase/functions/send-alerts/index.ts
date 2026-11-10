@@ -1,5 +1,6 @@
-// Supabase Edge Function: runs every minute (pg_cron), checks ESPN, and sends
-// web push alerts for followed teams (start + final) and close games late.
+// Supabase Edge Function: called every minute (pg_cron). Each call checks ESPN
+// four times, 15 seconds apart, and sends web push alerts: game starting,
+// halftime, final, close games late, and big performances.
 // Each alert goes out once per game, tracked in alert_game_state.
 import webpush from 'npm:web-push@3.6.7';
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -17,6 +18,8 @@ type Team = { id: string; abbr: string; score: number; winner: boolean };
 type Game = {
   key: string; league: 'nba' | 'nfl'; id: string; state: string; completed: boolean; start: string; half: boolean;
   period: number; clock: string; label: string; broadcast: string; home: Team; away: Team;
+  off: boolean; // postponed, cancelled or delayed
+  top: string; // NBA top scorer so far, e.g. "L. Doncic 38 PTS"
 };
 
 // ---- same "close game" rules as the app (src/lib/excitement.js) ----
@@ -38,14 +41,27 @@ function norm(league: 'nba' | 'nfl', e: any): Game | null {
     return { id: x?.team?.id ?? x?.id, abbr: x?.team?.abbreviation, score: Number(score) || 0, winner: x?.winner === true };
   };
   const st = e.status ?? c.status;
+  let top = '';
+  if (league === 'nba') {
+    let best = 0;
+    for (const t of c.competitors ?? []) {
+      const l = (t.leaders ?? []).find((x: any) => x.name === 'points')?.leaders?.[0];
+      const v = Number(l?.value ?? parseFloat(l?.displayValue));
+      if (l?.athlete && v > best) { best = v; top = `${l.athlete.shortName ?? l.athlete.displayName} ${Math.round(v)} PTS`; }
+    }
+  }
   return {
     key: `${league}:${e.id}`, league, id: String(e.id),
     state: st?.type?.state ?? 'pre', completed: st?.type?.completed === true, start: c.date ?? e.date,
-    half: st?.type?.name === 'STATUS_HALFTIME' || /^halftime$/i.test(st?.type?.shortDetail ?? ''),
+    // ESPN takes most of a minute to say "Halftime"; the clock hitting zero in the 2nd says it first.
+    half: st?.type?.name === 'STATUS_HALFTIME' || /^halftime$/i.test(st?.type?.shortDetail ?? '') ||
+      (st?.type?.state === 'in' && st?.period === 2 && /^0?:?0?0(\.0)?$/.test(String(st?.displayClock ?? ''))),
     period: st?.period ?? 0, clock: String(st?.displayClock ?? ''),
     label: st?.type?.shortDetail ?? '',
     broadcast: c.broadcast || (c.broadcasts ?? []).flatMap((b: any) => b.names ?? []).join(', ') || '',
     home: side('home'), away: side('away'),
+    off: /POSTPONED|CANCEL|DELAY|SUSPEND/i.test(st?.type?.name ?? ''),
+    top,
   };
 }
 
@@ -62,10 +78,15 @@ async function json(url: string) {
   const bust = `${url.includes('?') ? '&' : '?'}_=${Date.now()}`;
   const hosts = [url, url.replace('site.api.espn.com/apis/site', 'site.web.api.espn.com/apis/site')];
   let last = '';
-  for (const u of hosts) {
-    const r = await fetch(u + bust, { headers: HEADERS });
-    if (r.ok) return r.json();
-    last = `${r.status} ${u}`;
+  // Two rounds: ESPN drops the odd connection.
+  for (const u of [...hosts, ...hosts]) {
+    try {
+      const r = await fetch(u + bust, { headers: HEADERS, signal: AbortSignal.timeout(6000) });
+      if (r.ok) return await r.json();
+      last = `${r.status} ${u}`;
+    } catch (e: any) {
+      last = `${e?.message ?? e} ${u}`;
+    }
   }
   throw new Error(last);
 }
@@ -183,10 +204,27 @@ Deno.serve(async (req) => {
     return Response.json({ test: true, devices: subscriptions.length, sent });
   }
 
+  // ?demo=1 sends one alert per game that's live right now, to see alerts working.
+  if (new URL(req.url).searchParams.get('demo')) {
+    const live = (await loadGames()).filter((g) => g.state === 'in');
+    let sent = 0;
+    for (const g of live) {
+      const line = `${g.away.abbr} ${g.away.score} – ${g.home.score} ${g.home.abbr} · ${g.label}`;
+      sent += await send(
+        { title: `Live: ${g.away.abbr} at ${g.home.abbr}`, body: g.top ? `${line} · ${g.top}` : line, url: `${SITE}#/${g.league}/game/${g.id}`, tag: `${g.key}:demo` },
+        () => true,
+        `${g.label} · tap to see the score`
+      );
+    }
+    return Response.json({ demo: true, live: live.map((g) => g.key), sent });
+  }
+
+  // One look at ESPN. `n` is which look this is within the minute (0-3).
+  const pass = async (n: number) => {
   const games = await loadGames();
-  const graded = await gradePicks(games).catch((e) => `error: ${e?.message ?? e}`);
-  if (!games.length) return Response.json({ games: 0, graded, errors: loadErrors });
-  const { data: rows } = await db.from('alert_game_state').select('game_key,state,close_sent,half_sent,big_sent').in('game_key', games.map((g) => g.key));
+  const graded = n === 0 ? await gradePicks(games).catch((e) => `error: ${e?.message ?? e}`) : 0;
+  if (!games.length) return { games: 0, graded, errors: [...loadErrors] };
+  const { data: rows } = await db.from('alert_game_state').select('game_key,state,close_sent,half_sent,start_sent,big_sent').in('game_key', games.map((g) => g.key));
   const prev = Object.fromEntries((rows ?? []).map((r) => [r.game_key, r]));
 
   // Each moment has its own choice per device: 'off', 'teams' (followed teams' games) or 'all'.
@@ -199,35 +237,59 @@ Deno.serve(async (req) => {
   const match = (g: Game) => `${g.away.abbr} at ${g.home.abbr}`;
   const score = (g: Game) => `${g.away.abbr} ${g.away.score} – ${g.home.score} ${g.home.abbr}`;
   const updates: any[] = [];
+  const log: any[] = [];
   let events = 0;
   let sent = 0;
   const anyBig = subscriptions.some((s) => s.big);
+  const alert = async (g: Game, kind: string, ...args: Parameters<typeof send>) => {
+    events++;
+    const n = await send(...args);
+    sent += n;
+    log.push({ game_key: g.key, kind, title: args[0].title, devices: n });
+  };
+  // Box scores for big performances: every other look, all live games at once.
+  const summaries = new Map<string, any>();
+  if (anyBig) {
+    // A game that just ended is always checked, to catch the last minute's stats.
+    const live = games.filter((g) => (g.state === 'in' && n % 2 === 0) || (prev[g.key]?.state === 'in' && g.state === 'post'));
+    await Promise.all(live.map(async (g) => summaries.set(g.key, await json(`${ESPN}/${PATH[g.league]}/summary?event=${g.id}`).catch(() => null))));
+  }
+  const now = Date.now();
 
   for (const g of games) {
     const before = prev[g.key];
     const url = `${SITE}#/${g.league}/game/${g.id}`;
     let closeSent = before?.close_sent ?? false;
     let halfSent = before?.half_sent ?? false;
+    // A game first seen already under way has had its start.
+    let startSent = before ? before.start_sent ?? before.state !== 'pre' : g.state !== 'pre';
+    const withTop = (text: string) => (g.top ? `${text} · ${g.top}` : text);
     if (before) {
-      if (before.state === 'pre' && g.state === 'in') {
-        events++;
-        sent += await send(
-          { title: `${g.league === 'nfl' ? 'Kickoff' : 'Tip-off'}: ${match(g)}`, body: g.broadcast ? `Starting now on ${g.broadcast}` : 'Starting now', url, tag: `${g.key}:start` },
-          wants(g, 'start')
-        );
+      // Start: at the scheduled time, or the moment ESPN shows it live if that's sooner.
+      const since = now - Date.parse(g.start);
+      const due = g.state === 'in' || (g.state === 'pre' && !g.off && since >= 0);
+      if (!startSent && due) {
+        startSent = true;
+        // Not if we're only finding out long after the fact.
+        if (g.state === 'pre' ? since < 10 * 60_000 : before.state === 'pre') {
+          const word = g.league === 'nfl' ? 'Kickoff' : 'Tip-off';
+          const lead = g.state === 'in' ? 'Under way' : 'Starting now';
+          await alert(g, 'start',
+            { title: `${word}: ${match(g)}`, body: g.broadcast ? `${lead} on ${g.broadcast}` : lead, url, tag: `${g.key}:start` },
+            wants(g, 'start')
+          );
+        }
       }
       if (g.half && !halfSent) {
-        events++;
         halfSent = true;
-        sent += await send(
-          { title: `Halftime: ${match(g)}`, body: score(g), url, tag: `${g.key}:half` },
+        await alert(g, 'half',
+          { title: `Halftime: ${match(g)}`, body: withTop(score(g)), url, tag: `${g.key}:half` },
           wants(g, 'half'),
           'Tap to see the score'
         );
       }
       if (before.state === 'in' && g.state === 'post') {
-        events++;
-        sent += await send({ title: `Final: ${match(g)}`, body: score(g), url, tag: `${g.key}:final` }, wants(g, 'final'), 'Tap to see how it ended');
+        await alert(g, 'final', { title: `Final: ${match(g)}`, body: withTop(score(g)), url, tag: `${g.key}:final` }, wants(g, 'final'), 'Tap to see how it ended');
       }
     } else if (g.half) {
       halfSent = true; // first look mid-halftime: don't alert late
@@ -235,9 +297,8 @@ Deno.serve(async (req) => {
     // Big performances (any game, any player): check the live box score.
     let bigSent: string[] | null = before?.big_sent ?? null;
     let bigChanged = false;
-    const finishing = before?.state === 'in' && g.state === 'post'; // catch the last minute's stats
-    if (anyBig && (g.state === 'in' || finishing)) {
-      const summary = await json(`${ESPN}/${PATH[g.league]}/summary?event=${g.id}`).catch(() => null);
+    {
+      const summary = summaries.get(g.key); // includes games that just ended, for the last minute's stats
       if (summary) {
         const moments = bigMoments(g.league, summary);
         const known = new Set(bigSent ?? []);
@@ -245,8 +306,7 @@ Deno.serve(async (req) => {
         // The first look at a game only records what already happened (no late flood).
         if (bigSent) {
           for (const m of worthSending(fresh)) {
-            events++;
-            sent += await send(
+            await alert(g, 'big',
               { title: m.title, body: `${m.body} · ${match(g)} ${g.label}`, url, tag: `${g.key}:big:${m.key}` },
               (s) => s.big,
               'Tap to watch',
@@ -262,16 +322,36 @@ Deno.serve(async (req) => {
     }
     const heat = hot(g);
     if (heat && !closeSent) {
-      events++;
       closeSent = true;
-      sent += await send({ title: `🔥 ${heat}: ${match(g)}`, body: `${score(g)} · ${g.label}`, url, tag: `${g.key}:close` }, (s) => s.close_games, `${g.label} · worth tuning in`);
+      await alert(g, 'close', { title: `🔥 ${heat}: ${match(g)}`, body: `${score(g)} · ${g.label}`, url, tag: `${g.key}:close` }, (s) => s.close_games, `${g.label} · worth tuning in`);
     }
-    if (!before || bigChanged || before.state !== g.state || before.close_sent !== closeSent || before.half_sent !== halfSent) {
+    if (!before || bigChanged || before.state !== g.state || before.close_sent !== closeSent || before.half_sent !== halfSent || (before.start_sent ?? false) !== startSent) {
       // Every column every time: a bulk upsert fills missing ones with defaults.
-      updates.push({ game_key: g.key, state: g.state, close_sent: closeSent, half_sent: halfSent, big_sent: bigSent, updated_at: new Date().toISOString() });
+      updates.push({ game_key: g.key, state: g.state, close_sent: closeSent, half_sent: halfSent, start_sent: startSent, big_sent: bigSent, updated_at: new Date().toISOString() });
     }
   }
   if (updates.length) await db.from('alert_game_state').upsert(updates);
-  await db.from('alert_game_state').delete().lt('updated_at', new Date(Date.now() - 4 * 86400_000).toISOString());
-  return Response.json({ games: games.length, devices: subscriptions.length, events, sent, graded });
+  if (log.length) await db.from('alert_log').insert(log);
+  if (n === 0) {
+    await db.from('alert_game_state').delete().lt('updated_at', new Date(Date.now() - 4 * 86400_000).toISOString());
+    await db.from('alert_log').delete().lt('sent_at', new Date(Date.now() - 14 * 86400_000).toISOString());
+  }
+  return { games: games.length, devices: subscriptions.length, events, sent, graded, errors: loadErrors.length ? [...loadErrors] : undefined };
+  };
+
+  // Look now, then three more times 15 seconds apart after replying, so an
+  // alert is never more than a few seconds behind ESPN.
+  const t0 = Date.now();
+  const first = await pass(0);
+  const rest = (async () => {
+    for (const n of [1, 2, 3]) {
+      const wait = t0 + n * 15_000 - Date.now();
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      if (Date.now() - t0 > 50_000) break; // the next minute's call takes over
+      await pass(n).catch((e) => console.error('pass', n, e?.message ?? e));
+    }
+  })();
+  // @ts-ignore EdgeRuntime exists on Supabase
+  if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(rest);
+  return Response.json(first);
 });

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { currentSeason, getTeam, getTeamStats, seasonLabel, seasonOptions } from '../api/espn';
 import { BackButton, Card, ErrorState, Headshot, SeasonPicker, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
@@ -192,6 +192,9 @@ export default function Team() {
   const { isFav, toggle } = useFavorites();
   const [params] = useSearchParams();
   const [pickedSeason, setSeason] = useState(() => Number(params.get('season')) || null); // links from old playoff results
+  // A link to another team or season while this page is already open.
+  const wanted = params.get('season');
+  useEffect(() => { setSeason(Number(wanted) || null); }, [lg, id, wanted]);
   const season = pickedSeason && seasonOptions(lg, 'team').some((o) => o.value === pickedSeason) ? pickedSeason : currentSeason(lg);
   const { data: t, error, loading, reload } = useData((fresh) => getTeam(lg, id, season, { fresh }), [lg, id, season]);
 
