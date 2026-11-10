@@ -13,6 +13,8 @@ import { toast } from '../lib/toast';
 import WinProbability from '../components/WinProbability';
 import { GamePick } from '../components/Picks';
 import FootballField from '../components/FootballField';
+import GameStrip from '../components/GameStrip';
+import LeadTracker from '../components/LeadTracker';
 import { BackButton, Card, ErrorState, Headshot, LiveBadge, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
 import { visibleColor } from '../lib/color';
 import { useLeague } from '../lib/league';
@@ -303,20 +305,104 @@ function StatTable({ labels, groups, totals, lg, highlight }) {
   );
 }
 
-function BoxScore({ g }) {
+// ---------- NBA box score: big numbers, one row per player ----------
+
+// Shown in this order (the stats people look for first come first).
+const NBA_ORDER = ['PTS', 'REB', 'AST', 'MIN', 'FG', '3PT', 'FT', 'STL', 'BLK', 'TO', '+/-', 'PF', 'OREB', 'DREB'];
+const WIDE = new Set(['FG', '3PT', 'FT', 'MIN']);
+
+function PlayerLines({ labels, groups, lg }) {
+  const cols = NBA_ORDER.map((l) => [l, labels.indexOf(l)]).filter(([, i]) => i >= 0);
+  const tone = (label, v) => {
+    if (label !== '+/-') return '';
+    const n = Number(v);
+    return n > 0 ? 'text-win' : n < 0 ? 'text-live' : '';
+  };
+  return (
+    <div className="no-scrollbar overflow-x-auto">
+      <div className="min-w-max">
+        {groups.map(({ title, list, live }) =>
+          list.length ? (
+            <div key={title}>
+              <div className="sticky left-0 flex w-screen max-w-full items-center gap-1.5 bg-card-2 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-label-2">
+                {live && <span className="live-dot h-[6px] w-[6px] rounded-full bg-live" />}
+                {title}
+              </div>
+              {list.map((a) => (
+                <div key={a.id} className="flex items-center border-t border-sep">
+                  <Link to={`/${lg}/player/${a.id}`} className="sticky left-0 z-10 flex w-[132px] shrink-0 items-center gap-2 bg-card py-2 pl-3 pr-1.5 md:w-[190px]">
+                    <Headshot src={a.headshot} size={34} />
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13.5px] font-semibold leading-tight">{a.short}</span>
+                      <span className="block truncate text-[10.5px] text-label-2">
+                        {[a.pos, a.jersey && `#${a.jersey}`].filter(Boolean).join(' · ')}
+                        {a.starter && <span className="ml-1 rounded bg-fill px-1 text-[9.5px] font-bold text-label-2">S</span>}
+                      </span>
+                    </span>
+                  </Link>
+                  {a.dnp ? (
+                    <span className="px-3 text-[12px] italic text-label-2">{a.reason ? titleCase(a.reason) : 'Did not play'}</span>
+                  ) : (
+                    cols.map(([label, i]) => (
+                      <span key={label} className={`num shrink-0 py-2 text-center ${WIDE.has(label) ? 'w-[52px]' : 'w-[42px]'}`}>
+                        <span className={`block leading-none ${label === 'PTS' ? 'text-[18px] font-bold' : 'text-[15.5px] font-semibold'} ${tone(label, a.stats[i])}`}>
+                          {label === '+/-' && Number(a.stats[i]) > 0 ? `+${Number(a.stats[i])}` : a.stats[i] ?? '–'}
+                        </span>
+                        <span className="mt-1 block text-[9.5px] font-medium text-label-3">{label}</span>
+                      </span>
+                    ))
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : null
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** The team's own line: shooting with percentages, then the counting stats. */
+function TeamLine({ team, labels, totals }) {
+  const at = (l) => totals[labels.indexOf(l)];
+  const shot = (l) => {
+    const [m, n] = String(at(l) ?? '').split('-').map(Number);
+    return Number.isFinite(m) && n > 0 ? { v: `${m}/${n}`, pct: `${((m / n) * 100).toFixed(1)}%` } : null;
+  };
+  const shots = [['FG', shot('FG')], ['3PT', shot('3PT')], ['FT', shot('FT')]].filter(([, s]) => s);
+  const counts = ['REB', 'AST', 'STL', 'BLK', 'TO'].filter((l) => at(l) != null && at(l) !== '');
+  if (!shots.length && !counts.length) return null;
+  return (
+    <Card className="mb-3 px-4 py-3">
+      <div className="flex items-center gap-2 text-[14px] font-bold"><TeamLogo abbr={team.abbr} size={22} /> {team.name} totals</div>
+      <div className="num mt-2.5 grid grid-cols-3 gap-2">
+        {shots.map(([l, s]) => (
+          <div key={l} className="rounded-xl bg-fill px-2 py-2 text-center">
+            <div className="text-[17px] font-bold leading-none">{s.v}</div>
+            <div className="mt-1 text-[11px] text-label-2">{l} · <span className="font-semibold text-label">{s.pct}</span></div>
+          </div>
+        ))}
+      </div>
+      {counts.length > 0 && (
+        <div className="num mt-2.5 flex justify-between px-1">
+          {counts.map((l) => (
+            <div key={l} className="text-center">
+              <div className="text-[16px] font-bold leading-none">{at(l)}</div>
+              <div className="mt-1 text-[10px] font-medium text-label-3">{l}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function BoxScore({ g, side }) {
   const lg = useLeague();
-  const [side, setSide] = useState('away');
   const team = g[side];
   const box = g.box.find((b) => b.teamId === team.id) ?? g.box[side === 'away' ? 0 : 1];
 
-  const picker = (
-    <Segmented
-      className="mb-3"
-      value={side}
-      onChange={setSide}
-      options={[{ value: 'away', label: g.away.name }, { value: 'home', label: g.home.name }]}
-    />
-  );
+  const picker = null;
   if (!box) return <>{picker}<div className="py-10 text-center text-label-2">Box score not available yet.</div></>;
 
   if (lg === 'nfl') {
@@ -338,12 +424,12 @@ function BoxScore({ g }) {
   return (
     <div>
       {picker}
-      <NbaBox g={g} box={box} lg={lg} />
+      <NbaBox g={g} box={box} lg={lg} team={team} />
     </div>
   );
 }
 
-function NbaBox({ g, box, lg }) {
+function NbaBox({ g, box, lg, team }) {
   const q = g.quarters;
   const [period, setPeriod] = useState('game');
   const periods = q?.periods ?? [];
@@ -353,11 +439,22 @@ function NbaBox({ g, box, lg }) {
   let totals = box.totals;
   let groups;
   if (sel === 'game') {
-    groups = [
-      { title: 'Starters', list: box.athletes.filter((a) => a.starter) },
-      { title: 'Bench', list: box.athletes.filter((a) => !a.starter && !a.dnp) },
-      { title: 'Did Not Play', list: box.athletes.filter((a) => !a.starter && a.dnp) },
-    ];
+    // During a live game: who's on the floor right now, then everyone else.
+    const on = new Set(g.status.state === 'in' && !g.stoppage?.label?.match(/^End of|Halftime/) ? q?.onCourt ?? [] : []);
+    const mine = box.athletes.filter((a) => on.has(a.id));
+    if (mine.length === 5) {
+      groups = [
+        { title: 'On court', live: true, list: mine },
+        { title: 'Bench', list: box.athletes.filter((a) => !on.has(a.id) && !a.dnp) },
+        { title: 'Did Not Play', list: box.athletes.filter((a) => !on.has(a.id) && a.dnp) },
+      ];
+    } else {
+      groups = [
+        { title: 'Starters', list: box.athletes.filter((a) => a.starter) },
+        { title: 'Bench', list: box.athletes.filter((a) => !a.starter && !a.dnp) },
+        { title: 'Did Not Play', list: box.athletes.filter((a) => !a.starter && a.dnp) },
+      ];
+    }
   } else {
     const st = q.stats[sel] ?? {};
     // Quarter rows use the engine's column order, which matches ESPN's box score.
@@ -394,9 +491,10 @@ function NbaBox({ g, box, lg }) {
           ))}
         </div>
       )}
+      {groups.length > 0 && <TeamLine team={team} labels={labels} totals={totals} />}
       <Card className="overflow-hidden">
         {groups.length ? (
-          <StatTable lg={lg} labels={labels} totals={totals} highlight={labels.indexOf('PTS')} groups={groups} />
+          <PlayerLines lg={lg} labels={labels} groups={groups} />
         ) : (
           <div className="py-10 text-center text-[14px] text-label-2">No stats for this quarter yet.</div>
         )}
@@ -677,7 +775,7 @@ function HiddenNotice({ onReveal }) {
 export default function Game() {
   const { id } = useParams();
   const lg = useLeague();
-  const [tab, setTab] = useState('box');
+  const [tab, setTab] = useState('game');
   const room = `${lg}:game:${id}`;
   const counts = useCommentCounts([room]);
   const spoilers = useSpoilers();
@@ -716,6 +814,7 @@ export default function Game() {
           {g.round && (
             <div className="mb-2 px-1 text-[12.5px] font-semibold uppercase tracking-wide text-accent">Playoffs · {g.round}</div>
           )}
+          <GameStrip g={g} />
           <Hero g={g} hide={hide} onReveal={reveal} />
           <Actions g={g} />
           {/* Pick'em is for upcoming and recent games, not ones from years ago. */}
@@ -754,15 +853,22 @@ export default function Game() {
                     value={tab}
                     onChange={setTab}
                     options={[
-                      { value: 'box', label: 'Box Score' },
-                      { value: 'team', label: lg === 'nba' ? 'Team' : 'Team Stats' },
+                      { value: 'game', label: 'Game' },
+                      { value: 'away', label: g.away.abbr },
+                      { value: 'home', label: g.home.abbr },
                       { value: 'plays', label: lg === 'nfl' ? 'Drives' : 'Plays' },
                       ...(lg === 'nba' ? [{ value: 'shots', label: 'Shots' }] : []),
                     ]}
                   />
                   <div className="mt-3">
-                    {tab === 'box' && <BoxScore g={g} />}
-                    {tab === 'team' && <TeamStats g={g} />}
+                    {tab === 'game' && (
+                      <>
+                        <LeadTracker g={g} />
+                        <SectionTitle>Team Stats</SectionTitle>
+                        <TeamStats g={g} />
+                      </>
+                    )}
+                    {(tab === 'away' || tab === 'home') && <BoxScore g={g} side={tab} />}
                     {tab === 'plays' && (lg === 'nfl' ? <Drives g={g} /> : <Plays g={g} />)}
                     {tab === 'shots' && lg === 'nba' && <ShotChart g={g} />}
                   </div>

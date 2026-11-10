@@ -158,7 +158,9 @@ export function buildQuarterStats(rawPlays, teams) {
     lastLineup = Object.fromEntries(teamIds.map((tid) => [tid, new Set(lineup[tid])]));
   }
 
-  return { periods, stats, livePeriod };
+  // Who is on the floor right now (only meaningful while a period is in progress).
+  const onCourt = livePeriod && lastLineup ? Object.values(lastLineup).flatMap((set) => [...set]) : [];
+  return { periods, stats, livePeriod, onCourt };
 }
 
 const fmtMin = (sec) => {
