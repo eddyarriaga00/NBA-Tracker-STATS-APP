@@ -30,8 +30,8 @@ export function stoppage(play) {
     return { kind: 'review', icon: '🔍', label: who ? `Under review · ${who} challenge` : 'Under review' };
   }
   // NFL reviews are written into the play they change.
-  const nflReview = text.match(/(\w[\w .]*?) challenged the (.+?) ruling, and the play was (REVERSED|Upheld)/i);
-  if (nflReview) return { kind: 'review', icon: '🔍', label: `Challenge by ${tidy(nflReview[1])} · ${/reversed/i.test(nflReview[3]) ? 'call reversed' : 'call stands'}` };
+  const nflReview = text.match(/(?:^|[.)\]]\s*)([A-Z][A-Za-z ]{2,24}?) challenged the (.+?) ruling, and the play was (REVERSED|Upheld)/);
+  if (nflReview) return { kind: 'review', icon: '🔍', label: `${tidy(nflReview[1])} challenge · ${/reversed/i.test(nflReview[3]) ? 'reversed' : 'call stands'}` };
   if (/Replay Official reviewed/i.test(text)) return { kind: 'review', icon: '🔍', label: `Replay review · ${/reversed/i.test(text) ? 'call reversed' : 'call stands'}` };
 
   if (/^end (period|of half)/i.test(type) || /^end of the \d\w+ (quarter|half)/i.test(text)) {

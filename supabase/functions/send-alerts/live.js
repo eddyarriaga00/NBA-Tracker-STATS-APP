@@ -4,14 +4,36 @@ import { players } from './big.js';
 import { lastPlay, stoppage } from './stoppage.js';
 
 const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
-// A phone shows about 42 characters a line and 4 lines, so plays are shortened to fit one line.
-const LINE = 42;
+// An iPhone Lock Screen shows 4 lines of about 40 characters under the title.
+// Everything is written to fit that, so nothing is cut off mid-word.
+const LINE = 40;
+const MAX_LINES = 4;
 function shortPlay(text) {
   let t = text
-    .replace(/ makes /, ': ').replace(/three point/gi, '3PT').replace(/(\d+)-foot/gi, '$1-ft')
-    .replace(/jump shot|jumper/gi, 'jumper').replace(/free throw (\d) of (\d)/gi, 'FT $1 of $2').replace(/driving /gi, '')
-    .replace(/\(Shotgun\) |\(No Huddle, Shotgun\) |\(No Huddle\) /gi, '');
-  if (t.length > LINE - 2) t = t.replace(/\s*\(.*?\)\.?$/, ''); // drop "(X assists)" / tacklers when tight
+    // NFL: formations, tacklers and officials' notes aren't needed at a glance.
+    .replace(/\((?:No Huddle, )?Shotgun\)\s*|\(No Huddle\)\s*/gi, '')
+    .replace(/\[[^\]]*\]/g, '')
+    .replace(/\s*\([^)]*\)/g, '')
+    .split(/(?<=[a-z]{3})\.(?=[A-Z])|\.(?:\s|$)/)[0] // first sentence ("C.Wentz" keeps its dot)
+    .replace(/PENALTY on ([A-Z]{2,4})-[^,]+, ([^,]+).*/, 'Penalty on $1: $2')
+    .replace(/, Center-.*$/, '').replace(/ from [A-Z]{2,4} \d+ to .*$/, '')
+    .replace(/scrambles (?:left|right) (?:end|tackle|guard)|scrambles up the middle/i, 'scrambles')
+    .replace(/ (?:pushed|ran) ob at [A-Z]{2,4} \d+/i, '')
+    .replace(/pass incomplete (?:short|deep) (?:left|right|middle) (?:to|intended for)/i, 'incomplete to')
+    .replace(/pass incomplete (?:short|deep) (?:left|right|middle)/i, 'pass incomplete')
+    .replace(/pass (?:short|deep) (?:left|right|middle) to/i, 'pass to')
+    .replace(/(?:left|right) (?:end|tackle|guard)|up the middle/i, 'run')
+    .replace(/ (?:to|at) [A-Z]{2,4} \d+ for (-?\d+) yards?/i, ', $1 yds')
+    .replace(/ to (?:[A-Z]{2,4} )?\d+ for no gain/i, ', no gain')
+    .replace(/ for (-?\d+) yards?/i, ', $1 yds')
+    .replace(/, TOUCHDOWN/i, ' TD').replace(/TOUCHDOWN/i, 'TD')
+    .replace(/extra point is GOOD/i, 'XP good').replace(/field goal is GOOD/i, 'FG good')
+    // NBA
+    .replace(/ makes /, ': ').replace(/ misses /, ': missed ').replace(/three point/gi, '3PT').replace(/(\d+)-foot/gi, '$1-ft')
+    .replace(/jump ?shot/gi, 'jumper').replace(/step back/gi, 'step-back').replace(/, i(?:n|nside).*$/, '').replace(/free throw (\d) of (\d)/gi, 'FT $1 of $2').replace(/driving /gi, '')
+    .replace(/\s+/g, ' ').trim();
+  // Still too long? A long NBA name goes down to the last name.
+  if (t.length > LINE - 2) t = t.replace(/^\S+ ([^:]+: )/, '$1');
   return clip(t, LINE - 2);
 }
 const last = (name) => name.split(' ').slice(1).join(' ') || name; // "L. Doncic" -> "Doncic"
@@ -36,7 +58,7 @@ function nbaLines(g, summary) {
       return `${last(p.short)} ${s.points}${full ? ' PTS' : ''}${extra ? ` ${extra}` : ''}`;
     };
     const both = `${t.abbr}: ${one(top[0], true)}${top[1] ? `, ${one(top[1], false)}` : ''}`;
-    lines.push(both.length > LINE ? `${t.abbr}: ${one(top[0], true)}` : both);
+    lines.push(both.length > LINE + 2 ? `${t.abbr}: ${one(top[0], true)}` : both);
   }
   const pair = (name) => {
     const a = teamStat(summary, g.away.id, name);
@@ -60,7 +82,8 @@ function nflLines(g, summary) {
   const down = sit.downDistanceText || sit.shortDownDistanceText;
   if (g.state === 'in' && (ball || down)) lines.push([ball && `${ball} ball`, down].filter(Boolean).join(' · '));
   const playText = sit.lastPlay?.text ?? drive?.plays?.[drive.plays.length - 1]?.text;
-  if (playText) lines.push(`▸ ${shortPlay(playText)}`);
+  // A timeout or quarter break is shown as a stoppage, not as the last play.
+  if (playText && !/^(timeout|official timeout|two-minute|end )/i.test(playText.trim())) lines.push(`▸ ${shortPlay(playText)}`);
   const people = players(summary);
   for (const t of [g.away, g.home]) {
     const mine = people.filter((p) => p.teamId === String(t.id));
@@ -73,6 +96,8 @@ function nflLines(g, summary) {
       rb && `${last(rb.short)} ${rb.stats.rushingYards} rush`,
       wr && `${last(wr.short)} ${wr.stats.receivingYards} rec`,
     ].filter(Boolean);
+    // Drop the last name on the list until it fits one line.
+    while (parts.length > 1 && `${t.abbr}: ${parts.join(', ')}`.length > LINE + 2) parts.pop();
     if (parts.length) lines.push(`${t.abbr}: ${parts.join(', ')}`);
   }
   return lines;
@@ -97,8 +122,14 @@ export function liveCard(lg, g, summary) {
   const paused = lastPlay(summary);
   const stop = g.state === 'in' && !g.half ? stoppage(paused) : null;
   // A quarter break is already in the title ("End of 3rd"); the rest get the first line.
-  if (stop && stop.kind !== 'break') lines.unshift(`${stop.icon} ${stop.label}`);
-  if (lines.length > 4) lines.length = 4; // what fits; the team stat line goes first
+  if (stop && stop.kind !== 'break') lines.unshift(`${stop.icon} ${clip(stop.label, LINE - 3)}`);
+  // Too many lines? NFL gives up "who has the ball" first; then whatever is last (team stats).
+  if (lines.length > MAX_LINES && lg === 'nfl') {
+    const i = lines.findIndex((l) => / ball\b/.test(l) && !l.startsWith('▸'));
+    if (i >= 0) lines.splice(i, 1);
+  }
+  lines.length = Math.min(lines.length, MAX_LINES);
+  for (let i = 0; i < lines.length; i++) lines[i] = clip(lines[i], LINE + 2);
   const gap = Math.abs(g.home.score - g.away.score);
   const late = g.period >= 4 && g.state === 'in';
   return {
