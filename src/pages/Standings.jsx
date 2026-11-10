@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { currentSeason, getStandings, seasonLabel, seasonOptions } from '../api/espn';
+import { currentSeason, getStandings, seasonLabel, seasonOptions, teamHref } from '../api/espn';
 import { Card, ErrorState, PageTitle, SeasonPicker, Segmented, Skeleton, TeamLogo } from '../components/ui';
 import { useLeague } from '../lib/league';
 import { useData } from '../lib/useData';
@@ -63,7 +63,7 @@ const COLS = {
   ],
 };
 
-function Table({ teams, dividers = {}, showSeed = true, title }) {
+function Table({ teams, dividers = {}, showSeed = true, title, season }) {
   const lg = useLeague();
   const cols = COLS[lg];
   const span = cols.length + 1;
@@ -85,7 +85,7 @@ function Table({ teams, dividers = {}, showSeed = true, title }) {
               dividers[i] && <Divider key={`d${i}`} label={dividers[i]} cols={span} />,
               <tr key={t.id} className="transition-colors hover:bg-fill/50">
                 <td className="sticky left-0 z-10 bg-card py-2 pl-3 pr-2 md:py-2.5">
-                  <Link to={`/${lg}/team/${t.id}`} className="flex items-center gap-3">
+                  <Link to={teamHref(lg, t.id, season)} className="flex items-center gap-3">
                     {showSeed && <span className="w-5 text-right text-[13px] text-label-2">{t.seed < 99 ? t.seed : ''}</span>}
                     <TeamLogo abbr={t.abbr} size={22} className="md:h-[26px] md:w-[26px]" />
                     <span className="font-semibold">{t.name}</span>
@@ -178,11 +178,11 @@ export default function Standings() {
         <Bracket key={`${lg}:${season}`} confs={data} season={season} />
       ) : lg === 'nfl' && view === 'division' ? (
         <div key={conf} className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {current?.divisions.map((d) => <Table key={d.name} title={d.name} teams={d.teams} showSeed={seedsOk} />)}
+          {current?.divisions.map((d) => <Table key={d.name} title={d.name} teams={d.teams} showSeed={seedsOk} season={season} />)}
         </div>
       ) : (
         <div key={`${conf}${view}`}>
-          <Table teams={era.teams} dividers={era.dividers} showSeed={seedsOk} />
+          <Table teams={era.teams} dividers={era.dividers} showSeed={seedsOk} season={season} />
         </div>
       )}
       {view !== 'bracket' && <p className="mt-3 px-1 text-[12px] text-label-2">

@@ -1,6 +1,6 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { createContext, useContext, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { currentSeason, firstSeason, getPlayoffGames, seasonLabel } from '../api/espn';
+import { currentSeason, firstSeason, getPlayoffGames, seasonLabel, teamHref } from '../api/espn';
 import { useData } from '../lib/useData';
 import { buildActualBracket, buildBracket } from '../lib/bracket';
 import { useLeague } from '../lib/league';
@@ -30,7 +30,11 @@ function centers() {
 const winnerSide = (g, advance) =>
   g.win !== undefined ? g.win : advance && g.a?.team && g.b?.team ? (g.a.team.seed <= g.b.team.seed ? 'a' : 'b') : null;
 
+// The season being shown, so tapping a team opens that year's team page.
+const BracketSeason = createContext(null);
+
 function Slot({ s, lg, win, lose, bye }) {
+  const season = useContext(BracketSeason);
   const base = 'flex items-center gap-1.5 px-2';
   if (bye) return <div className={`${base} text-[11.5px] font-semibold uppercase tracking-wide text-label-3`} style={{ height: ROW }}>Bye</div>;
   if (!s?.team) {
@@ -42,7 +46,7 @@ function Slot({ s, lg, win, lose, bye }) {
   }
   const t = s.team;
   return (
-    <Link to={`/${lg}/team/${t.id}`} className={`${base} transition hover:bg-fill/50 ${lose ? 'opacity-40' : ''}`} style={{ height: ROW }}>
+    <Link to={teamHref(lg, t.id, season)} className={`${base} transition hover:bg-fill/50 ${lose ? 'opacity-40' : ''}`} style={{ height: ROW }}>
       <span className="num w-3.5 shrink-0 text-right text-[10px] font-semibold text-label-2">{t.seed < 99 ? t.seed : ''}</span>
       {/* eager: lazy images inside a sideways scroller often never load */}
       <TeamLogo abbr={t.abbr} size={17} eager />
@@ -159,6 +163,7 @@ export default function Bracket({ confs, season }) {
   const nowSeason = !season || season === currentSeason(lg);
 
   return (
+    <BracketSeason.Provider value={yr}>
     <div className="rise">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
         <p className="text-[12.5px] text-label-2">
@@ -265,5 +270,6 @@ export default function Bracket({ confs, season }) {
         {real && pastSeason && hasGaps(lg, left, right) && <p>ESPN’s records are missing some games from this postseason, so some spots are empty or have no winner.</p>}
       </div>
     </div>
+    </BracketSeason.Provider>
   );
 }

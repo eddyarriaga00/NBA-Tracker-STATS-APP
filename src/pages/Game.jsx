@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { getGame } from '../api/espn';
+import { getGame, teamHref } from '../api/espn';
 import Comments, { useCommentCounts } from '../components/Comments';
 import Preview from '../components/Preview';
 import Highlights from '../components/Highlights';
@@ -37,7 +37,7 @@ function Hero({ g, hide, onReveal }) {
 
   const Side = ({ t }) => (
     <Link
-      to={t.tbd ? '#' : `/${lg}/team/${t.id}`}
+      to={t.tbd ? '#' : teamHref(lg, t.id, g.seasonYear)}
       onClick={(e) => t.tbd && e.preventDefault()}
       className="flex min-w-0 flex-1 flex-col items-center gap-1.5 transition active:scale-95"
     >

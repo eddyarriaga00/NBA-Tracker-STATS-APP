@@ -38,6 +38,12 @@ export const FIRST_SEASON = {
 };
 export const firstSeason = (lg, feature = 'team') => FIRST_SEASON[lg][feature] ?? FIRST_SEASON[lg].team;
 
+/** Link to a team's page; for a past season, the page opens on that season. */
+export function teamHref(lg, id, season) {
+  const past = season && Number(season) !== currentSeason(lg) && Number(season) >= firstSeason(lg, 'team');
+  return `/${lg}/team/${id}${past ? `?season=${season}` : ''}`;
+}
+
 /** Every supported season for a feature, newest first. */
 export function seasonOptions(lg, feature = 'team') {
   const cur = currentSeason(lg);
@@ -550,6 +556,8 @@ export async function getGame(lg, id, opts) {
     quarters,
     preview: normPreview(lg, s, away, home),
     round: await playoffRound(lg, s, id, home?.id).catch(() => ''),
+    seasonYear: s.header?.season?.year ?? null, // so team links from an old game open that season
+
     // NBA shot locations (feet; x across the court 0-50, y out from the hoop).
     shots:
       lg === 'nba'
