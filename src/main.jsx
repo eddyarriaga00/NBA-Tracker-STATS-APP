@@ -10,6 +10,7 @@ import { loadPage, watchForUpdates } from './lib/update';
 
 registerServiceWorker(); // alerts when the app is closed + offline copy
 clearAlertBadgeOnOpen();
+import('./lib/viewportFix').then((m) => m.startViewportFix()); // keeps the top and bottom bars pinned on iPhone
 import('./lib/social').then((m) => m.startProfile()); // your profile follows your nickname and teams
 import('./lib/sync').then((m) => m.startSync()); // followed teams + preferences follow your account
 // Coming back from Google sign-in.
