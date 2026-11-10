@@ -1,5 +1,5 @@
 // Supabase Edge Function: called every minute (pg_cron). Each call checks ESPN
-// four times, 15 seconds apart, and sends web push alerts: game starting,
+// six times, 10 seconds apart, and sends web push alerts: game starting,
 // halftime, final, close games late, and big performances.
 // Each alert goes out once per game, tracked in alert_game_state.
 import webpush from 'npm:web-push@3.6.7';
@@ -288,7 +288,7 @@ Deno.serve(async (req) => {
     // A game that just ended is always checked, to catch the last minute's stats.
     const live = games.filter((g) =>
       g.state !== 'pre' && followers[g.key] ? true
-      : anyBig && ((g.state === 'in' && n % 2 === 0) || (prev[g.key]?.state === 'in' && g.state === 'post')));
+      : anyBig && ((g.state === 'in' && n % 3 === 0) || (prev[g.key]?.state === 'in' && g.state === 'post')));
     await Promise.all(live.map(async (g) => summaries.set(g.key, await json(`${ESPN}/${PATH[g.league]}/summary?event=${g.id}`).catch(() => null))));
   }
   const now = Date.now();
@@ -334,7 +334,7 @@ Deno.serve(async (req) => {
     // Big performances (any game, any player): check the live box score.
     let bigSent: string[] | null = before?.big_sent ?? null;
     let bigChanged = false;
-    if (anyBig && (n % 2 === 0 || (before?.state === 'in' && g.state === 'post'))) {
+    if (anyBig && (n % 3 === 0 || (before?.state === 'in' && g.state === 'post'))) {
       const summary = summaries.get(g.key); // includes games that just ended, for the last minute's stats
       if (summary) {
         const moments = bigMoments(g.league, summary);
@@ -366,7 +366,7 @@ Deno.serve(async (req) => {
         const waited = f.sent_at ? now - Date.parse(f.sent_at) : Infinity;
         // Play resuming after a timeout isn't worth a buzz by itself.
         const resumed = !card.stopped && f.sig?.startsWith(`${card.sig}|`);
-        const fresh = f.sig !== card.sig && !resumed && (waited >= f.every * 1000 || (card.urgent && waited >= 12_000));
+        const fresh = f.sig !== card.sig && !resumed && (waited >= f.every * 1000 - 4000 || (card.urgent && waited >= 8_000));
         if (s && fresh) {
           try {
             await webpush.sendNotification(
@@ -404,15 +404,15 @@ Deno.serve(async (req) => {
   return { games: games.length, devices: subscriptions.length, events, sent, graded, errors: loadErrors.length ? [...loadErrors] : undefined };
   };
 
-  // Look now, then three more times 15 seconds apart after replying, so an
+  // Look now, then five more times 10 seconds apart after replying, so an
   // alert is never more than a few seconds behind ESPN.
   const t0 = Date.now();
   const first = await pass(0);
   const rest = (async () => {
-    for (const n of [1, 2, 3]) {
-      const wait = t0 + n * 15_000 - Date.now();
+    for (const n of [1, 2, 3, 4, 5]) {
+      const wait = t0 + n * 10_000 - Date.now();
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-      if (Date.now() - t0 > 50_000) break; // the next minute's call takes over
+      if (Date.now() - t0 > 55_000) break; // the next minute's call takes over
       await pass(n).catch((e) => console.error('pass', n, e?.message ?? e));
     }
   })();
