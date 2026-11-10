@@ -545,9 +545,10 @@ function TeamStats({ g }) {
   );
 }
 
-function PeriodPicker({ periods, period, setPeriod, scoringOnly, setScoringOnly }) {
+function PeriodPicker({ periods, period, setPeriod, scoringOnly, setScoringOnly, newest, setNewest }) {
   return (
-    <div className="mb-3 flex items-center gap-2">
+    <>
+    <div className="mb-2 flex items-center gap-2">
       <Segmented className="flex-1" value={period} onChange={setPeriod} options={periods.map((p) => ({ value: p, label: periodName(p) }))} />
       <button
         onClick={() => setScoringOnly((s) => !s)}
@@ -556,6 +557,13 @@ function PeriodPicker({ periods, period, setPeriod, scoringOnly, setScoringOnly 
         Scoring
       </button>
     </div>
+    {setNewest && (
+      <button onClick={() => setNewest((n) => !n)} className="mb-2 flex items-center gap-1 px-1 text-[12.5px] font-semibold text-accent active:opacity-60">
+        <span className="text-[14px] leading-none">{newest ? '↑' : '↓'}</span>
+        {newest ? 'Latest play first' : 'First play first'}
+      </button>
+    )}
+    </>
   );
 }
 
@@ -570,13 +578,15 @@ function usePeriods(list) {
 function Plays({ g }) {
   const { periods, period, setPeriod } = usePeriods(g.plays);
   const [scoringOnly, setScoringOnly] = useState(false);
+  const [newest, setNewest] = useState(true);
   if (!g.plays.length) return <div className="py-10 text-center text-label-2">Play-by-play starts at tip-off.</div>;
   let list = g.plays.filter((p) => p.period === period && (!scoringOnly || p.scoring));
-  if (g.status.state === 'in') list = [...list].reverse();
+  // Same order live and after the game (it used to flip once the game ended).
+  if (newest) list = [...list].reverse();
   const abbr = { [g.away.id]: g.away.abbr, [g.home.id]: g.home.abbr };
   return (
     <div>
-      <PeriodPicker {...{ periods, period, setPeriod, scoringOnly, setScoringOnly }} />
+      <PeriodPicker {...{ periods, period, setPeriod, scoringOnly, setScoringOnly, newest, setNewest }} />
       <Card className="divide-y divide-sep">
         {list.length === 0 && <div className="py-8 text-center text-[14px] text-label-2">No plays.</div>}
         {list.map((p) => (
@@ -621,7 +631,7 @@ function Drives({ g }) {
     );
   }
 
-  const list = live ? [...g.drives].reverse() : g.drives;
+  const list = [...g.drives].reverse(); // latest drive first, live and after the game
   return (
     <div>
       <Segmented className="mb-3" value="all" onChange={(v) => setScoringOnly(v === 'scoring')} options={[{ value: 'all', label: 'All Drives' }, { value: 'scoring', label: 'Scoring Plays' }]} />
