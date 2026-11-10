@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { commentsEnabled, currentUserId, ensureUser, getClient } from '../lib/supabase';
 import { Icon } from './icons';
 
@@ -170,6 +171,7 @@ function useThread(room) {
     const temp = { id: `tmp-${Date.now()}`, room, user_id: user.id, author, body, created_at: new Date().toISOString(), pending: true };
     setComments((prev) => [...prev, temp]);
     const { data, error } = await supabase.from('comments').insert({ room, author, body }).select().single();
+    import('../lib/social').then((m) => m.ensureProfile()).catch(() => {}); // so people can find and add you
     if (error) {
       setComments((prev) => prev.filter((x) => x.id !== temp.id));
       throw new Error(error.message.includes('Slow down') ? 'Slow down! Try again in a few seconds.' : error.message);
@@ -232,7 +234,7 @@ export function NamePrompt({ onSave, initial = '', onCancel }) {
   );
 }
 
-function Composer({ onSend, name, onRename }) {
+export function Composer({ onSend, name, onRename, placeholder = 'Say something…' }) {
   const [text, setText] = useState('');
   const [err, setErr] = useState('');
   const [sending, setSending] = useState(false);
@@ -264,10 +266,12 @@ function Composer({ onSend, name, onRename }) {
 
   return (
     <div className="p-3">
-      <div className="mb-1.5 flex items-center gap-1.5 px-1 text-[12px] text-label-2">
-        Posting as
-        <button onClick={onRename} className="font-semibold text-accent">{name}</button>
-      </div>
+      {name && (
+        <div className="mb-1.5 flex items-center gap-1.5 px-1 text-[12px] text-label-2">
+          Posting as
+          <button onClick={onRename} className="font-semibold text-accent">{name}</button>
+        </div>
+      )}
       <div className="flex items-end gap-2">
         <textarea
           ref={ref}
@@ -278,7 +282,7 @@ function Composer({ onSend, name, onRename }) {
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); }
           }}
-          placeholder="Say something…"
+          placeholder={placeholder}
           className="min-w-0 flex-1 resize-none rounded-[20px] border border-sep bg-card px-4 py-2 text-[16px] leading-snug outline-none placeholder:text-label-3 focus:border-accent"
         />
         <button
@@ -309,11 +313,17 @@ function Message({ c, mine, showHead, reactions, me, active, setActive, onReact,
 
   return (
     <div className={`group flex gap-2 ${mine ? 'flex-row-reverse' : ''} ${showHead ? 'mt-3' : 'mt-0.5'}`}>
-      <div className="w-7 shrink-0">{!mine && showHead && <Avatar name={c.author} />}</div>
+      <div className="w-7 shrink-0">
+        {!mine && showHead && <Link to={`/u/${c.user_id}`} aria-label={`${c.author}'s profile`}><Avatar name={c.author} /></Link>}
+      </div>
       <div className={`flex min-w-0 max-w-[78%] flex-col ${mine ? 'items-end' : 'items-start'}`}>
         {showHead && (
           <div className={`mb-0.5 flex items-baseline gap-1.5 px-1 text-[12px] ${mine ? 'flex-row-reverse' : ''}`}>
-            <span className="font-semibold" style={{ color: mine ? undefined : colorFor(c.author) }}>{mine ? 'You' : c.author}</span>
+            {mine ? (
+              <span className="font-semibold">You</span>
+            ) : (
+              <Link to={`/u/${c.user_id}`} className="font-semibold" style={{ color: colorFor(c.author) }}>{c.author}</Link>
+            )}
             <span className="text-label-3">{ago(c.created_at)}</span>
           </div>
         )}

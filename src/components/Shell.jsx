@@ -11,6 +11,7 @@ import Toaster from './Toaster';
 import { AccountSheet } from './Account';
 import { useGameAlerts } from '../lib/alerts';
 import { usePushSync } from '../lib/push';
+import { useSocialBadge } from '../lib/social';
 
 /** Gear button: opens the Settings page (dot = spoiler-free is on). */
 function SettingsButton() {
@@ -104,12 +105,13 @@ export default function Shell() {
     return () => document.removeEventListener('keydown', key);
   }, []);
 
+  const badge = useSocialBadge();
   const tabs = [
     { to: `/${league}`, label: 'Scores', icon: Icon.Scores, end: true, match: (p) => p === `/${league}` || p.startsWith(`/${league}/game`) },
     { to: `/${league}/standings`, label: 'Standings', icon: Icon.Standings },
     { to: `/${league}/leaders`, label: 'Leaders', icon: Icon.Leaders, match: (p) => p.startsWith(`/${league}/leaders`) || p.startsWith(`/${league}/player`) },
     { to: `/${league}/teams`, label: 'Teams', icon: Icon.Teams, match: (p) => p.startsWith(`/${league}/team`) },
-    { to: '/chat', label: 'Friends', icon: Icon.Chat, match: (p) => p === '/chat' || p.startsWith(`/${league}/picks`) },
+    { to: '/chat', label: 'Friends', icon: Icon.Chat, match: (p) => p === '/chat' || p === '/friends' || p.startsWith('/u/') || p.startsWith('/dm/') || p.startsWith(`/${league}/picks`), badge },
   ];
   const isActive = (t) => (t.match ? t.match(pathname) : pathname.startsWith(t.to));
 
@@ -134,6 +136,7 @@ export default function Shell() {
                   }`}
                 >
                   {t.label}
+                  {t.badge > 0 && <span className="num ml-1.5 rounded-full bg-live px-1.5 py-px text-[11px] font-bold text-white">{t.badge}</span>}
                 </NavLink>
               ))}
             </nav>
@@ -170,7 +173,12 @@ export default function Shell() {
                   isActive(t) ? 'text-accent' : 'text-label-3'
                 }`}
               >
-                <t.icon className="h-[22px] w-[22px]" />
+                <span className="relative">
+                  <t.icon className="h-[22px] w-[22px]" />
+                  {t.badge > 0 && (
+                    <span className="num absolute -right-2.5 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-live px-1 text-[10px] font-bold leading-none text-white">{t.badge > 9 ? '9+' : t.badge}</span>
+                  )}
+                </span>
                 {t.label}
               </NavLink>
             ))}

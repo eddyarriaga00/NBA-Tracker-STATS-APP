@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { Avatar, NamePrompt, useNickname } from './Comments';
 import { Card, Segmented, Skeleton, TeamLogo } from './ui';
 import { Icon } from './icons';
 import { useLeague } from '../lib/league';
+import { useSocialBadge } from '../lib/social';
 import { useSpoilers } from '../lib/settings';
 import { useTheme } from '../lib/theme';
 import { visibleColor } from '../lib/color';
@@ -12,6 +13,7 @@ import { PERIODS, isLocked, picksEnabled, useLeaderboard, usePicks } from '../li
 /** Pick'em | Chat switch shown at the top of both friend pages. */
 export function FriendsTabs() {
   const league = useLeague();
+  const badge = useSocialBadge();
   const tab = (to, label) => (
     <NavLink
       to={to}
@@ -25,8 +27,9 @@ export function FriendsTabs() {
     </NavLink>
   );
   return (
-    <div className="mb-3 grid grid-cols-2 rounded-[10px] bg-fill p-[2px] md:max-w-xs">
+    <div className="mb-3 grid grid-cols-3 rounded-[10px] bg-fill p-[2px] md:max-w-sm">
       {tab('/chat', 'Chat')}
+      {tab('/friends', badge ? `Friends · ${badge}` : 'Friends')}
       {tab(`/${league}/picks`, 'Pick’em')}
     </div>
   );
@@ -256,7 +259,7 @@ export function Leaderboard({ league }) {
               <Avatar name={u.nickname} size={28} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
-                  <span className="truncate text-[15px] font-semibold">{u.nickname}</span>
+                  <Link to={`/u/${u.user_id}`} className="truncate text-[15px] font-semibold">{u.nickname}</Link>
                   {u.user_id === me && <span className="text-[11px] font-semibold text-accent">You</span>}
                 </div>
                 <div className="mt-0.5 flex gap-[3px]" aria-label="Last picks, newest first">

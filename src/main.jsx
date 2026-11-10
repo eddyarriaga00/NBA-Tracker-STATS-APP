@@ -10,6 +10,7 @@ import { loadPage, watchForUpdates } from './lib/update';
 
 registerServiceWorker(); // alerts when the app is closed + offline copy
 clearAlertBadgeOnOpen();
+import('./lib/social').then((m) => m.startProfile()); // your profile follows your nickname and teams
 import('./lib/sync').then((m) => m.startSync()); // followed teams + preferences follow your account
 // Coming back from Google sign-in.
 if (/[?&](code|error)=/.test(location.search) || /error_code=/.test(location.hash)) {
@@ -31,6 +32,9 @@ const Compare = lazy(loadPage(() => import('./pages/Compare')));
 const Picks = lazy(loadPage(() => import('./pages/Picks')));
 const Settings = lazy(loadPage(() => import('./pages/Settings')));
 const About = lazy(loadPage(() => import('./pages/About')));
+const Friends = lazy(loadPage(() => import('./pages/Friends')));
+const Profile = lazy(loadPage(() => import('./pages/Profile')));
+const DM = lazy(loadPage(() => import('./pages/DM')));
 const DevField = import.meta.env.DEV ? lazy(() => import('./pages/DevField')) : null;
 
 // Only "nba" and "nfl" are valid league segments; anything else goes home.
@@ -46,6 +50,10 @@ function Keyed({ Page }) {
   const { lg, id } = useParams();
   return <Page key={`${lg}:${id}`} />;
 }
+function UserKeyed({ Page }) {
+  const { id } = useParams();
+  return <Page key={id} />;
+}
 const Home = () => <Navigate to={`/${leagueFromPath('/')}`} replace />;
 
 createRoot(document.getElementById('root')).render(
@@ -56,6 +64,9 @@ createRoot(document.getElementById('root')).render(
           <Route element={<Shell />}>
             <Route index element={<Home />} />
             <Route path="chat" element={<Chat />} />
+            <Route path="friends" element={<Friends />} />
+            <Route path="u/:id" element={<UserKeyed Page={Profile} />} />
+            <Route path="dm/:id" element={<UserKeyed Page={DM} />} />
             <Route path="settings" element={<Settings />} />
             <Route path="about" element={<About />} />
             {import.meta.env.DEV && <Route path="dev/field" element={<DevField />} />}

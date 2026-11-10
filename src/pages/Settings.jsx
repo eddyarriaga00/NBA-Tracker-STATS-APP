@@ -118,6 +118,15 @@ function Profile() {
           />
         </div>
       )}
+      {acct?.id && name && !editing && (
+        <Link to={`/u/${acct.id}`} className="flex items-center gap-3 border-t border-sep px-4 py-3 active:bg-fill">
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-semibold">Your profile</span>
+            <span className="block text-[12px] text-label-2">Photo, username and bio. This is what friends see.</span>
+          </span>
+          <Icon.ChevronRight className="h-4 w-4 shrink-0 text-label-3" />
+        </Link>
+      )}
       {stats && (
         <div className="grid grid-cols-4 border-t border-sep px-2 py-3">
           <Stat value={`${stats.w}-${stats.l}`} label="Pick’em" />
