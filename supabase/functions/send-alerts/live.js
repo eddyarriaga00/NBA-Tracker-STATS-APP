@@ -34,6 +34,9 @@ function shortPlay(text) {
     .replace(/\s+/g, ' ').trim();
   // Still too long? A long NBA name goes down to the last name.
   if (t.length > LINE - 2) t = t.replace(/^\S+ ([^:]+: )/, '$1');
+  // Or stop at the last comma that fits, so it ends on a whole thought.
+  const comma = t.lastIndexOf(',', LINE - 2);
+  if (t.length > LINE - 2 && comma > 12) t = t.slice(0, comma);
   return clip(t, LINE - 2);
 }
 const last = (name) => name.split(' ').slice(1).join(' ') || name; // "L. Doncic" -> "Doncic"
