@@ -148,6 +148,39 @@ export async function syncPush(prefs) {
   return { ok: true, reason: 'on' };
 }
 
+/**
+ * Tapping an alert opens what it's about (the game, the chat). The service
+ * worker tells the open app where to go; if the app was closed or asleep, it
+ * leaves a note that's picked up as soon as the app is in front.
+ */
+export function openAlertTargets() {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+  const go = (url) => {
+    try {
+      const u = new URL(url, location.href);
+      if (u.origin !== location.origin || !u.hash) return;
+      if (location.hash !== u.hash) location.hash = u.hash;
+    } catch { /* not a link */ }
+  };
+  navigator.serviceWorker.addEventListener('message', (e) => e.data?.type === 'open' && go(e.data.url));
+  const pickUp = async () => {
+    if (document.visibilityState !== 'visible' || !('caches' in window)) return;
+    try {
+      const key = new URL('__open', new URL('./', location.href)).href;
+      const cache = await caches.open('app-v1');
+      const hit = await cache.match(key);
+      if (!hit) return;
+      await cache.delete(key);
+      const note = await hit.json();
+      if (Date.now() - note.at < 20_000) go(note.url); // only a tap from just now
+    } catch { /* nothing waiting */ }
+  };
+  pickUp();
+  document.addEventListener('visibilitychange', pickUp);
+  window.addEventListener('pageshow', pickUp);
+  window.addEventListener('focus', pickUp);
+}
+
 /** Opening the app counts alerts as read: clears the number on the app icon. */
 export function clearAlertBadgeOnOpen() {
   if (typeof document === 'undefined') return;
