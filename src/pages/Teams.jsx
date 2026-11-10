@@ -21,7 +21,7 @@ export default function Teams() {
       <button
         onClick={() => toggle(lg, t.id)}
         aria-label={isFav(lg, t.id) ? `Unfollow ${t.name}` : `Follow ${t.name}`}
-        className={`grid h-11 w-11 shrink-0 place-items-center transition active:scale-90 ${isFav(lg, t.id) ? 'text-[#ff9f0a]' : 'text-label-3 hover:text-label-2'}`}
+        className={`grid h-11 w-11 shrink-0 place-items-center transition active:scale-90 ${isFav(lg, t.id) ? 'text-[#ffcc00]' : 'text-label-3 hover:text-label-2'}`}
       >
         <Icon.Star filled={isFav(lg, t.id)} className="h-[18px] w-[18px]" />
       </button>

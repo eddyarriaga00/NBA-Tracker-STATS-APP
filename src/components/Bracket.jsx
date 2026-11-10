@@ -218,7 +218,7 @@ export default function Bracket({ confs, season }) {
             {headers.map(([conf, name], i) => (
               <div key={i} className="absolute text-center leading-tight" style={{ left: colX(i), width: CW, top: 0 }}>
                 <div className="text-[10px] font-bold uppercase tracking-wide text-label-3">{conf || '🏆'}</div>
-                <div className={`truncate text-[11px] font-semibold uppercase tracking-wide ${i === 3 ? 'text-[#c26a00] dark:text-[#ffb340]' : 'text-label-2'}`}>{name}</div>
+                <div className={`truncate text-[11px] font-semibold uppercase tracking-wide ${i === 3 ? 'text-[#806000] dark:text-[#ffd60a]' : 'text-label-2'}`}>{name}</div>
               </div>
             ))}
             <svg className="pointer-events-none absolute inset-0" width={WIDTH} height={HEIGHT} aria-hidden>
@@ -228,7 +228,7 @@ export default function Bracket({ confs, season }) {
             </svg>
             {L.cards}
             {R.cards}
-            <div className="absolute overflow-hidden rounded-xl bg-card ring-2 ring-[#ff9f0a]" style={{ left: fx, top: midY - CH / 2, width: CW, height: CH }}>
+            <div className="absolute overflow-hidden rounded-xl bg-card ring-2 ring-[#ffcc00]" style={{ left: fx, top: midY - CH / 2, width: CW, height: CH }}>
               <Slot s={fa} lg={lg} win={fw && fa.team === fw} lose={fw && fa.team !== fw} />
               <div className="h-px bg-sep" />
               <Slot s={fb} lg={lg} win={fw && fb.team === fw} lose={fw && fb.team !== fw} />

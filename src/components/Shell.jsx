@@ -80,7 +80,7 @@ function OfflineNotice() {
   if (online) return null;
   return (
     <div role="status" className="mb-3 flex items-center justify-center gap-2 rounded-full bg-fill px-4 py-1.5 text-[12.5px] font-semibold text-label-2">
-      <span className="h-2 w-2 rounded-full bg-[#ff9f0a]" aria-hidden />
+      <span className="h-2 w-2 rounded-full bg-[#ffcc00]" aria-hidden />
       Offline · showing your last saved scores
     </div>
   );

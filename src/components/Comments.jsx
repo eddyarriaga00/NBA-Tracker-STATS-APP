@@ -31,7 +31,7 @@ export function useNickname() {
 
 // ---------- helpers ----------
 
-const PALETTE = ['#ff6a13', '#007aff', '#34c759', '#af52de', '#ff2d55', '#5ac8fa', '#ff9f0a', '#30b0c7', '#5856d6', '#a2845e'];
+const PALETTE = ['#5e5ce6', '#007aff', '#34c759', '#af52de', '#ff2d55', '#5ac8fa', '#00c7be', '#30b0c7', '#5856d6', '#a2845e'];
 function colorFor(name = '') {
   let h = 0;
   for (const ch of name.toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) >>> 0;

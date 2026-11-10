@@ -226,7 +226,7 @@ export default function Team() {
                 onClick={() => toggle(lg, t.id)}
                 aria-label={isFav(lg, t.id) ? 'Remove from favorites' : 'Add to favorites'}
                 className={`absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold transition active:scale-95 ${
-                  isFav(lg, t.id) ? 'bg-[#ff9f0a] text-white' : 'bg-fill text-label-2 hover:text-label'
+                  isFav(lg, t.id) ? 'bg-[#ffcc00] text-black' : 'bg-fill text-label-2 hover:text-label'
                 }`}
               >
                 <Icon.Star filled={isFav(lg, t.id)} className="h-4 w-4" />

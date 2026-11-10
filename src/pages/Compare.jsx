@@ -94,7 +94,7 @@ function Row({ label, a, b, lower }) {
             <div className={`h-full rounded-full ${aWins ? 'bg-accent' : 'bg-label-3'}`} style={{ width: `${(Math.abs(na) / total) * 100}%` }} />
           </div>
           <div className="flex-1 overflow-hidden rounded-full bg-fill">
-            <div className={`h-full rounded-full ${bWins ? 'bg-[#ff9f0a]' : 'bg-label-3'}`} style={{ width: `${(Math.abs(nb) / total) * 100}%` }} />
+            <div className={`h-full rounded-full ${bWins ? 'bg-[#bf5af2]' : 'bg-label-3'}`} style={{ width: `${(Math.abs(nb) / total) * 100}%` }} />
           </div>
         </div>
       )}
@@ -188,7 +188,7 @@ export default function Compare() {
         {pa && pb && !picking && (
           <div className="mt-3 flex justify-center gap-6 text-[11.5px] text-label-2">
             <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-accent" />{pa.bio.last}</span>
-            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#ff9f0a]" />{pb.bio.last}</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#bf5af2]" />{pb.bio.last}</span>
           </div>
         )}
       </Card>

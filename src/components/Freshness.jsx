@@ -12,8 +12,8 @@ export default function Freshness({ updatedAt, error, className = '' }) {
   const stale = age > 20;
   const label = age < 2 ? 'Updated just now' : age < 60 ? `Updated ${age}s ago` : `Updated ${Math.floor(age / 60)}m ago`;
   return (
-    <span className={`inline-flex items-center gap-1.5 text-[11.5px] num ${stale ? 'text-[#c26a00] dark:text-[#ffb340]' : 'text-label-3'} ${className}`} aria-live="off">
-      <span className={`h-[6px] w-[6px] rounded-full ${stale ? 'bg-[#ff9f0a]' : 'bg-win live-dot'}`} />
+    <span className={`inline-flex items-center gap-1.5 text-[11.5px] num ${stale ? 'text-[#806000] dark:text-[#ffd60a]' : 'text-label-3'} ${className}`} aria-live="off">
+      <span className={`h-[6px] w-[6px] rounded-full ${stale ? 'bg-[#ffcc00]' : 'bg-win live-dot'}`} />
       {stale && error ? 'Reconnecting… ' : ''}
       {label}
     </span>

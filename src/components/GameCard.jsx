@@ -45,7 +45,7 @@ function Injuries({ inj }) {
   const all = [...outs.map((i) => `${i.name}: ${i.status}`), ...gtd.map((i) => `${i.name}: ${i.status}`)].join('\n');
   return (
     <span title={all} className="flex max-w-[45%] shrink-0 items-center gap-1 text-[11px] font-semibold text-label-2">
-      <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${out ? 'bg-live' : 'bg-[#ff9f0a]'}`} />
+      <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${out ? 'bg-live' : 'bg-[#ffcc00]'}`} />
       <span className="truncate">{label}</span>
     </span>
   );
@@ -143,7 +143,7 @@ export function HeatBadge({ g }) {
   return (
     <span
       className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
-        heat.hot ? 'bg-[#ff9f0a]/15 text-[#c26a00] dark:text-[#ffb340]' : 'bg-fill text-label-2'
+        heat.hot ? 'bg-[#ffd60a]/20 text-[#806000] dark:text-[#ffd60a]' : 'bg-fill text-label-2'
       }`}
     >
       {heat.hot && <span aria-hidden>🔥</span>}
@@ -212,13 +212,13 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
       className="rise block transition active:scale-[0.985]"
       style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}
     >
-      <Card className={`overflow-hidden transition hover:shadow-[0_6px_24px_rgba(0,0,0,0.08)] dark:hover:bg-card-2 ${favorite ? 'ring-1 ring-[#ff9f0a]/60' : ''}`}>
+      <Card className={`overflow-hidden transition hover:shadow-[0_6px_24px_rgba(0,0,0,0.08)] dark:hover:bg-card-2 ${favorite ? 'ring-1 ring-[#ffcc00]/60' : ''}`}>
         <div className="flex items-center justify-between gap-3 px-3.5 pt-2.5 text-[12px] md:px-4 md:pt-3 md:text-[13px]">
           {live ? (
             <span className="flex min-w-0 items-center gap-2">
               <LiveBadge label={status.label} />
               {!hide && situation?.stoppage && situation.stoppage.label !== 'Halftime' && (
-                <span className={`truncate rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${situation.stoppage.kind === 'injury' ? 'bg-live/12 text-live' : 'bg-[#ff9f0a]/15 text-[#c26a00] dark:text-[#ffb340]'}`}>{situation.stoppage.icon} {situation.stoppage.label}</span>
+                <span className={`truncate rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${situation.stoppage.kind === 'injury' ? 'bg-live/12 text-live' : 'bg-[#ffd60a]/20 text-[#806000] dark:text-[#ffd60a]'}`}>{situation.stoppage.icon} {situation.stoppage.label}</span>
               )}
             </span>
           ) : (
@@ -231,7 +231,7 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
           )}
           <span className="flex min-w-0 items-center gap-2 text-label-2">
             <HeatBadge g={g} />
-            {favorite && <Icon.Star filled className="h-3.5 w-3.5 shrink-0 text-[#ff9f0a]" />}
+            {favorite && <Icon.Star filled className="h-3.5 w-3.5 shrink-0 text-[#ffcc00]" />}
             <span className="truncate">{g.broadcast}</span>
             {comments > 0 && (
               <span className="flex shrink-0 items-center gap-1 rounded-full bg-fill px-2 py-0.5 text-[11px] font-semibold text-label-2">

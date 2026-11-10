@@ -163,7 +163,7 @@ function Sheet({ lg, id, onClose }) {
                   <div className="divide-y divide-sep overflow-hidden rounded-xl bg-card-2">
                     {p.awards.map((a) => (
                       <div key={a.id} className="flex items-start gap-3 px-3 py-2">
-                        <span className="num w-8 shrink-0 pt-0.5 text-[13px] font-bold text-[#c26a00] dark:text-[#ffb340]">{a.count}</span>
+                        <span className="num w-8 shrink-0 pt-0.5 text-[13px] font-bold text-[#806000] dark:text-[#ffd60a]">{a.count}</span>
                         <div className="min-w-0">
                           <div className="text-[13.5px] font-semibold">{a.name}</div>
                           <div className="text-[11.5px] text-label-2">{a.seasons.map((y) => seasonLabel(lg, y)).join(', ')}</div>

@@ -218,7 +218,7 @@ function Streak({ u }) {
   return (
     <span
       className={`num rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
-        hot ? 'bg-[#ff9f0a]/15 text-[#c26a00] dark:text-[#ffb340]' : 'bg-fill text-label-2'
+        hot ? 'bg-[#ffd60a]/20 text-[#806000] dark:text-[#ffd60a]' : 'bg-fill text-label-2'
       }`}
     >
       {hot ? '🔥 ' : ''}

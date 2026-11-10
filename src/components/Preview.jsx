@@ -148,7 +148,7 @@ function Series({ preview }) {
 }
 
 const statusColor = (s) =>
-  /out|injured reserve|suspend/i.test(s) ? 'bg-live/12 text-live' : /doubt|question/i.test(s) ? 'bg-[#ff9f0a]/15 text-[#c26a00] dark:text-[#ffb340]' : 'bg-fill text-label-2';
+  /out|injured reserve|suspend/i.test(s) ? 'bg-live/12 text-live' : /doubt|question/i.test(s) ? 'bg-[#ffd60a]/20 text-[#806000] dark:text-[#ffd60a]' : 'bg-fill text-label-2';
 
 function Injuries({ preview, home, away }) {
   const lg = useLeague();
