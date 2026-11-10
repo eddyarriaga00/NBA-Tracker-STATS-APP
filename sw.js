@@ -133,6 +133,9 @@ self.addEventListener('push', (event) => {
         icon: 'icon-192.png',
         badge: 'icon-192.png',
         tag: data.tag || undefined, // replaces an older alert for the same game
+        // Live score updates replace themselves quietly where the phone allows it.
+        silent: data.quiet === true,
+        renotify: false,
         data: { url: data.url || './' },
       })
       .then(updateBadge)
