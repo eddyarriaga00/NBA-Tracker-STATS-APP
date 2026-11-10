@@ -1,6 +1,7 @@
 // How often pages refresh. Tune live speed here.
-// ESPN's own data updates every ~4-7 seconds, so faster than this gains nothing.
-export const LIVE_MS = 5_000;
+// ESPN refreshes each feed about every 10 seconds; checking every 3 catches a
+// new score within a few seconds of ESPN publishing it. (Measured Nov 2026.)
+export const LIVE_MS = 3_000;
 const SOON_MS = 15_000; // a game starts within 15 minutes
 const LATER_MS = 60_000; // games later today
 

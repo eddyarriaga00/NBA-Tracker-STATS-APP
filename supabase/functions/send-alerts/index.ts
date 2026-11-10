@@ -334,7 +334,9 @@ Deno.serve(async (req) => {
       await Promise.allSettled(followers[g.key].map(async (f) => {
         const s = subscriptions.find((x) => x.endpoint === f.endpoint);
         const waited = f.sent_at ? now - Date.parse(f.sent_at) : Infinity;
-        const fresh = f.sig !== card.sig && (waited >= f.every * 1000 || (card.urgent && waited >= 12_000));
+        // Play resuming after a timeout isn't worth a buzz by itself.
+        const resumed = !card.stopped && f.sig?.startsWith(`${card.sig}|`);
+        const fresh = f.sig !== card.sig && !resumed && (waited >= f.every * 1000 || (card.urgent && waited >= 12_000));
         if (s && fresh) {
           try {
             await webpush.sendNotification(

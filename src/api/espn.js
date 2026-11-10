@@ -1,3 +1,4 @@
+import { lastPlay, stoppage } from '../../supabase/functions/send-alerts/stoppage.js';
 import { buildQuarterStats } from '../lib/quarterStats';
 // Data layer for ESPN's public NBA and NFL feeds (no API key, CORS-enabled).
 // Every function returns plain, normalized objects so components never
@@ -183,6 +184,7 @@ function normSituation(s) {
     possession: s.possession ?? null,
     redZone: !!s.isRedZone,
     lastPlay: s.lastPlay?.text?.trim() ?? '',
+    stoppage: stoppage(s.lastPlay), // timeout, injury, review or break, if play is stopped
     // Field position, for the live field graphic.
     spot: s.possessionText ?? '', // e.g. "TB 20" or "50"
     yardLine: typeof s.yardLine === 'number' ? s.yardLine : null, // yards from the offense's own goal
@@ -227,8 +229,44 @@ const sortGames = (games) => {
 };
 
 /** NBA: games on a calendar day (YYYYMMDD). */
+// ---------- live speed ----------
+// ESPN refreshes each feed about every 10 seconds, and its two hosts (and the
+// scoreboard vs. the game feed) refresh at different moments. Live refreshes
+// read two of them and keep whichever is further along, which cuts the wait
+// for a new score roughly in half.
+
+/** How far along a game is, as a comparable number list: state, period, clock, points. */
+function progress(status, competitors) {
+  const st = status?.type?.state;
+  const total = (competitors ?? []).reduce((n, c) => n + (Number(typeof c.score === 'object' ? c.score?.value : c.score) || 0), 0);
+  // "5:08" or "27.1" left in the period; the two feeds don't both carry a numeric clock.
+  const c = String(status?.displayClock ?? '');
+  const left = c.includes(':') ? c.split(':').reduce((m, x) => m * 60 + (Number(x) || 0), 0) : c ? Number(c) || 0 : 1e9;
+  return [st === 'post' ? 2 : st === 'in' ? 1 : 0, status?.period ?? 0, -left, total];
+}
+const ahead = (a, b) => {
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] > b[i];
+  return false;
+};
+const eventProgress = (e) => progress(e.status ?? e.competitions?.[0]?.status, e.competitions?.[0]?.competitors);
+
+/** A scoreboard; on live refreshes, the freshest of ESPN's two hosts game by game. */
+async function getScoreboard(url, opts) {
+  if (!opts?.fresh) return get(url, opts);
+  const [a, b] = await Promise.allSettled([get(url, opts), get(url.replace('site.api.espn.com', 'site.web.api.espn.com'), opts)]);
+  if (a.status !== 'fulfilled') {
+    if (b.status === 'fulfilled') return b.value;
+    throw a.reason;
+  }
+  if (b.status !== 'fulfilled') return a.value;
+  const other = new Map((b.value.events ?? []).map((e) => [e.id, e]));
+  return { ...a.value, events: (a.value.events ?? []).map((e) => (other.has(e.id) && ahead(eventProgress(other.get(e.id)), eventProgress(e)) ? other.get(e.id) : e)) };
+}
+
+const gameDay = new Map(); // game id -> its scoreboard day, learned on first load
+
 export async function getNbaScoreboard(dateKey, opts) {
-  const data = await get(`${site('nba')}/scoreboard?dates=${dateKey}`, opts);
+  const data = await getScoreboard(`${site('nba')}/scoreboard?dates=${dateKey}`, opts);
   return sortGames((data.events ?? []).map((e) => normGame('nba', e)));
 }
 
@@ -238,7 +276,7 @@ export async function getNbaScoreboard(dateKey, opts) {
  */
 export async function getNflScoreboard(sel, opts) {
   const q = sel ? `?seasontype=${sel.type}&week=${sel.week}&dates=${sel.year}` : '';
-  const data = await get(`${site('nfl')}/scoreboard${q}`, opts);
+  const data = await getScoreboard(`${site('nfl')}/scoreboard${q}`, opts);
   const calendar = (data.leagues?.[0]?.calendar ?? [])
     .filter((c) => c.entries?.length && c.value !== '4')
     .map((c) => ({
@@ -398,8 +436,24 @@ function normDrive(d) {
 }
 
 export async function getGame(lg, id, opts) {
-  const s = await get(`${site(lg)}/summary?event=${id}`, opts);
+  // Live refreshes also read the scoreboard: it often has the new score first.
+  const day = opts?.fresh ? gameDay.get(`${lg}:${id}`) : null;
+  const [s, board] = await Promise.all([
+    get(`${site(lg)}/summary?event=${id}`, opts),
+    day ? get(`${site(lg)}/scoreboard?dates=${day}`, opts).catch(() => null) : null,
+  ]);
   const comp = s.header?.competitions?.[0] ?? {};
+  if (comp.date) gameDay.set(`${lg}:${id}`, new Date(comp.date).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replaceAll('-', ''));
+  const live = board?.events?.find((e) => e.id === String(id));
+  const liveComp = live?.competitions?.[0];
+  if (liveComp && ahead(eventProgress(live), progress(comp.status, comp.competitors))) {
+    comp.status = live.status ?? liveComp.status;
+    for (const c of comp.competitors ?? []) {
+      const x = liveComp.competitors?.find((y) => y.id === c.id);
+      if (x) { c.score = x.score; if (x.winner != null) c.winner = x.winner; }
+    }
+    if (liveComp.situation) comp.situation = liveComp.situation;
+  }
   const comps = (comp.competitors ?? []).map(normCompetitor);
   const home = comps.find((c) => c.homeAway === 'home') ?? comps[0];
   const away = comps.find((c) => c.homeAway === 'away') ?? comps[1];
@@ -539,6 +593,8 @@ export async function getGame(lg, id, opts) {
     currentDriveId: s.drives?.current?.id ?? null,
     scoringPlays,
     situation,
+    // Play stopped right now? The game feed's latest play says why.
+    stoppage: comp.status?.type?.state === 'in' ? stoppage(lastPlay(s)) ?? situation?.stoppage ?? null : null,
     venue: info.venue?.fullName ?? '',
     city: [info.venue?.address?.city, info.venue?.address?.state].filter(Boolean).join(', '),
     attendance: info.attendance,

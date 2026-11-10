@@ -1,6 +1,7 @@
 // "Follow live": the text of the one score notification that keeps updating.
 // Plain JavaScript so the server (Deno) and local tests (Node) share it.
 import { players } from './big.js';
+import { lastPlay, stoppage } from './stoppage.js';
 
 const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 const last = (name) => name.split(' ').slice(1).join(' ') || name; // "L. Doncic" -> "Doncic"
@@ -76,12 +77,18 @@ export function liveCard(lg, g, summary) {
   const when = final ? 'Final' : g.half ? 'Halftime' : g.label;
   const lines = summary ? (lg === 'nba' ? nbaLines(g, summary) : nflLines(g, summary)) : [];
   if (final) lines.shift(); // the last play isn't news once it's over
+  // Play stopped (timeout, injury, review, break)? Say so first.
+  const paused = lastPlay(summary);
+  const stop = g.state === 'in' && !g.half ? stoppage(paused) : null;
+  if (stop && stop.label !== 'Halftime') lines.unshift(`${stop.icon} ${stop.label}`);
   const gap = Math.abs(g.home.score - g.away.score);
   const late = g.period >= 4 && g.state === 'in';
   return {
     title: `${score} · ${when}`,
     body: lines.join('\n'),
-    sig: `${g.away.score}-${g.home.score}|${final ? 'F' : g.half ? 'H' : g.period}`,
-    urgent: final || g.half || (late && gap <= (lg === 'nfl' ? 8 : 6)),
+    // A new stoppage is news too; play resuming is not (the next score will say so).
+    sig: `${g.away.score}-${g.home.score}|${final ? 'F' : g.half ? 'H' : g.period}${stop ? `|${paused?.id ?? stop.label}` : ''}`,
+    stopped: !!stop,
+    urgent: final || g.half || stop?.kind === 'injury' || (late && gap <= (lg === 'nfl' ? 8 : 6)),
   };
 }

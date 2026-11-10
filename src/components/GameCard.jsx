@@ -215,7 +215,12 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
       <Card className={`overflow-hidden transition hover:shadow-[0_6px_24px_rgba(0,0,0,0.08)] dark:hover:bg-card-2 ${favorite ? 'ring-1 ring-[#ff9f0a]/60' : ''}`}>
         <div className="flex items-center justify-between gap-3 px-3.5 pt-2.5 text-[12px] md:px-4 md:pt-3 md:text-[13px]">
           {live ? (
-            <LiveBadge label={status.label} />
+            <span className="flex min-w-0 items-center gap-2">
+              <LiveBadge label={status.label} />
+              {!hide && situation?.stoppage && situation.stoppage.label !== 'Halftime' && (
+                <span className={`truncate rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${situation.stoppage.kind === 'injury' ? 'bg-live/12 text-live' : 'bg-[#ff9f0a]/15 text-[#c26a00] dark:text-[#ffb340]'}`}>{situation.stoppage.icon} {situation.stoppage.label}</span>
+              )}
+            </span>
           ) : (
             <span className="flex shrink-0 items-center gap-2">
               <span className={`shrink-0 font-semibold ${final ? 'text-label' : 'text-label-2'}`}>
