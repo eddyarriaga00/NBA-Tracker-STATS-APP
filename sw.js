@@ -148,11 +148,18 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     (async () => {
       await updateBadge();
+      // Leave a note for the app as well: iPhone often just brings the app to
+      // the front (or opens its home screen) without going to the link.
+      try {
+        const cache = await caches.open(APP);
+        await cache.put(new URL('__open', scope()).href, new Response(JSON.stringify({ url: target, at: Date.now() })));
+      } catch { /* the message below still works */ }
       const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       for (const w of wins) {
         if (w.url.startsWith(scope())) {
-          await w.focus();
-          return w.navigate(target);
+          w.postMessage({ type: 'open', url: target }); // the app goes to the game itself
+          await w.focus().catch(() => {});
+          return;
         }
       }
       return self.clients.openWindow(target);
