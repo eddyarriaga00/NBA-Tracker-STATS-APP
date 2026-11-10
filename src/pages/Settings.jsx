@@ -8,7 +8,7 @@ import { accountsEnabled, deleteAccount, getProfileStats, openAccount, sendTestA
 import { useFavorites } from '../lib/favorites';
 import { SORTS, useGameSort } from '../lib/gameSort';
 import { isIOS, isStandalone, pushConfigured, pushSupported, usePushStatus } from '../lib/push';
-import { useSetting } from '../lib/settings';
+import { useAlertPrefs, useSetting } from '../lib/settings';
 import { useTheme } from '../lib/theme';
 import { useData } from '../lib/useData';
 
@@ -205,6 +205,8 @@ function Alerts() {
   const [final, setFinal] = useSetting('alertsFinalFor');
   const [close, setClose] = useSetting('alertsClose');
   const [big, setBig] = useSetting('alertsBig');
+  const [, setChat] = useSetting('alertsChat');
+  const { chat } = useAlertPrefs();
   const { favs } = useFavorites();
   const status = usePushStatus();
   const [test, setTest] = useState('');
@@ -250,6 +252,7 @@ function Alerts() {
         sub="Any player, any game: 15+ in a quarter, 30/40/50-point nights, triple-doubles, 8+ threes, 400-yard passers, 150-yard receivers and more"
         right={<Switch on={big} onChange={enable(setBig)} label="Big performance alerts" />}
       />
+      <Row label="Chat messages" sub="When someone posts in the group chat" right={<Switch on={!!chat} onChange={enable(setChat)} label="Chat message alerts" />} />
       {status?.reason === 'on' && <Row label="Send a test alert" sub={test || 'Check alerts reach this device'} onClick={runTest} />}
     </Group>
   );

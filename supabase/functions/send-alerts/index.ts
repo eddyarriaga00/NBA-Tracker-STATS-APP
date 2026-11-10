@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
   if (req.headers.get('x-cron-secret') !== Deno.env.get('CRON_SECRET')) return new Response('forbidden', { status: 403 });
   const test = new URL(req.url).searchParams.get('test'); // ?test=1 sends a test alert to every device
 
-  const { data: subs } = await db.from('push_subscriptions').select('endpoint,p256dh,auth,followed,close_games,spoiler_free,scope,starts,halftime,finals,big,start_for,half_for,final_for');
+  const { data: subs } = await db.from('push_subscriptions').select('endpoint,p256dh,auth,user_id,chat,followed,close_games,spoiler_free,scope,starts,halftime,finals,big,start_for,half_for,final_for');
   const subscriptions = subs ?? [];
 
   const send = async (payload: Record<string, string>, pick: (s: any) => boolean, spoilerBody?: string, spoilerTitle?: string) => {
@@ -220,11 +220,41 @@ Deno.serve(async (req) => {
     return Response.json({ demo: true, live: live.map((g) => g.key), sent });
   }
 
+  // New messages in the group chat go to everyone who wants them (not the sender).
+  const chatAlerts = async () => {
+    const { data: cur } = await db.from('alert_state').select('value').eq('key', 'chat_last_id').maybeSingle();
+    if (!cur) {
+      // First run: start from now, don't announce old messages.
+      const { data: top } = await db.from('comments').select('id').eq('room', 'general').order('id', { ascending: false }).limit(1);
+      await db.from('alert_state').upsert({ key: 'chat_last_id', value: String(top?.[0]?.id ?? 0) });
+      return 0;
+    }
+    const { data: fresh } = await db.from('comments').select('id,user_id,author,body').eq('room', 'general').gt('id', Number(cur.value)).order('id').limit(30);
+    if (!fresh?.length) return 0;
+    // Move the marker first, so a slow send can never announce a message twice.
+    await db.from('alert_state').upsert({ key: 'chat_last_id', value: String(fresh[fresh.length - 1].id), updated_at: new Date().toISOString() });
+    // Several messages from one person in a row become one alert.
+    const groups: { user_id: string; author: string; lines: string[] }[] = [];
+    for (const m of fresh) {
+      const g = groups[groups.length - 1];
+      if (g && g.user_id === m.user_id) g.lines.push(m.body);
+      else groups.push({ user_id: m.user_id, author: m.author, lines: [m.body] });
+    }
+    let n = 0;
+    for (const g of groups) {
+      const body = g.lines.slice(-4).map((l) => (l.length > 150 ? `${l.slice(0, 149)}…` : l)).join('\n');
+      n += await send({ title: `${g.author} in Chat`, body, url: `${SITE}#/chat`, tag: `chat:${fresh[fresh.length - 1].id}:${g.user_id.slice(0, 8)}` }, (s) => s.chat !== false && s.user_id !== g.user_id);
+    }
+    await db.from('alert_log').insert({ game_key: 'chat', kind: 'chat', title: `${fresh.length} message(s)`, devices: n });
+    return n;
+  };
+
   // One look at ESPN. `n` is which look this is within the minute (0-3).
   const pass = async (n: number) => {
+  const chatted = await chatAlerts().catch((e) => { console.error('chat', e?.message ?? e); return 0; });
   const games = await loadGames();
   const graded = n === 0 ? await gradePicks(games).catch((e) => `error: ${e?.message ?? e}`) : 0;
-  if (!games.length) return { games: 0, graded, errors: [...loadErrors] };
+  if (!games.length) return { games: 0, graded, chat: chatted, errors: [...loadErrors] };
   const { data: rows } = await db.from('alert_game_state').select('game_key,state,close_sent,half_sent,start_sent,big_sent').in('game_key', games.map((g) => g.key));
   const prev = Object.fromEntries((rows ?? []).map((r) => [r.game_key, r]));
 
@@ -240,7 +270,7 @@ Deno.serve(async (req) => {
   const updates: any[] = [];
   const log: any[] = [];
   let events = 0;
-  let sent = 0;
+  let sent = chatted;
   const anyBig = subscriptions.some((s) => s.big);
   const alert = async (g: Game, kind: string, ...args: Parameters<typeof send>) => {
     events++;

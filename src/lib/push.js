@@ -138,6 +138,7 @@ export async function syncPush(prefs) {
     p_start_for: prefs.start,
     p_half_for: prefs.half,
     p_final_for: prefs.final,
+    p_chat: !!prefs.chat,
   });
   if (error) {
     setActive(false);

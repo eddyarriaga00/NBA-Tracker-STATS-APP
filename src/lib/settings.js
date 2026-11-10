@@ -43,7 +43,10 @@ export function alertPrefs() {
     big: read('alertsBig'), // any game
   };
   const on = (v) => v === 'teams' || v === 'all';
-  return { ...p, any: on(p.start) || on(p.half) || on(p.final) || p.close || p.big };
+  const games = on(p.start) || on(p.half) || on(p.final) || p.close || p.big;
+  // Chat alerts are on for anyone who has alerts on, until they switch them off.
+  const chat = read('alertsChat') ?? games;
+  return { ...p, chat, any: games || chat };
 }
 
 /** Live version of alertPrefs() for components. */
