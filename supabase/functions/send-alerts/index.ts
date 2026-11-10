@@ -5,6 +5,7 @@
 import webpush from 'npm:web-push@3.6.7';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { bigMoments, worthSending } from './big.js';
+import { liveCard } from './live.js';
 
 const SITE = 'https://eddyarriaga00.github.io/NBA-Tracker-STATS-APP/';
 const ESPN = 'https://site.api.espn.com/apis/site/v2/sports';
@@ -247,11 +248,17 @@ Deno.serve(async (req) => {
     sent += n;
     log.push({ game_key: g.key, kind, title: args[0].title, devices: n });
   };
+  // Games someone is following live get a box score on every look.
+  const { data: lf } = await db.from('live_follows').select('endpoint,game_key,every,sig,sent_at').in('game_key', games.map((g) => g.key));
+  const followers: Record<string, any[]> = {};
+  for (const f of lf ?? []) (followers[f.game_key] ??= []).push(f);
   // Box scores for big performances: every other look, all live games at once.
   const summaries = new Map<string, any>();
-  if (anyBig) {
+  {
     // A game that just ended is always checked, to catch the last minute's stats.
-    const live = games.filter((g) => (g.state === 'in' && n % 2 === 0) || (prev[g.key]?.state === 'in' && g.state === 'post'));
+    const live = games.filter((g) =>
+      g.state !== 'pre' && followers[g.key] ? true
+      : anyBig && ((g.state === 'in' && n % 2 === 0) || (prev[g.key]?.state === 'in' && g.state === 'post')));
     await Promise.all(live.map(async (g) => summaries.set(g.key, await json(`${ESPN}/${PATH[g.league]}/summary?event=${g.id}`).catch(() => null))));
   }
   const now = Date.now();
@@ -297,7 +304,7 @@ Deno.serve(async (req) => {
     // Big performances (any game, any player): check the live box score.
     let bigSent: string[] | null = before?.big_sent ?? null;
     let bigChanged = false;
-    {
+    if (anyBig && (n % 2 === 0 || (before?.state === 'in' && g.state === 'post'))) {
       const summary = summaries.get(g.key); // includes games that just ended, for the last minute's stats
       if (summary) {
         const moments = bigMoments(g.league, summary);
@@ -320,6 +327,31 @@ Deno.serve(async (req) => {
         }
       }
     }
+    // Follow live: one notification per game that keeps updating in place.
+    if (followers[g.key] && g.state !== 'pre') {
+      const card = liveCard(g.league, g, summaries.get(g.key));
+      const done = g.state === 'post';
+      await Promise.allSettled(followers[g.key].map(async (f) => {
+        const s = subscriptions.find((x) => x.endpoint === f.endpoint);
+        const waited = f.sent_at ? now - Date.parse(f.sent_at) : Infinity;
+        const fresh = f.sig !== card.sig && (waited >= f.every * 1000 || (card.urgent && waited >= 12_000));
+        if (s && fresh) {
+          try {
+            await webpush.sendNotification(
+              { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+              JSON.stringify({ title: card.title, body: card.body, url, tag: `${g.key}:live`, quiet: true }),
+              { TTL: 90, urgency: 'high' } // short-lived: a late score is worse than none (no topic: Apple rejects it)
+            );
+            sent++;
+            if (!done) await db.from('live_follows').update({ sig: card.sig, sent_at: new Date().toISOString() }).eq('endpoint', f.endpoint).eq('game_key', g.key);
+          } catch (e: any) {
+            if (e?.statusCode === 404 || e?.statusCode === 410) await db.from('push_subscriptions').delete().eq('endpoint', s.endpoint);
+            else log.push({ game_key: g.key, kind: 'live-error', title: `${e?.statusCode ?? ''} ${e?.body ?? e?.message ?? e}`.slice(0, 200), devices: 0 });
+          }
+        } else if (!s) log.push({ game_key: g.key, kind: 'live-error', title: 'no device for this follow', devices: 0 });
+      }));
+      if (done) await db.from('live_follows').delete().eq('game_key', g.key); // the final score was the last update
+    }
     const heat = hot(g);
     if (heat && !closeSent) {
       closeSent = true;
@@ -335,6 +367,7 @@ Deno.serve(async (req) => {
   if (n === 0) {
     await db.from('alert_game_state').delete().lt('updated_at', new Date(Date.now() - 4 * 86400_000).toISOString());
     await db.from('alert_log').delete().lt('sent_at', new Date(Date.now() - 14 * 86400_000).toISOString());
+    await db.from('live_follows').delete().lt('created_at', new Date(Date.now() - 3 * 86400_000).toISOString());
   }
   return { games: games.length, devices: subscriptions.length, events, sent, graded, errors: loadErrors.length ? [...loadErrors] : undefined };
   };

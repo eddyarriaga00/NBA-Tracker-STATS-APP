@@ -37,10 +37,11 @@ const num = (v) => {
 const passed = (milestones, value) => milestones.filter((m) => value >= m);
 
 /** Every player's stats as { id, name, team, stats: { key: number } }. */
-function players(summary) {
+export function players(summary) {
   const out = new Map();
   for (const team of summary.boxscore?.players ?? []) {
     const abbr = team.team?.abbreviation ?? '';
+    const teamId = String(team.team?.id ?? '');
     for (const cat of team.statistics ?? []) {
       // Same names mean different things by category: a QB's "sacks" are sacks
       // taken and his "interceptions" are thrown; a defender's are made.
@@ -52,7 +53,7 @@ function players(summary) {
       for (const a of cat.athletes ?? []) {
         const id = a.athlete?.id;
         if (!id) continue;
-        const p = out.get(id) ?? { id, name: a.athlete.displayName, short: a.athlete.shortName ?? a.athlete.displayName, team: abbr, stats: {} };
+        const p = out.get(id) ?? { id, name: a.athlete.displayName, short: a.athlete.shortName ?? a.athlete.displayName, team: abbr, teamId, stats: {} };
         keys.forEach((k, i) => {
           // "3-7" style cells: the first number is what was made.
           const base = k.split(/[-/]/)[0];

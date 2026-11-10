@@ -21,6 +21,7 @@ import { useData } from '../lib/useData';
 import { gameDelay } from '../lib/livePolling';
 import Freshness from '../components/Freshness';
 import { formatLine, sumLines } from '../lib/quarterStats';
+import { liveFollowAvailable, useLiveFollow } from '../lib/liveFollow';
 
 const periodName = (n) => (n <= 4 ? `Q${n}` : n === 5 ? 'OT' : `${n - 4}OT`);
 const titleCase = (s) => s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
@@ -610,10 +611,33 @@ function Actions({ g }) {
       'NBA Tracker'
     );
   };
+  const [every, setEvery] = useLiveFollow(g.league, g.id);
+  const canFollow = liveFollowAvailable() && g.status.state !== 'post' && !g.status.postponed && every !== undefined;
+  const follow = async (next) => {
+    try {
+      await setEvery(next);
+      if (next && !every) toast({ title: 'Following live', body: g.status.state === 'pre' ? 'Score updates start at tip-off, in one notification that keeps updating.' : 'The score stays in one notification that keeps updating.', ms: 4000 });
+    } catch (e) {
+      toast(e.message === 'no-alerts'
+        ? { title: 'Turn on alerts first', body: 'Tap here to open Settings, then switch on any alert.', href: '/settings', ms: 6000 }
+        : { title: 'Couldn’t follow this game', body: e.message, ms: 5000 });
+    }
+  };
   return (
+    <>
     <div className="mt-3 flex flex-wrap items-center gap-2">
       <HeatBadge g={g} />
       <span className="flex-1" />
+      {canFollow && (
+        <button
+          onClick={() => follow(every ? null : 20)}
+          aria-pressed={!!every}
+          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold active:scale-95 ${every ? 'bg-accent text-white' : 'bg-fill text-accent'}`}
+        >
+          <span className={`h-2 w-2 rounded-full ${every ? 'bg-white' : 'bg-live'}`} />
+          {every ? 'Following live' : 'Follow live'}
+        </button>
+      )}
       {g.status.state === 'pre' && g.timeValid && !g.status.postponed && (
         <button onClick={addToCalendar} className="flex items-center gap-1.5 rounded-full bg-fill px-3 py-1.5 text-[13px] font-semibold text-accent active:scale-95">
           <Icon.CalendarPlus className="h-4 w-4" /> Add to Calendar
@@ -623,6 +647,18 @@ function Actions({ g }) {
         <Icon.Share className="h-4 w-4" /> Share
       </button>
     </div>
+    {canFollow && every && (
+      <div className="mt-2 flex items-center justify-end gap-2 text-[12.5px] text-label-2">
+        Update
+        <Segmented
+          className="w-[250px]"
+          options={[{ value: 20, label: 'Every score' }, { value: 60, label: 'Each minute' }, { value: 180, label: 'Every 3 min' }]}
+          value={every}
+          onChange={follow}
+        />
+      </div>
+    )}
+    </>
   );
 }
 
