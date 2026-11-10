@@ -26,7 +26,10 @@ if [ -z "$TOKEN" ]; then echo "Not logged in to Supabase. Run: npx supabase logi
 
 STATUS=$(CLIENT_ID="$CLIENT_ID" CLIENT_SECRET="$CLIENT_SECRET" python3 -c '
 import json, os
-print(json.dumps({"external_github_enabled": True, "external_github_client_id": os.environ["CLIENT_ID"].strip(), "external_github_secret": os.environ["CLIENT_SECRET"].strip()}))
+import re
+# Keep only visible characters: a stray Escape or paste marker would break the sign-in.
+clean = lambda v: re.sub(r"\x1b\[[0-9;~]*|[^\x21-\x7e]", "", v)
+print(json.dumps({"external_github_enabled": True, "external_github_client_id": clean(os.environ["CLIENT_ID"]), "external_github_secret": clean(os.environ["CLIENT_SECRET"])}))
 ' | curl -s -o /dev/null -w '%{http_code}' -X PATCH "https://api.supabase.com/v1/projects/$REF/config/auth" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" --data @-)
 unset CLIENT_SECRET TOKEN
