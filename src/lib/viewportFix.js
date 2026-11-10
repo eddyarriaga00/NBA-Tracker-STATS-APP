@@ -23,4 +23,27 @@ export function startViewportFix() {
   window.addEventListener('pageshow', soon);
   window.addEventListener('orientationchange', soon);
   window.visualViewport?.addEventListener('resize', soon);
+
+  // The nudge alone isn't enough on newer iOS: after the keyboard closes, the
+  // visible screen can stay "panned" down the page by the keyboard's height,
+  // which leaves the top bar off-screen and the tabs floating mid-screen.
+  // iOS does report that shift, so move the pinned bars by exactly that much.
+  const vv = window.visualViewport;
+  if (!vv) return;
+  let frame = 0;
+  const measure = () => {
+    frame = 0;
+    const typing = /^(input|textarea)$/i.test(document.activeElement?.tagName ?? '');
+    // Not while typing (the keyboard really is there) or pinch-zoomed.
+    const shift = !typing && Math.abs(vv.scale - 1) < 0.01 ? Math.max(0, Math.round(vv.offsetTop)) : 0;
+    document.documentElement.style.setProperty('--vv-shift', `${shift}px`);
+  };
+  const queue = () => { if (!frame) frame = setTimeout(measure, 16); }; // a timer, so it also runs when frames are paused
+  vv.addEventListener('resize', queue);
+  vv.addEventListener('scroll', queue);
+  window.addEventListener('scroll', queue, { passive: true });
+  document.addEventListener('focusin', queue);
+  document.addEventListener('focusout', () => [0, 150, 400, 900].forEach((ms) => setTimeout(queue, ms)));
+  document.addEventListener('visibilitychange', queue);
+  measure();
 }
