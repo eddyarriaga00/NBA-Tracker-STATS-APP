@@ -17,13 +17,15 @@ export const openAccount = () => window.dispatchEvent(new Event('open-account'))
 
 function describe(user) {
   if (!user) return null;
-  const google = user.identities?.some((i) => i.provider === 'google') || user.app_metadata?.provider === 'google';
+  const has = (p) => user.identities?.some((i) => i.provider === p) || user.app_metadata?.provider === p;
+  const google = has('google');
+  const github = has('github');
   return {
     id: user.id,
     guest: !!user.is_anonymous,
     email: user.email || '',
-    provider: google ? 'Google' : user.email ? 'Email' : 'Guest',
-    nickname: user.user_metadata?.nickname || user.user_metadata?.full_name?.split(' ')[0] || '',
+    provider: google ? 'Google' : github ? 'GitHub' : user.email ? 'Email' : 'Guest',
+    nickname: user.user_metadata?.nickname || user.user_metadata?.full_name?.split(' ')[0] || user.user_metadata?.user_name || '',
     // A guest who links Google keeps their old profile, so the photo lives on the Google identity.
     avatar:
       user.user_metadata?.avatar_url ||
@@ -81,33 +83,41 @@ export function useAccount(enabled = true) {
   return acct;
 }
 
-/** Is Google sign-in switched on in Supabase? */
-export async function googleEnabled() {
+/** Which sign-in buttons are switched on in Supabase: { google, github }. */
+export async function enabledProviders() {
   const url = import.meta.env.VITE_SUPABASE_URL;
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
   try {
     const r = await fetch(`${url}/auth/v1/settings`, { headers: { apikey: key } });
-    return !!(await r.json()).external?.google;
+    const ext = (await r.json()).external ?? {};
+    return { google: !!ext.google, github: !!ext.github };
   } catch {
-    return false;
+    return { google: false, github: false };
   }
 }
+export const googleEnabled = async () => (await enabledProviders()).google;
+
+const PROVIDER_KEY = 'authProvider';
 
 const rememberWhere = () => {
   try { sessionStorage.setItem(RETURN_KEY, location.hash || '#/'); } catch { /* ignore */ }
 };
 
 /** Google: a guest's account is upgraded (keeps history); otherwise a normal sign-in. */
-export async function continueWithGoogle() {
+export const continueWithGoogle = () => continueWith('google');
+
+/** Google or GitHub: a guest's account is upgraded (keeps history); otherwise a normal sign-in. */
+export async function continueWith(provider) {
   const sb = await getClient();
   rememberWhere();
+  try { sessionStorage.setItem(PROVIDER_KEY, provider); } catch { /* ignore */ }
   const { data } = await sb.auth.getSession();
-  const opts = { redirectTo: base(), queryParams: { prompt: 'select_account' } };
+  const opts = { redirectTo: base(), ...(provider === 'google' ? { queryParams: { prompt: 'select_account' } } : {}) };
   if (data.session?.user?.is_anonymous) {
-    const { error } = await sb.auth.linkIdentity({ provider: 'google', options: opts });
+    const { error } = await sb.auth.linkIdentity({ provider, options: opts });
     if (!error) return;
   }
-  const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: opts });
+  const { error } = await sb.auth.signInWithOAuth({ provider, options: opts });
   if (error) throw error;
 }
 
@@ -171,7 +181,9 @@ export async function handleAuthRedirect() {
   }
   history.replaceState(null, '', base() + back);
   if (errCode === 'identity_already_exists' || /already linked|already exists/i.test(errText || '')) {
-    await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: base() } });
+    let provider = 'google';
+    try { provider = sessionStorage.getItem(PROVIDER_KEY) || 'google'; } catch { /* ignore */ }
+    await sb.auth.signInWithOAuth({ provider, options: { redirectTo: base() } });
     return;
   }
   if (errCode) {
