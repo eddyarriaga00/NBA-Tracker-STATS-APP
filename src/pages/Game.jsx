@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { getGame, teamHref } from '../api/espn';
+import { getGame, getNflQuarters, teamHref } from '../api/espn';
 import Comments, { useCommentCounts } from '../components/Comments';
 import Preview from '../components/Preview';
 import Highlights from '../components/Highlights';
@@ -23,6 +23,7 @@ import { useData } from '../lib/useData';
 import { gameDelay } from '../lib/livePolling';
 import Freshness from '../components/Freshness';
 import { formatLine, sumLines } from '../lib/quarterStats';
+import { nflQuarterGroups } from '../lib/nflQuarterStats';
 import { liveFollowAvailable, useLiveFollow } from '../lib/liveFollow';
 
 const periodName = (n) => (n <= 4 ? `Q${n}` : n === 5 ? 'OT' : `${n - 4}OT`);
@@ -405,26 +406,99 @@ function BoxScore({ g, side }) {
   const picker = null;
   if (!box) return <>{picker}<div className="py-10 text-center text-label-2">Box score not available yet.</div></>;
 
-  if (lg === 'nfl') {
-    return (
-      <div>
-        {picker}
-        <div className="space-y-3">
-          {box.groups.map((gr) => (
-            <Card key={gr.key} className="overflow-hidden">
-              <div className="px-4 pb-1 pt-3 text-[15px] font-bold">{gr.title}</div>
-              <StatTable labels={gr.labels} groups={[{ list: gr.athletes }]} totals={gr.totals} lg={lg} highlight={gr.labels.indexOf('YDS')} />
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  if (lg === 'nfl') return <NflBox g={g} box={box} lg={lg} />;
 
   return (
     <div>
       {picker}
       <NbaBox g={g} box={box} lg={lg} team={team} />
+    </div>
+  );
+}
+
+function PeriodChips({ periods, sel, onPick, live }) {
+  return (
+    <div className="no-scrollbar -mx-3 mb-3 flex items-center gap-1.5 overflow-x-auto px-3 md:mx-0 md:px-0">
+      {['game', ...periods].map((p) => (
+        <button
+          key={p}
+          onClick={() => onPick(p)}
+          className={`shrink-0 rounded-full px-3.5 py-1 text-[13px] font-semibold transition active:scale-95 ${
+            sel === p ? 'bg-label text-bg' : 'bg-card text-label-2 hover:text-label'
+          }`}
+        >
+          {p === 'game' ? 'Full Game' : periodName(p)}
+          {p === live && <span className="live-dot ml-1.5 inline-block h-[6px] w-[6px] rounded-full bg-live align-middle" />}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function NflBox({ g, box, lg }) {
+  const [period, setPeriod] = useState('game');
+  const [q, setQ] = useState(null);
+  const [failed, setFailed] = useState(false);
+  const live = g.status.state === 'in';
+  const started = g.status.state !== 'pre';
+  const count = started ? Math.max(live ? 1 : 4, g.status.period || 0, ...g.drives.map((d) => d.period || 0)) : 0;
+  const periods = Array.from({ length: count }, (_, i) => i + 1);
+  const sel = period !== 'game' && periods.includes(period) ? period : 'game';
+  // Reload as plays come in during a live game.
+  const playCount = g.drives.reduce((n, d) => n + d.plays.length, 0);
+  const wanted = sel !== 'game';
+
+  useEffect(() => {
+    if (!wanted) return;
+    let on = true;
+    getNflQuarters(g.id, { fresh: live, ttl: 10 * 60_000 })
+      .then((d) => { if (on) { setQ(d); setFailed(false); } })
+      .catch(() => { if (on) setFailed(true); });
+    return () => { on = false; };
+  }, [g.id, wanted, live, playCount]);
+
+  const athletes = useMemo(() => {
+    const seen = new Map();
+    for (const gr of box.groups) for (const a of gr.athletes) if (!seen.has(a.id)) seen.set(a.id, a);
+    return [...seen.values()];
+  }, [box]);
+
+  let groups = box.groups;
+  let note = null;
+  if (sel !== 'game') {
+    if (!q) note = failed ? "Couldn't load quarter stats. Check your connection and try again." : 'loading';
+    else if (!q.named) note = 'This game is too old for quarter stats. ESPN has no player-by-player record of its plays.';
+    else {
+      groups = nflQuarterGroups(q.stats[sel], athletes);
+      if (!groups.length) note = `No stats for this team in ${periodName(sel)}${sel === q.livePeriod ? ' yet' : ''}.`;
+    }
+  }
+
+  return (
+    <div>
+      {periods.length > 0 && <PeriodChips periods={periods} sel={sel} onPick={setPeriod} live={live ? g.status.period : null} />}
+      {note === 'loading' ? (
+        <div className="space-y-3">
+          <Skeleton className="h-36" />
+          <Skeleton className="h-48" />
+        </div>
+      ) : note ? (
+        <Card className="px-4 py-10 text-center text-[14px] text-label-2">{note}</Card>
+      ) : (
+        <div className="space-y-3">
+          {groups.map((gr) => (
+            <Card key={gr.key} className="overflow-hidden">
+              <div className="px-4 pb-1 pt-3 text-[15px] font-bold">{gr.title}</div>
+              <StatTable labels={gr.labels} groups={[{ list: gr.athletes }]} totals={gr.totals} lg={lg} highlight={gr.highlight ?? gr.labels.indexOf('YDS')} />
+            </Card>
+          ))}
+        </div>
+      )}
+      {sel !== 'game' && !note && (
+        <p className="mt-2 px-1 text-[11.5px] text-label-3">
+          {sel === q.livePeriod ? `${periodName(sel)} in progress · ` : ''}Quarter stats are built from play-by-play. An unusual play (a fumble or a flag) can leave a line a yard or a tackle off the official count.
+        </p>
+      )}
     </div>
   );
 }

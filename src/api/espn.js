@@ -1,5 +1,6 @@
 import { lastPlay, stoppage } from '../../supabase/functions/send-alerts/stoppage.js';
 import { buildQuarterStats } from '../lib/quarterStats';
+import { buildNflQuarterStats } from '../lib/nflQuarterStats';
 // Data layer for ESPN's public NBA and NFL feeds (no API key, CORS-enabled).
 // Every function returns plain, normalized objects so components never
 // touch the raw ESPN shapes.
@@ -439,6 +440,17 @@ function normDrive(d) {
     home: last?.home,
     plays,
   };
+}
+
+/** NFL player stats for each quarter, built from ESPN's detailed play feed. */
+export async function getNflQuarters(id, opts) {
+  const url = (page) => `https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/${id}/competitions/${id}/plays?limit=400&page=${page}`;
+  const first = await get(url(1), opts);
+  const items = [...(first.items ?? [])];
+  for (let page = 2; page <= Math.min(first.pageCount ?? 1, 3); page++) items.push(...((await get(url(page), opts)).items ?? []));
+  const q = buildNflQuarterStats(items);
+  // Old games list plays without naming the players, so there is nothing to build from.
+  return { ...q, named: items.some((it) => it.participants?.length) };
 }
 
 export async function getGame(lg, id, opts) {
