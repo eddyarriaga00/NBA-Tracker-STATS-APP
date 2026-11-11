@@ -46,7 +46,9 @@ export function alertPrefs() {
   const games = on(p.start) || on(p.half) || on(p.final) || p.close || p.big;
   // Chat alerts are on for anyone who has alerts on, until they switch them off.
   const chat = read('alertsChat') ?? games;
-  return { ...p, chat, any: games || chat };
+  // Same for trades by teams you follow.
+  const trades = read('alertsTrades') ?? games;
+  return { ...p, chat, trades, any: games || chat || trades };
 }
 
 /** Live version of alertPrefs() for components. */

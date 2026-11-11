@@ -206,7 +206,8 @@ function Alerts() {
   const [close, setClose] = useSetting('alertsClose');
   const [big, setBig] = useSetting('alertsBig');
   const [, setChat] = useSetting('alertsChat');
-  const { chat } = useAlertPrefs();
+  const [, setTrades] = useSetting('alertsTrades');
+  const { chat, trades } = useAlertPrefs();
   const { favs } = useFavorites();
   const status = usePushStatus();
   const [test, setTest] = useState('');
@@ -252,6 +253,7 @@ function Alerts() {
         sub="Any player, any game: 15+ in a quarter, 30/40/50-point nights, triple-doubles, 8+ threes, 400-yard passers, 150-yard receivers and more"
         right={<Switch on={big} onChange={enable(setBig)} label="Big performance alerts" />}
       />
+      <Row label="Trades" sub="When a team you follow makes a trade" right={<Switch on={!!trades} onChange={enable(setTrades)} label="Trade alerts" />} />
       <Row label="Chat messages" sub="When someone posts in the group chat" right={<Switch on={!!chat} onChange={enable(setChat)} label="Chat message alerts" />} />
       {status?.reason === 'on' && <Row label="Send a test alert" sub={test || 'Check alerts reach this device'} onClick={runTest} />}
     </Group>

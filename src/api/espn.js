@@ -1892,9 +1892,9 @@ export function findPlayer(lg, name, teamIds = []) {
  * Recent trades, signings and other roster moves, newest first. ESPN dates
  * these by day only (no time of day). `page` starts at 1.
  */
-export async function getMoves(lg, page = 1, opts) {
+export async function getMoves(lg, page = 1, { team, ...opts } = {}) {
   const [d, confs] = await Promise.all([
-    get(`${site(lg)}/transactions?limit=100&page=${page}`, { ttl: 5 * 60_000, ...opts }),
+    get(`${site(lg)}/transactions?limit=${team ? 40 : 100}&page=${page}${team ? `&team=${team}` : ''}`, { ttl: 5 * 60_000, ...opts }),
     getTeams(lg).catch(() => []),
   ]);
   const teams = confs.flatMap((c) => c.divisions.flatMap((x) => x.teams)).map((x) => ({ id: x.id, abbr: x.abbr, name: x.name, short: x.short, place: x.name.replace(new RegExp(`\\s+${x.short}$`), '') }));
@@ -1905,7 +1905,8 @@ export async function getMoves(lg, page = 1, opts) {
   const moves = [];
   const trades = new Set();
   for (const [i, t] of (d.transactions ?? []).entries()) {
-    const team = { id: t.team?.id, abbr: t.team?.abbreviation, name: t.team?.displayName, short: t.team?.name };
+    const tm = t.team ?? d.team; // a single team's list names the team once, at the top
+    const team = { id: tm?.id, abbr: tm?.abbreviation, name: tm?.displayName, short: tm?.name };
     const day = String(t.date ?? '').slice(0, 10);
     // One entry can hold several moves: "Signed X. Placed Y on injured reserve."
     const parts = String(t.description ?? '').split(/\.\s+(?=[A-Z][a-z-]+ed\b)/).map((x) => x.trim().replace(/\.$/, '')).filter(Boolean);
@@ -1923,13 +1924,15 @@ export async function getMoves(lg, page = 1, opts) {
           if (got) gets = [{ team, what: got[1] }, got[2] && { team: other, what: got[2] }].filter(Boolean);
           else if (sent) gets = [{ team: other, what: sent[1] }, sent[2] && { team, what: sent[2] }].filter(Boolean);
           // Both teams report the same trade; show it once.
-          const pair = `${day}:${[team.id, other.id].sort().join('-')}`;
+          // ESPN sometimes lists it again the next day in other words, so match on the players, not the day.
+          const who2 = namesIn(text, teamWords).map((n) => n.split(' ').slice(0, 2).join(' ')).sort().join('+');
+          const pair = `${who2 || day}:${[team.id, other.id].sort().join('-')}`;
           if (trades.has(pair)) return;
           trades.add(pair);
         }
       }
       if (gets) gets = gets.map((g) => ({ ...g, players: namesIn(`Got ${g.what}`, teamWords) }));
-      moves.push({ key: `${page}:${i}:${j}`, day, text: `${text}.`, kind, team, other, gets, players: namesIn(text, teamWords) });
+      moves.push({ key: `${team ? `t${team}:` : ''}${page}:${i}:${j}`, day, text: `${text}.`, kind, team, other, gets, players: namesIn(text, teamWords) });
     });
   }
   return { moves, more: (d.pageIndex ?? page) < (d.pageCount ?? 1) };

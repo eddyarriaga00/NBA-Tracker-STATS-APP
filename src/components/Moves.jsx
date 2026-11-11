@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { findPlayer, getMoves } from '../api/espn';
 import { useData } from '../lib/useData';
 import { useSeen } from '../lib/useSeen';
-import { Card, TeamLogo } from './ui';
+import { Card, Skeleton, TeamLogo } from './ui';
 
 export const KINDS = {
   trade: { label: 'Trade', tone: 'bg-accent/12 text-accent' },
@@ -192,5 +192,28 @@ export default function LatestMoves({ lg }) {
         </>
       )}
     </section>
+  );
+}
+
+/** One team's moves this season, newest first (Team page). */
+export function TeamMoves({ lg, id }) {
+  const { data, error, loading } = useData((fresh) => getMoves(lg, 1, { team: id, fresh }), [lg, id]);
+  const [all, setAll] = useState(false);
+  if (loading && !data) return <Skeleton className="h-[220px] !rounded-2xl" />;
+  const moves = data?.moves ?? [];
+  if (!moves.length) {
+    return <Card className="px-4 py-6 text-center text-[14px] text-label-2">{error ? 'Couldn’t load moves. Try again later.' : 'No moves yet this season.'}</Card>;
+  }
+  const rows = all ? moves : moves.slice(0, 12);
+  return (
+    <>
+      <Card className="rise divide-y divide-sep overflow-hidden">
+        {rows.map((m) => <MoveRow key={m.key} m={m} lg={lg} showDay />)}
+        {moves.length > rows.length && (
+          <button onClick={() => setAll(true)} className="w-full py-2.5 text-[13.5px] font-semibold text-accent active:bg-fill">Show {moves.length - rows.length} more</button>
+        )}
+      </Card>
+      <Link to={`/${lg}/moves`} className="mt-3 block text-center text-[13.5px] font-semibold text-accent active:opacity-60">All {lg.toUpperCase()} trades &amp; moves</Link>
+    </>
   );
 }

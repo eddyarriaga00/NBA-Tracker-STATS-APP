@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
   if (req.headers.get('x-cron-secret') !== Deno.env.get('CRON_SECRET')) return new Response('forbidden', { status: 403 });
   const test = new URL(req.url).searchParams.get('test'); // ?test=1 sends a test alert to every device
 
-  const { data: subs } = await db.from('push_subscriptions').select('endpoint,p256dh,auth,user_id,chat,followed,close_games,spoiler_free,scope,starts,halftime,finals,big,start_for,half_for,final_for');
+  const { data: subs } = await db.from('push_subscriptions').select('endpoint,p256dh,auth,user_id,chat,trades,followed,close_games,spoiler_free,scope,starts,halftime,finals,big,start_for,half_for,final_for');
   const subscriptions = subs ?? [];
 
   const send = async (payload: Record<string, string>, pick: (s: any) => boolean, spoilerBody?: string, spoilerTitle?: string) => {
@@ -249,12 +249,43 @@ Deno.serve(async (req) => {
     return n;
   };
 
+  // A trade by a team someone follows. ESPN lists each trade once per team, in
+  // that team's words, so followers of either side get their own team's version.
+  const tradeAlerts = async () => {
+    if (!subscriptions.some((s) => s.trades !== false && (s.followed ?? []).length)) return 0;
+    const found: { key: string; lg: string; teamId: string; team: string; text: string }[] = [];
+    for (const lg of ['nba', 'nfl'] as const) {
+      const d = await json(`${ESPN}/${PATH[lg]}/transactions?limit=40`).catch(() => null);
+      for (const t of d?.transactions ?? []) {
+        const text = String(t.description ?? '').trim();
+        if (!t.team?.id || !/\btraded\b|\bacquired\b/i.test(text)) continue;
+        found.push({ key: `${lg}:${t.team.id}:${String(t.date).slice(0, 10)}:${text.length}:${text.slice(0, 40)}`, lg, teamId: String(t.team.id), team: t.team.name ?? t.team.displayName ?? '', text });
+      }
+    }
+    const { data: cur } = await db.from('alert_state').select('value').eq('key', 'trades_seen').maybeSingle();
+    const seen: string[] = cur ? JSON.parse(cur.value) : [];
+    const fresh = found.filter((f) => !seen.includes(f.key));
+    if (!fresh.length) return 0;
+    // Remember before sending, so a failure can never repeat an alert.
+    await db.from('alert_state').upsert({ key: 'trades_seen', value: JSON.stringify([...fresh.map((f) => f.key), ...seen].slice(0, 400)), updated_at: new Date().toISOString() });
+    if (!cur) return 0; // first run: start from now, don't announce old trades
+    let n = 0;
+    for (const f of fresh.slice(0, 6)) {
+      const body = f.text.length > 170 ? `${f.text.slice(0, 169)}…` : f.text;
+      const sent = await send({ title: `Trade: ${f.team}`, body, url: `${SITE}#/${f.lg}/moves`, tag: `trade:${f.key}`.slice(0, 60) }, (s) => s.trades !== false && (s.followed ?? []).includes(`${f.lg}:${f.teamId}`));
+      n += sent;
+      await db.from('alert_log').insert({ game_key: `${f.lg}:trade`, kind: 'trade', title: `${f.team}: ${f.text}`.slice(0, 200), devices: sent });
+    }
+    return n;
+  };
+
   // One look at ESPN. `n` is which look this is within the minute (0-3).
   const pass = async (n: number) => {
   const chatted = await chatAlerts().catch((e) => { console.error('chat', e?.message ?? e); return 0; });
+  const traded = n === 0 ? await tradeAlerts().catch((e) => { console.error('trades', e?.message ?? e); return 0; }) : 0;
   const games = await loadGames();
   const graded = n === 0 ? await gradePicks(games).catch((e) => `error: ${e?.message ?? e}`) : 0;
-  if (!games.length) return { games: 0, graded, chat: chatted, errors: [...loadErrors] };
+  if (!games.length) return { games: 0, graded, chat: chatted, trades: traded, errors: [...loadErrors] };
   const { data: rows } = await db.from('alert_game_state').select('game_key,state,close_sent,half_sent,start_sent,big_sent').in('game_key', games.map((g) => g.key));
   const prev = Object.fromEntries((rows ?? []).map((r) => [r.game_key, r]));
 
@@ -270,7 +301,7 @@ Deno.serve(async (req) => {
   const updates: any[] = [];
   const log: any[] = [];
   let events = 0;
-  let sent = chatted;
+  let sent = chatted + traded;
   const anyBig = subscriptions.some((s) => s.big);
   const alert = async (g: Game, kind: string, ...args: Parameters<typeof send>) => {
     events++;

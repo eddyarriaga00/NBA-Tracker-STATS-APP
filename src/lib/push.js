@@ -139,6 +139,7 @@ export async function syncPush(prefs) {
     p_half_for: prefs.half,
     p_final_for: prefs.final,
     p_chat: !!prefs.chat,
+    p_trades: !!prefs.trades,
   });
   if (error) {
     setActive(false);

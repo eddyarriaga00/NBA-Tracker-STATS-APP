@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { currentSeason, getTeam, getTeamStats, seasonLabel, seasonOptions } from '../api/espn';
+import { TeamMoves } from '../components/Moves';
 import { BackButton, Card, ErrorState, Headshot, SeasonPicker, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
 import { visibleColor } from '../lib/color';
 import { useFavorites } from '../lib/favorites';
@@ -197,6 +198,7 @@ export default function Team() {
   useEffect(() => { setSeason(Number(wanted) || null); }, [lg, id, wanted]);
   const season = pickedSeason && seasonOptions(lg, 'team').some((o) => o.value === pickedSeason) ? pickedSeason : currentSeason(lg);
   const { data: t, error, loading, reload } = useData((fresh) => getTeam(lg, id, season, { fresh }), [lg, id, season]);
+  const view = tab === 'moves' && season !== currentSeason(lg) ? 'schedule' : tab; // moves are only listed for this season
 
   const form = useMemo(() => (t ? t.schedule.filter((e) => e.state === 'post').slice(-5) : []), [t]);
   const next = t?.schedule.find((e) => e.state !== 'post');
@@ -284,16 +286,17 @@ export default function Team() {
           <div className="mt-6 flex items-center gap-2">
             <Segmented
               className="flex-1"
-              value={tab}
+              value={view}
               onChange={setTab}
-              options={[{ value: 'schedule', label: 'Schedule' }, { value: 'stats', label: 'Stats' }, { value: 'roster', label: 'Roster' }]}
+              options={[{ value: 'schedule', label: 'Games' }, { value: 'stats', label: 'Stats' }, { value: 'roster', label: 'Roster' }, ...(Number(season) === currentSeason(lg) ? [{ value: 'moves', label: 'Moves' }] : [])]}
             />
             <SeasonPicker options={seasonOptions(lg, 'team')} value={season} onChange={setSeason} />
           </div>
           <div className="mt-4">
-            {tab === 'schedule' && <Schedule t={t} lg={lg} />}
-            {tab === 'stats' && <TeamStats lg={lg} id={id} season={season} />}
-            {tab === 'roster' && (
+            {view === 'schedule' && <Schedule t={t} lg={lg} />}
+            {view === 'stats' && <TeamStats lg={lg} id={id} season={season} />}
+            {view === 'moves' && <TeamMoves lg={lg} id={id} />}
+            {view === 'roster' && (
               <>
                 <Roster t={t} lg={lg} />
               </>
