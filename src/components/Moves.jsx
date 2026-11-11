@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getMoves } from '../api/espn';
+import { findPlayer, getMoves } from '../api/espn';
 import { useData } from '../lib/useData';
 import { useSeen } from '../lib/useSeen';
 import { Card, TeamLogo } from './ui';
@@ -29,8 +30,63 @@ const Swap = (p) => (
   </svg>
 );
 
-/** One move. Trades show both teams and who ends up with what. */
-export function MoveRow({ m, lg, showDay = false }) {
+// Player lookups run four at a time so a long list never floods the network.
+let running = 0;
+const waiting = [];
+function lookup(lg, name, teamIds) {
+  return new Promise((resolve) => {
+    const go = () => {
+      running++;
+      findPlayer(lg, name, teamIds).then(resolve, () => resolve(null)).finally(() => { running--; waiting.shift()?.(); });
+    };
+    if (running < 4) go(); else waiting.push(go);
+  });
+}
+
+/** The players named in a move, matched to their photo and page: { [name]: player }. Starts once `on` is true. */
+function usePlayers(lg, m, on) {
+  const [found, setFound] = useState({});
+  const names = m.players ?? [];
+  useEffect(() => {
+    if (!on || !names.length) return;
+    let alive = true;
+    const teamIds = [m.team.id, m.other?.id].filter(Boolean).map(String);
+    for (const name of names) {
+      lookup(lg, name, teamIds).then((p) => alive && p && setFound((f) => ({ ...f, [name]: p })));
+    }
+    return () => { alive = false; };
+  }, [lg, m.key, on]); // eslint-disable-line react-hooks/exhaustive-deps
+  return found;
+}
+
+/** A player's photo in a circle; their initials if ESPN has no photo of them. */
+function Face({ p, size }) {
+  const [failed, setFailed] = useState(false);
+  const initials = p.name.split(/\s+/).filter((w) => !/^(jr\.?|sr\.?|ii|iii|iv)$/i.test(w)).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  return (
+    <span className="grid h-[var(--s)] w-[var(--s)] shrink-0 place-items-center overflow-hidden rounded-full bg-fill" style={{ '--s': `${size}px` }}>
+      {failed ? (
+        <span className="font-semibold text-label-2" style={{ fontSize: Math.round(size * 0.36) }}>{initials}</span>
+      ) : (
+        <img src={p.headshot} alt="" loading="lazy" onError={() => setFailed(true)} className="h-full w-full object-cover object-top" style={{ transform: 'scale(1.35) translateY(8%)' }} />
+      )}
+    </span>
+  );
+}
+
+/** Small photo + name, linking to the player's page. */
+function PlayerPill({ p, lg }) {
+  return (
+    <Link to={`/${lg}/player/${p.id}`} className="flex items-center gap-1.5 rounded-full bg-fill py-0.5 pl-0.5 pr-2.5 active:opacity-60">
+      <Face p={p} size={24} />
+      <span className="text-[12.5px] font-semibold">{p.name}</span>
+    </Link>
+  );
+}
+
+/** One move, with the photos of the players in it. Trades show both teams and who ends up with what. */
+export function MoveRow({ m, lg, showDay = false, load = true }) {
+  const found = usePlayers(lg, m, load);
   const k = KINDS[m.kind] ?? KINDS.other;
   const badge = <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${k.tone}`}>{k.label}</span>;
   const when = showDay && <span className="shrink-0 text-[11.5px] text-label-3">{dayLabel(m.day)}</span>;
@@ -46,33 +102,73 @@ export function MoveRow({ m, lg, showDay = false }) {
           {badge}
         </div>
         {m.gets ? (
-          <div className="mt-2 space-y-1">
-            {m.gets.map((g) => (
-              <div key={g.team.id} className="flex items-baseline gap-2 text-[13.5px] leading-snug">
-                <span className="w-[68px] shrink-0 text-[12px] font-semibold text-label-2">{g.team.abbr} get</span>
-                <span className="min-w-0 flex-1">{g.what}</span>
-              </div>
-            ))}
+          <div className="mt-2.5 space-y-2.5">
+            {m.gets.map((g) => {
+              const people = g.players.map((n) => found[n]).filter(Boolean);
+              // "DB Jessie Bates" under Jessie Bates's photo adds nothing; picks and extra players do.
+              const more = !people.length || people.length < g.players.length || /\b(pick|picks|cash|considerations?|rights|future)\b/i.test(g.what);
+              return (
+                <div key={g.team.id} className="flex items-start gap-2.5">
+                  <span className="flex w-[78px] shrink-0 items-center gap-1.5 whitespace-nowrap pt-0.5 text-[12px] font-semibold text-label-2">
+                    <TeamLogo abbr={g.team.abbr} size={16} league={lg} />
+                    {g.team.abbr} get
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    {people.length > 0 && (
+                      <div className="mb-1 flex flex-wrap gap-x-3 gap-y-1.5">
+                        {people.map((p) => (
+                          <Link key={p.id} to={`/${lg}/player/${p.id}`} className="flex items-center gap-2 active:opacity-60">
+                            <Face p={p} size={40} />
+                            <span className="text-[14.5px] font-semibold">{p.name}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                    {more && <p className={`leading-snug ${people.length ? 'text-[12.5px] text-label-2' : 'text-[13.5px]'}`}>{g.what}</p>}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
-          <p className="mt-1.5 text-[13.5px] leading-snug">{m.text}</p>
+          <>
+            <p className="mt-1.5 text-[13.5px] leading-snug">{m.text}</p>
+            <Pills people={(m.players ?? []).map((n) => found[n]).filter(Boolean)} lg={lg} />
+          </>
         )}
       </div>
     );
   }
+  const people = (m.players ?? []).map((n) => found[n]).filter(Boolean);
+  const star = people.length === 1 ? people[0] : null; // one player: their photo leads the row
   return (
     <div className="flex items-start gap-3 px-3.5 py-3 md:px-4">
-      <Link to={`/${lg}/team/${m.team.id}`} aria-label={m.team.name} className="mt-0.5 active:opacity-60"><TeamLogo abbr={m.team.abbr} size={28} league={lg} /></Link>
+      {star ? (
+        <Link to={`/${lg}/player/${star.id}`} aria-label={star.name} className="relative mt-0.5 shrink-0 active:opacity-60">
+          <Face p={star} size={40} />
+          <span className="absolute -bottom-1 -right-1 grid h-[20px] w-[20px] place-items-center rounded-full bg-card">
+            <TeamLogo abbr={m.team.abbr} size={15} league={lg} />
+          </span>
+        </Link>
+      ) : (
+        <Link to={`/${lg}/team/${m.team.id}`} aria-label={m.team.name} className="mt-0.5 grid h-10 w-10 shrink-0 place-items-center active:opacity-60"><TeamLogo abbr={m.team.abbr} size={30} league={lg} /></Link>
+      )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-label-2">{m.team.name}</span>
+          <Link to={`/${lg}/team/${m.team.id}`} className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-label-2 active:opacity-60">{m.team.name}</Link>
           {when}
           {badge}
         </div>
         <p className="mt-0.5 text-[14px] leading-snug">{m.text}</p>
+        {!star && <Pills people={people} lg={lg} />}
       </div>
     </div>
   );
+}
+
+function Pills({ people, lg }) {
+  if (!people.length) return null;
+  return <div className="mt-1.5 flex flex-wrap gap-1.5">{people.map((p) => <PlayerPill key={p.id} p={p} lg={lg} />)}</div>;
 }
 
 /** The few newest moves (trades first) for the Scores page, with a link to the full list. */
@@ -91,7 +187,7 @@ export default function LatestMoves({ lg }) {
             <Link to={`/${lg}/moves`} className="normal-case tracking-normal text-[13px] font-semibold text-accent active:opacity-60">See all</Link>
           </h2>
           <Card className="rise divide-y divide-sep overflow-hidden">
-            {top.map((m) => <MoveRow key={m.key} m={m} lg={lg} showDay />)}
+            {top.map((m) => <MoveRow key={m.key} m={m} lg={lg} showDay load={seen} />)}
           </Card>
         </>
       )}

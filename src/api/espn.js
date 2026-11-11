@@ -1844,6 +1844,50 @@ const MOVE_KINDS = [
 ];
 const moveKind = (text) => MOVE_KINDS.find(([, re]) => re.test(text))?.[0] ?? 'other';
 
+// Player names in a move: runs of capitalized words, minus the position in
+// front ("F Dalen Terry", "Gs Bruce Brown and Dink Pate") and any team names.
+const SEQ_RE = /[A-Z][A-Za-z.'’-]*(?:\s+(?:[A-Z][A-Za-z.'’-]*))+/g;
+function namesIn(text, teamWords) {
+  const body = String(text).replace(/^[A-Z][a-z-]+\s+/, ''); // drop the verb: "Signed", "Waived"
+  const out = [];
+  for (const m of body.matchAll(SEQ_RE)) {
+    let words = m[0].replace(/[’']s\b/g, '').replace(/[.,]+$/, '').split(/\s+/);
+    const pos = /^[A-Z]{1,3}s?\.?$/.test(words[0]) && words.length > 2;
+    if (pos) words = words.slice(1);
+    if (words.length < 2 || words.length > 4) continue;
+    // A name right after a position is a player even if it looks like a place ("RB DeeJay Dallas").
+    if (!pos && words.some((w) => teamWords.has(w.toLowerCase()) || /^(Draft|Round|Pick|Reserve|List|Injured|League|Exhibit|Two-Way)$/i.test(w))) continue;
+    out.push(words.join(' '));
+  }
+  return [...new Set(out)];
+}
+
+const people = new Map(); // `${lg}:${name}` -> promise of { id, name, headshot } or null
+const plainName = (v) => String(v ?? '').toLowerCase().normalize('NFD').replace(/[^a-z ]/g, '').replace(/\b(jr|sr|ii|iii|iv|v)\b/g, '').replace(/\s+/g, ' ').trim();
+
+/**
+ * Looks a player up by name (for lists that only give names). When several
+ * players share the name, the one on one of `teamIds` wins, then the best
+ * known active one. Null if nobody matches.
+ */
+export function findPlayer(lg, name, teamIds = []) {
+  const key = `${lg}:${name}:${teamIds.join(',')}`;
+  if (!people.has(key)) {
+    const url = `https://site.web.api.espn.com/apis/common/v3/search?query=${encodeURIComponent(name)}&limit=6&type=player`;
+    people.set(key, get(url, { ttl: 60 * 60_000 }).then((d) => {
+      cache.delete(url); // the answers are bulky; only the match is kept
+      const hits = (d.items ?? []).filter((x) => x.league === lg && plainName(x.displayName) === plainName(name));
+      // "A.J. Woods" is listed as "AJ Woods"; search again without the dots.
+      if (!hits.length) return name.includes('.') ? findPlayer(lg, name.replaceAll('.', ''), teamIds) : null;
+      const onTeam = (x) => (x.teamRelationships ?? []).some((t) => teamIds.includes(String(t.core?.id)));
+      const rank = (x) => (onTeam(x) ? 2e12 : 0) + (x.isActive ? 1e12 : 0) + (Number(x.relevance) || 0);
+      const hit = hits.sort((p, q) => rank(q) - rank(p))[0];
+      return { id: hit.id, name: hit.displayName, headshot: hit.headshot?.href || `https://a.espncdn.com/i/headshots/${lg}/players/full/${hit.id}.png` };
+    }).catch(() => { people.delete(key); return null; }));
+  }
+  return people.get(key);
+}
+
 /**
  * Recent trades, signings and other roster moves, newest first. ESPN dates
  * these by day only (no time of day). `page` starts at 1.
@@ -1857,6 +1901,7 @@ export async function getMoves(lg, page = 1, opts) {
   // "Charlotte" names one team; "Los Angeles" doesn't, so it's never matched alone.
   const placeCount = teams.reduce((m, x) => m.set(x.place, (m.get(x.place) ?? 0) + 1), new Map());
   const esc = (v) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const teamWords = new Set(teams.flatMap((x) => x.name.toLowerCase().split(/\s+/)));
   const moves = [];
   const trades = new Set();
   for (const [i, t] of (d.transactions ?? []).entries()) {
@@ -1883,7 +1928,8 @@ export async function getMoves(lg, page = 1, opts) {
           trades.add(pair);
         }
       }
-      moves.push({ key: `${page}:${i}:${j}`, day, text: `${text}.`, kind, team, other, gets });
+      if (gets) gets = gets.map((g) => ({ ...g, players: namesIn(`Got ${g.what}`, teamWords) }));
+      moves.push({ key: `${page}:${i}:${j}`, day, text: `${text}.`, kind, team, other, gets, players: namesIn(text, teamWords) });
     });
   }
   return { moves, more: (d.pageIndex ?? page) < (d.pageCount ?? 1) };

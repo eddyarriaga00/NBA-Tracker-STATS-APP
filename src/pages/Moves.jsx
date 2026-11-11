@@ -4,6 +4,23 @@ import { KINDS, MoveRow, dayLabel } from '../components/Moves';
 import { BackButton, Card, Chips, Empty, ErrorState, PageTitle, Skeleton } from '../components/ui';
 import { useFavorites } from '../lib/favorites';
 import { useLeague } from '../lib/league';
+import { useSeen } from '../lib/useSeen';
+
+/** One day's moves. Player photos are looked up only once the day is near the screen. */
+function Day({ day, list, lg }) {
+  const [ref, seen] = useSeen(500);
+  return (
+    <section ref={ref} className="mb-5">
+      <h2 className="mb-1.5 flex items-baseline gap-1.5 px-1 text-[11.5px] font-semibold uppercase tracking-wide text-label-2 md:text-[13px]">
+        <span>{dayLabel(day, true)}</span>
+        <span className="font-normal text-label-3">· {list.length}</span>
+      </h2>
+      <Card className="divide-y divide-sep overflow-hidden">
+        {list.map((m) => <MoveRow key={m.key} m={m} lg={lg} load={seen} />)}
+      </Card>
+    </section>
+  );
+}
 
 /** Trades, signings, releases and injury-list moves for the league, newest first. */
 export default function Moves() {
@@ -64,17 +81,7 @@ export default function Moves() {
               subtitle={`No ${filter === 'mine' ? 'moves by your teams' : filter === 'all' ? 'moves' : (KINDS[filter]?.label ?? '').toLowerCase() + ' moves'} since ${oldest ? dayLabel(oldest) : 'the season began'}.`}
             />
           )}
-          {days.map(([day, list]) => (
-            <section key={day} className="mb-5">
-              <h2 className="mb-1.5 flex items-baseline gap-1.5 px-1 text-[11.5px] font-semibold uppercase tracking-wide text-label-2 md:text-[13px]">
-                <span>{dayLabel(day, true)}</span>
-                <span className="font-normal text-label-3">· {list.length}</span>
-              </h2>
-              <Card className="divide-y divide-sep overflow-hidden">
-                {list.map((m) => <MoveRow key={m.key} m={m} lg={lg} />)}
-              </Card>
-            </section>
-          ))}
+          {days.map(([day, list]) => <Day key={day} day={day} list={list} lg={lg} />)}
           {state.more && (
             <button
               disabled={state.loading}
