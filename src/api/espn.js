@@ -1716,3 +1716,175 @@ export async function getOnThisDay(lg, date = new Date(), years = 15) {
   }
   return out;
 }
+
+// ---------- Top players of the day ----------
+
+const n0 = (v) => parseFloat(String(v ?? '').replace(/,/g, '')) || 0;
+/** "4-9" or "21/31" -> [4, 9]. */
+const pairOf = (v) => String(v ?? '').split(/[-/]/).map(n0);
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** NBA: John Hollinger's Game Score, one number for a whole box score line. */
+function nbaRatings(s) {
+  const out = [];
+  for (const t of s.boxscore?.players ?? []) {
+    const st = t.statistics?.[0];
+    const keys = st?.keys ?? [];
+    for (const a of st?.athletes ?? []) {
+      if (!a.athlete?.id || a.didNotPlay || !a.stats?.length) continue;
+      const v = Object.fromEntries(keys.map((k, i) => [k, a.stats[i]]));
+      const [fgm, fga] = pairOf(v['fieldGoalsMade-fieldGoalsAttempted']);
+      const [ftm, fta] = pairOf(v['freeThrowsMade-freeThrowsAttempted']);
+      const [pts, reb, ast, stl, blk, to, oreb, dreb, pf] = ['points', 'rebounds', 'assists', 'steals', 'blocks', 'turnovers', 'offensiveRebounds', 'defensiveRebounds', 'fouls'].map((k) => n0(v[k]));
+      const rating = pts + 0.4 * fgm - 0.7 * fga - 0.4 * (fta - ftm) + 0.7 * oreb + 0.3 * dreb + stl + 0.7 * ast + 0.7 * blk - 0.4 * pf - to;
+      const line = [`${pts} PTS`, `${reb} REB`, `${ast} AST`];
+      if (stl >= 3) line.push(`${stl} STL`);
+      if (blk >= 3) line.push(`${blk} BLK`);
+      out.push({ athlete: a.athlete, team: t.team, rating, line: line.join(' · ') });
+    }
+  }
+  return out;
+}
+
+/** NFL: fantasy-style points (offense, defense, kicking and returns together). */
+function nflRatings(s) {
+  const by = new Map();
+  for (const t of s.boxscore?.players ?? []) {
+    for (const cat of t.statistics ?? []) {
+      for (const a of cat.athletes ?? []) {
+        if (!a.athlete?.id) continue;
+        const v = Object.fromEntries((cat.keys ?? []).map((k, i) => [k, a.stats?.[i]]));
+        const p = by.get(a.athlete.id) ?? { athlete: a.athlete, team: t.team, rating: 0, parts: [] };
+        let pts = 0;
+        let text = '';
+        const td = (n) => (n ? `, ${n} TD` : '');
+        if (cat.name === 'passing') {
+          const [yds, tds, int] = [n0(v.passingYards), n0(v.passingTouchdowns), n0(v.interceptions)];
+          pts = yds / 25 + 4 * tds - 2 * int;
+          text = `${v['completions/passingAttempts']}, ${yds} yds${td(tds)}${int ? `, ${int} INT` : ''}`;
+        } else if (cat.name === 'rushing') {
+          const [yds, tds] = [n0(v.rushingYards), n0(v.rushingTouchdowns)];
+          pts = yds / 10 + 6 * tds;
+          text = `${yds} rush yds${td(tds)}`;
+        } else if (cat.name === 'receiving') {
+          const [rec, yds, tds] = [n0(v.receptions), n0(v.receivingYards), n0(v.receivingTouchdowns)];
+          pts = rec * 0.5 + yds / 10 + 6 * tds;
+          text = `${rec} rec, ${yds} yds${td(tds)}`;
+        } else if (cat.name === 'fumbles') {
+          pts = -2 * n0(v.fumblesLost);
+        } else if (cat.name === 'defensive') {
+          const [tkl, sacks, tfl, pd, tds] = [n0(v.totalTackles), n0(v.sacks), n0(v.tacklesForLoss), n0(v.passesDefended), n0(v.defensiveTouchdowns)];
+          pts = tkl * 0.75 + sacks * 3 + tfl + pd * 1.5 + tds * 6;
+          text = [plural(tkl, 'tackle'), sacks && plural(sacks, 'sack'), pd >= 2 && `${pd} PD`, tds && `${tds} TD`].filter(Boolean).join(', ');
+        } else if (cat.name === 'interceptions') {
+          const [int, tds] = [n0(v.interceptions), n0(v.interceptionTouchdowns)];
+          pts = int * 5;
+          text = `${int} INT${tds ? ' (TD)' : ''}`;
+        } else if (cat.name === 'kickReturns' || cat.name === 'puntReturns') {
+          const tds = n0(v.kickReturnTouchdowns ?? v.puntReturnTouchdowns);
+          pts = tds * 6;
+          text = tds ? `${tds} return TD` : '';
+        } else if (cat.name === 'kicking') {
+          const [fgm, fga] = pairOf(v['fieldGoalsMade/fieldGoalAttempts']);
+          pts = n0(v.totalKickingPoints);
+          text = `${fgm}/${fga} FG`;
+        }
+        p.rating += pts;
+        if (text) p.parts.push({ pts, text });
+        by.set(a.athlete.id, p);
+      }
+    }
+  }
+  return [...by.values()].map((p) => ({
+    ...p,
+    line: p.parts.sort((a, b) => b.pts - a.pts).slice(0, 2).map((x) => x.text).join(' · '),
+  }));
+}
+
+const rated = new Map(); // `${lg}:${gameId}` -> that game's players (finished games never change)
+
+/**
+ * The best players of one finished game (a normalized scoreboard game), best
+ * first. Remembered for the session, so each box score is only read once.
+ */
+export async function getGameTop(lg, g, limit = 10) {
+  const key = `${lg}:${g.id}`;
+  if (rated.has(key)) return rated.get(key);
+  const url = `${site(lg)}/summary?event=${g.id}`;
+  const s = await get(url, { ttl: 60_000 });
+  const list = (lg === 'nba' ? nbaRatings(s) : nflRatings(s))
+    .sort((a, b) => b.rating - a.rating)
+    .slice(0, limit)
+    .map((p) => {
+      const mine = String(p.team?.id) === String(g.home.id) ? g.home : g.away;
+      const opp = mine === g.home ? g.away : g.home;
+      return {
+        id: p.athlete.id,
+        name: p.athlete.displayName,
+        headshot: headshotOf(p.athlete) || `https://a.espncdn.com/i/headshots/${lg}/players/full/${p.athlete.id}.png`,
+        teamAbbr: mine.abbr,
+        result: `${mine.winner ? 'W' : opp.winner ? 'L' : 'T'} ${mine.score}-${opp.score} ${mine === g.home ? 'vs' : '@'} ${opp.abbr}`,
+        gameId: g.id,
+        rating: Math.round(p.rating * 10) / 10,
+        line: p.line,
+      };
+    });
+  // Box scores are big (about half a megabyte each); keep only what's shown.
+  if (list.length) { rated.set(key, list); cache.delete(url); }
+  return list;
+}
+
+// ---------- Trades and roster moves ----------
+
+const MOVE_KINDS = [
+  ['trade', /\btraded\b|\bacquired\b|\btrade\b/i],
+  ['cut', /\bwaived\b|\breleased\b|\bterminated\b|\bcut\b/i],
+  ['injury', /injured reserve|\binjur|physically unable|\bsuspended\b|non-football|\binactive\b/i],
+  ['sign', /signed|\bclaimed\b|\bactivated\b|\bpromoted\b|\brecalled\b|\bexercised\b|\bextension\b|\bconverted\b|\bassigned\b|\belevated\b|\bdesignated\b|\breinstated\b|\bhired\b|\bnamed\b/i],
+];
+const moveKind = (text) => MOVE_KINDS.find(([, re]) => re.test(text))?.[0] ?? 'other';
+
+/**
+ * Recent trades, signings and other roster moves, newest first. ESPN dates
+ * these by day only (no time of day). `page` starts at 1.
+ */
+export async function getMoves(lg, page = 1, opts) {
+  const [d, confs] = await Promise.all([
+    get(`${site(lg)}/transactions?limit=100&page=${page}`, { ttl: 5 * 60_000, ...opts }),
+    getTeams(lg).catch(() => []),
+  ]);
+  const teams = confs.flatMap((c) => c.divisions.flatMap((x) => x.teams)).map((x) => ({ id: x.id, abbr: x.abbr, name: x.name, short: x.short, place: x.name.replace(new RegExp(`\\s+${x.short}$`), '') }));
+  // "Charlotte" names one team; "Los Angeles" doesn't, so it's never matched alone.
+  const placeCount = teams.reduce((m, x) => m.set(x.place, (m.get(x.place) ?? 0) + 1), new Map());
+  const esc = (v) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const moves = [];
+  const trades = new Set();
+  for (const [i, t] of (d.transactions ?? []).entries()) {
+    const team = { id: t.team?.id, abbr: t.team?.abbreviation, name: t.team?.displayName, short: t.team?.name };
+    const day = String(t.date ?? '').slice(0, 10);
+    // One entry can hold several moves: "Signed X. Placed Y on injured reserve."
+    const parts = String(t.description ?? '').split(/\.\s+(?=[A-Z][a-z-]+ed\b)/).map((x) => x.trim().replace(/\.$/, '')).filter(Boolean);
+    parts.forEach((text, j) => {
+      const kind = moveKind(text);
+      let other = null;
+      let gets = null; // trades: who ends up with what
+      if (kind === 'trade') {
+        const others = teams.filter((x) => x.id !== team.id);
+        other = others.find((x) => text.includes(x.name)) ?? others.find((x) => placeCount.get(x.place) === 1 && new RegExp(`\\b${esc(x.place)}\\b`).test(text));
+        if (other) {
+          const who = `(?:the )?(?:${esc(other.name)}|${esc(other.place)})`;
+          const got = text.match(new RegExp(`^Acquired (.+?),? (?:pending a physical,? )?from ${who}(?:,? in exchange)?(?: for (.+))?$`, 'i'));
+          const sent = text.match(new RegExp(`^Traded (.+?) to ${who}(?:,? in exchange)?(?: for (.+))?$`, 'i'));
+          if (got) gets = [{ team, what: got[1] }, got[2] && { team: other, what: got[2] }].filter(Boolean);
+          else if (sent) gets = [{ team: other, what: sent[1] }, sent[2] && { team, what: sent[2] }].filter(Boolean);
+          // Both teams report the same trade; show it once.
+          const pair = `${day}:${[team.id, other.id].sort().join('-')}`;
+          if (trades.has(pair)) return;
+          trades.add(pair);
+        }
+      }
+      moves.push({ key: `${page}:${i}:${j}`, day, text: `${text}.`, kind, team, other, gets });
+    });
+  }
+  return { moves, more: (d.pageIndex ?? page) < (d.pageCount ?? 1) };
+}

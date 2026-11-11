@@ -32,6 +32,7 @@ const Teams = lazy(loadPage(() => import('./pages/Teams')));
 const Chat = lazy(loadPage(() => import('./pages/Chat')));
 const Compare = lazy(loadPage(() => import('./pages/Compare')));
 const Picks = lazy(loadPage(() => import('./pages/Picks')));
+const Moves = lazy(loadPage(() => import('./pages/Moves')));
 const Settings = lazy(loadPage(() => import('./pages/Settings')));
 const About = lazy(loadPage(() => import('./pages/About')));
 const Friends = lazy(loadPage(() => import('./pages/Friends')));
@@ -79,6 +80,7 @@ createRoot(document.getElementById('root')).render(
             <Route path=":lg/player/:id" element={guard(<Keyed Page={Player} />)} />
             <Route path=":lg/teams" element={guard(<Teams />)} />
             <Route path=":lg/compare" element={guard(<Compare />)} />
+            <Route path=":lg/moves" element={guard(<Moves />)} />
             <Route path=":lg/picks" element={guard(<Picks />)} />
             <Route path=":lg/team/:id" element={guard(<Keyed Page={Team} />)} />
             <Route path="game/:id" element={<LegacyGame />} />

@@ -37,6 +37,13 @@ export default function Teams() {
         <ErrorState error={error} onRetry={reload} />
       ) : (
         <>
+        <Link to={`/${lg}/moves`} className="mb-3 flex items-center gap-3 rounded-2xl bg-card px-4 py-3 active:bg-fill">
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-semibold">Trades &amp; moves</span>
+            <span className="block text-[12.5px] text-label-2">Who was traded, signed or released, day by day</span>
+          </span>
+          <Icon.ChevronRight className="h-5 w-5 shrink-0 text-label-3" />
+        </Link>
         <Card className="mb-6 overflow-hidden">
           <div className="px-4 pb-1 pt-3 text-[13px] font-semibold uppercase tracking-wide text-label-2">Your Teams</div>
           {favTeams.length ? (

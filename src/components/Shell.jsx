@@ -36,7 +36,7 @@ function LeagueSwitch({ league }) {
   const go = (lg) => {
     if (lg === league) return;
     const section = pathname.split('/')[2];
-    const keep = ['standings', 'leaders', 'teams'].includes(section) ? `/${section}` : '';
+    const keep = ['standings', 'leaders', 'teams', 'moves'].includes(section) ? `/${section}` : '';
     navigate(`/${lg}${keep}`);
   };
   const ids = Object.keys(LEAGUES);
@@ -110,7 +110,7 @@ export default function Shell() {
 
   const badge = useSocialBadge();
   const tabs = [
-    { to: `/${league}`, label: 'Scores', icon: Icon.Scores, end: true, match: (p) => p === `/${league}` || p.startsWith(`/${league}/game`) },
+    { to: `/${league}`, label: 'Scores', icon: Icon.Scores, end: true, match: (p) => p === `/${league}` || p.startsWith(`/${league}/game`) || p === `/${league}/moves` },
     { to: `/${league}/standings`, label: 'Standings', icon: Icon.Standings },
     { to: `/${league}/leaders`, label: 'Leaders', icon: Icon.Leaders, match: (p) => p.startsWith(`/${league}/leaders`) || p.startsWith(`/${league}/player`) },
     { to: `/${league}/teams`, label: 'Teams', icon: Icon.Teams, match: (p) => p.startsWith(`/${league}/team`) },

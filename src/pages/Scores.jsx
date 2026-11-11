@@ -5,6 +5,8 @@ import { useCommentCounts } from '../components/Comments';
 import GameCard from '../components/GameCard';
 import MyTeamsToday from '../components/MyTeamsToday';
 import OnThisDay from '../components/OnThisDay';
+import TopPlayers from '../components/TopPlayers';
+import LatestMoves from '../components/Moves';
 import { CardExtras, useNextGames, useStreaks } from '../lib/cardExtras';
 import { Icon } from '../components/icons';
 import { Empty, ErrorState, PageTitle, SeasonPicker, Segmented, Skeleton } from '../components/ui';
@@ -162,6 +164,8 @@ function NbaScores() {
         <CardExtras.Provider value={extras}>
           <GameGrid games={games} loading={loading} error={error} reload={reload} emptyTitle="No Games" emptySub="There are no NBA games on this day." />
         </CardExtras.Provider>
+        <TopPlayers lg="nba" games={games} label={isToday ? 'Today' : date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} />
+        {isToday && <LatestMoves lg="nba" />}
         {isToday && <OnThisDay lg="nba" />}
       </div>
     </div>
@@ -277,6 +281,8 @@ function NflScores() {
             <CardExtras.Provider value={extras}>
               <GameGrid games={data.games} byDay />
             </CardExtras.Provider>
+            <TopPlayers lg="nfl" games={data.games} label={current?.label.replace('Wk', 'Week') ?? ''} />
+            {thisWeek && <LatestMoves lg="nfl" />}
             {thisWeek && <OnThisDay lg="nfl" />}
           </>
         )}
