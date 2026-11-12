@@ -19,3 +19,13 @@ export function visibleColor(hex, dark, alt) {
   if (ok(alt)) return alt;
   return '#8e8e93';
 }
+
+/** A team colour for a thin line: the team's own hue, lightened on a dark
+ *  card (or darkened on a light one) when it would otherwise disappear. */
+export function edgeColor(hex, dark) {
+  if (!hex) return '#8e8e93';
+  const l = lum(hex);
+  if (dark && l < 0.2) return `color-mix(in srgb, ${hex} 58%, #ffffff)`;
+  if (!dark && l > 0.7) return `color-mix(in srgb, ${hex} 68%, #000000)`;
+  return hex;
+}

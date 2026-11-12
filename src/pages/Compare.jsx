@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { getPlayer, searchPlayers } from '../api/espn';
+import { currentSeason, getLeaders, getPlayer, LEADER_CATS, searchPlayers } from '../api/espn';
 import { Icon } from '../components/icons';
-import { BackButton, Card, Headshot, PageTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
+import { BackButton, Card, Headshot, PageTitle, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
 import { useLeague } from '../lib/league';
 import { useData } from '../lib/useData';
 
@@ -12,6 +12,79 @@ const num = (v) => {
   const n = parseFloat(String(v ?? '').replace(/,/g, ''));
   return Number.isFinite(n) ? n : null;
 };
+
+const RECENT_KEY = 'recentCompares';
+const loadRecent = () => {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch { return []; }
+};
+/** Remember a finished comparison (newest first, four per league at most). */
+function saveRecent(lg, pa, pb) {
+  const side = (p, id) => ({ id, name: p.bio.name ?? [p.bio.first, p.bio.last].filter(Boolean).join(' '), headshot: p.bio.headshot });
+  const item = { lg, a: side(pa, pa.bio.id), b: side(pb, pb.bio.id) };
+  if (!item.a.id || !item.b.id) return;
+  const same = (x) => x.lg === lg && [x.a.id, x.b.id].sort().join() === [item.a.id, item.b.id].sort().join();
+  const rest = loadRecent().filter((x) => !same(x));
+  const mine = [item, ...rest.filter((x) => x.lg === lg)].slice(0, 4);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify([...mine, ...rest.filter((x) => x.lg !== lg)])); } catch { /* storage full or blocked */ }
+}
+
+const SUGGEST = { nba: ['pointsPerGame', 'reboundsPerGame', 'assistsPerGame'], nfl: ['passingYards', 'rushingYards', 'receivingYards'] };
+
+function Pair({ a, b, sub, onPick }) {
+  return (
+    <button onClick={() => onPick(a.id, b.id)} className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition hover:bg-fill/40 active:bg-fill md:px-4">
+      <span className="flex shrink-0">
+        <Headshot src={a.headshot} size={36} />
+        <Headshot src={b.headshot} size={36} className="-ml-2.5 ring-2 ring-card" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[14.5px] font-semibold">{a.name} <span className="font-normal text-label-3">vs</span> {b.name}</span>
+        {sub && <span className="block truncate text-[12px] text-label-2">{sub}</span>}
+      </span>
+      <svg aria-hidden width="8" height="13" viewBox="0 0 8 13" className="shrink-0 text-label-3">
+        <path d="M1.5 1.5l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
+  );
+}
+
+/** Something to tap when no one is picked yet: your recent comparisons and the league's leaders. */
+function Starters({ lg, onPick }) {
+  const { data } = useData(() => getLeaders(lg, currentSeason(lg)), ['compare-starters', lg], { remember: `leaders:${lg}:${currentSeason(lg)}` });
+  const recent = useMemo(() => loadRecent().filter((x) => x.lg === lg), [lg]);
+  const pairs = useMemo(() => {
+    const used = new Set();
+    const out = [];
+    for (const key of SUGGEST[lg]) {
+      const two = (data?.categories?.[key] ?? []).filter((p) => p.id && !used.has(p.id)).slice(0, 2);
+      if (two.length < 2) continue;
+      two.forEach((p) => used.add(p.id));
+      const cat = LEADER_CATS[lg].find((c) => c.key === key);
+      out.push({ a: two[0], b: two[1], sub: `Top two in ${cat?.label.toLowerCase() ?? 'the league'}` });
+    }
+    return out;
+  }, [data, lg]);
+  return (
+    <>
+      {recent.length > 0 && (
+        <>
+          <SectionTitle>Recent</SectionTitle>
+          <Card className="divide-y divide-sep overflow-hidden">
+            {recent.map((r) => <Pair key={`${r.a.id}:${r.b.id}`} a={r.a} b={r.b} onPick={onPick} />)}
+          </Card>
+        </>
+      )}
+      <SectionTitle>Try a matchup</SectionTitle>
+      {pairs.length ? (
+        <Card className="divide-y divide-sep overflow-hidden">
+          {pairs.map((x) => <Pair key={`${x.a.id}:${x.b.id}`} {...x} onPick={onPick} />)}
+        </Card>
+      ) : (
+        <Skeleton className="h-[168px] !rounded-2xl" />
+      )}
+    </>
+  );
+}
 
 function PlayerPicker({ lg, onPick, exclude }) {
   const [q, setQ] = useState('');
@@ -160,6 +233,10 @@ export default function Compare() {
     return ['Age', 'Height', 'Weight', 'Experience', 'Draft', 'College'].filter((k) => fa[k] || fb[k]).map((k) => ({ label: k, a: fa[k] ?? '–', b: fb[k] ?? '–' }));
   }, [pa, pb]);
 
+  // A comparison with both players loaded goes on the Recent list.
+  useEffect(() => { if (pa && pb) saveRecent(lg, pa, pb); }, [lg, pa, pb]);
+  const pickBoth = (x, y) => setParams({ a: x, b: y }, { replace: true });
+
   const slot = (side, p, state) => {
     if (picking === side || (!p && !state.loading)) {
       return (
@@ -192,6 +269,8 @@ export default function Compare() {
           </div>
         )}
       </Card>
+
+      {!a && !b && <Starters lg={lg} onPick={pickBoth} />}
 
       {pa && pb && (
         <>

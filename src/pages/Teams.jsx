@@ -8,7 +8,7 @@ import { useData } from '../lib/useData';
 
 export default function Teams() {
   const lg = useLeague();
-  const { data, error, loading, reload } = useData((fresh) => getTeams(lg, { fresh }), [lg]);
+  const { data, error, loading, reload } = useData((fresh) => getTeams(lg, { fresh }), [lg], { remember: `teams:${lg}` });
   const { isFav, toggle } = useFavorites();
   const favTeams = (data ?? []).flatMap((c) => c.divisions.flatMap((d) => d.teams)).filter((t) => isFav(lg, t.id));
   const Row = ({ t }) => (

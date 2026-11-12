@@ -128,13 +128,16 @@ export default function Bracket({ confs, season }) {
   const left = (lg === 'nfl' ? pick(/american/i) : pick(/west/i)) ?? b.conferences[0];
   const right = (lg === 'nfl' ? pick(/national/i) : pick(/east/i)) ?? b.conferences[1];
 
+  const finalist = !!(b.final?.a?.team || b.final?.b?.team);
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
     const over = el.scrollWidth > el.clientWidth + 1;
     setOverflowing(over);
-    if (over) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2; // start centered on the final
-  }, [lg]);
+    // Once a finalist is known, open on the final in the middle. Before that the
+    // middle of the bracket is empty, so a phone opens on the first round instead.
+    if (over) el.scrollLeft = finalist ? (el.scrollWidth - el.clientWidth) / 2 : 0;
+  }, [lg, finalist]);
 
   if (pastSeason && yr < firstSeason(lg, 'bracket'))
     return (

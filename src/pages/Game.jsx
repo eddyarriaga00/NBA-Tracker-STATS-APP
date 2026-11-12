@@ -14,6 +14,9 @@ import { GamePick } from '../components/Picks';
 import FootballField from '../components/FootballField';
 import GameStrip from '../components/GameStrip';
 import GameFlow from '../components/GameFlow';
+import RollingNumber from '../components/RollingNumber';
+import PullToRefresh from '../components/PullToRefresh';
+import { MORPH_NAME, peekGame, setMorph } from '../lib/morph';
 import { BackButton, Card, ErrorState, Headshot, LiveBadge, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
 import { visibleColor } from '../lib/color';
 import { useLeague } from '../lib/league';
@@ -52,19 +55,16 @@ function Hero({ g, hide, onReveal }) {
     </Link>
   );
 
-  const Score = ({ t }) => (
-    <span
-      key={status.state === 'in' ? t.score : undefined}
-      className={`num font-display text-[36px] font-bold leading-none tracking-tight md:text-[56px] ${
-        final && !t.winner ? 'text-label-3' : ''
-      } ${status.state === 'in' ? 'score-flash' : ''}`}
-    >
-      {t.score ?? 0}
-    </span>
-  );
+  const scoreCls = 'num font-display text-[36px] font-bold tracking-tight md:text-[56px]';
+  const score = (t) =>
+    status.state === 'in' ? (
+      <RollingNumber value={t.score ?? 0} className={scoreCls} />
+    ) : (
+      <span className={`${scoreCls} leading-none ${final && !t.winner ? 'text-label-3' : ''}`}>{t.score ?? 0}</span>
+    );
 
   return (
-    <Card className="relative overflow-hidden">
+    <Card className="relative overflow-hidden" style={{ viewTransitionName: MORPH_NAME }}>
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-[0.14] dark:opacity-[0.22]"
@@ -93,9 +93,9 @@ function Hero({ g, hide, onReveal }) {
           ) : (
             <>
               <div className="flex items-center gap-2.5 md:gap-6">
-                <Score t={away} />
+                {score(away)}
                 <span className="text-[18px] text-label-3">–</span>
-                <Score t={home} />
+                {score(home)}
               </div>
               {status.state === 'in' ? <LiveBadge label={status.label} /> : <span className="text-[13px] font-semibold text-label-2">{status.label}</span>}
             </>
@@ -104,6 +104,42 @@ function Hero({ g, hide, onReveal }) {
         <Side t={home} />
       </div>
     </Card>
+  );
+}
+
+const STAR_UNIT = { nba: 'Game score', nfl: 'Fantasy pts' };
+
+/** The game's best player: "Player of the game" once it's over, "Top performer" while it's on. */
+function StarPlayer({ g }) {
+  const { dark } = useTheme();
+  const lg = useLeague();
+  const p = g.star;
+  if (!p) return null;
+  const team = String(g.home.id) === p.teamId ? g.home : String(g.away.id) === p.teamId ? g.away : null;
+  const c = team ? visibleColor(team.color, dark, team.alt) : 'var(--accent)';
+  return (
+    <Link to={`/${lg}/player/${p.id}`} className="mb-3 block transition active:scale-[0.99]">
+      <Card className="relative overflow-hidden">
+        <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.16] dark:opacity-[0.26]" style={{ background: `linear-gradient(100deg, ${c} 0%, transparent 62%)` }} />
+        <div className="relative flex items-center gap-3 px-3.5 py-3 md:px-4">
+          <Headshot src={p.headshot} size={52} />
+          <div className="min-w-0 flex-1">
+            <div className="text-[10.5px] font-bold uppercase tracking-wide text-[#806000] dark:text-[#ffd60a]">
+              {g.status.state === 'post' ? '★ Player of the game' : '★ Top performer so far'}
+            </div>
+            <div className="truncate text-[16px] font-bold leading-tight">{p.name}</div>
+            <div className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-label-2">
+              {team && <TeamLogo abbr={team.abbr} size={14} />}
+              <span className="num truncate text-label">{p.line}</span>
+            </div>
+          </div>
+          <div className="shrink-0 text-right">
+            <div className="num text-[20px] font-bold leading-tight">{p.rating.toFixed(1)}</div>
+            <div className="text-[10px] font-medium text-label-3">{STAR_UNIT[lg]}</div>
+          </div>
+        </div>
+      </Card>
+    </Link>
   );
 }
 
@@ -928,13 +964,17 @@ export default function Game() {
   const [query] = useSearchParams();
   const asked = query.get('tab');
   const [tab, setTab] = useState(() => (asked === 'away' || asked === 'home' ? 'box' : asked === 'plays' ? 'plays' : 'game'));
-  const [focus, setFocus] = useState(() => (asked === 'away' || asked === 'home' ? asked : null));
+  // Only for the game the link pointed at, not the next one opened from the strip.
+  const [focus, setFocus] = useState(() => (asked === 'away' || asked === 'home' ? { id, side: asked } : null));
   const room = `${lg}:game:${id}`;
+  // Going back from here, this game's score card is the one that pairs with the header.
+  useEffect(() => { setMorph(id); }, [id]);
   const counts = useCommentCounts([room]);
   const spoilers = useSpoilers();
   const pushing = useRef(false);
   const { data: fetched, error, loading, reload, updatedAt } = useData((fresh) => getGame(lg, id, { fresh }), [lg, id], {
     pollMs: (d) => relaxed(gameDelay(d), pushing.current),
+    remember: `game:${lg}:${id}`,
   });
   // Hopping between games keeps the last one on screen, dimmed, until the next arrives,
   // so the page never collapses to a loading skeleton and jumps.
@@ -944,6 +984,7 @@ export default function Game() {
   // Score and clock arrive by push, a second or so ahead of the full refresh.
   const g = useGamePush(lg, shown, reload, pushing);
   const stale = !fetched && !!g;
+  const seed = !g && loading ? peekGame(lg, id) : null;
   const hide = g ? spoilers.hidden(g) : false;
   const reveal = () => g && spoilers.reveal(g);
   // ESPN's injury list is as of today, so it only belongs on a game that's on now or just ended.
@@ -957,7 +998,7 @@ export default function Game() {
     <>
       <SectionTitle right={counts[room] ? <span className="text-[13px] text-label-2">{counts[room]}</span> : null}>Comments</SectionTitle>
       <Card className="overflow-hidden">
-        <Comments room={room} />
+        <Comments key={room} room={room} />
       </Card>
     </>
   );
@@ -978,23 +1019,33 @@ export default function Game() {
 
   return (
     <div>
+      <PullToRefresh onRefresh={reload} />
       <div className="flex items-start justify-between">
         <BackButton label="Scores" fallback={`/${lg}`} />
         {state === 'in' && !hide && !stale && <Freshness updatedAt={updatedAt} error={error} className="mt-1" />}
       </div>
 
       {loading && !g ? (
-        <div className="space-y-3">
-          <Skeleton className="h-[180px] !rounded-2xl" />
-          <Skeleton className="h-[110px] !rounded-2xl" />
-          <Skeleton className="h-[300px] !rounded-2xl" />
+        // Opened from a score card: its teams and score fill the header at once.
+        <div>
+          {seed ? (
+            <>
+              <GameStrip g={seed} id={id} />
+              <Hero g={seed} hide={spoilers.hidden(seed)} onReveal={() => spoilers.reveal(seed)} />
+            </>
+          ) : (
+            <Skeleton className="h-[180px] !rounded-2xl" />
+          )}
+          <Skeleton className="mt-3 h-[110px] !rounded-2xl" />
+          <Skeleton className="mt-3 h-[300px] !rounded-2xl" />
         </div>
       ) : error && !g ? (
         <ErrorState error={error} onRetry={reload} />
       ) : (
         <div className="rise">
           <GameStrip g={g} id={id} />
-          <div className={`transition-opacity duration-200 ${stale ? 'pointer-events-none opacity-40' : ''}`}>
+          {/* Keyed by game: pickers and charts start fresh for each game, the chosen tab carries over. */}
+          <div key={g.id} className={`transition-opacity duration-200 ${stale ? 'pointer-events-none opacity-40' : ''}`}>
           {g.round && (
             <div className="mb-2 px-1 text-[12.5px] font-semibold uppercase tracking-wide text-accent">Playoffs · {g.round}</div>
           )}
@@ -1027,6 +1078,7 @@ export default function Game() {
                   <div className="mt-3">
                     {shownTab === 'game' && (
                       <>
+                        <StarPlayer g={g} />
                         <GameFlow g={g} />
                         <GameLeaders g={g} />
                         <SectionTitle>Team Stats</SectionTitle>
@@ -1036,7 +1088,7 @@ export default function Game() {
                     )}
                     {shownTab === 'box' && (
                       <InjuryCtx.Provider value={hurt}>
-                        <Boxes g={g} focus={focus} />
+                        <Boxes g={g} focus={focus?.id === id ? focus.side : null} />
                       </InjuryCtx.Provider>
                     )}
                     {shownTab === 'plays' && (lg === 'nfl' ? <Drives g={g} /> : <Plays g={g} />)}

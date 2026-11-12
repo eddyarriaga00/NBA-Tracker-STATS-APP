@@ -13,6 +13,7 @@ import { Empty, ErrorState, PageTitle, SeasonPicker, Segmented, Skeleton } from 
 import { SORTS, sectionGames, useGameSort } from '../lib/gameSort';
 import { scoresDelay } from '../lib/livePolling';
 import { relaxed, useScoresPush } from '../lib/livePush';
+import PullToRefresh from '../components/PullToRefresh';
 import Freshness from '../components/Freshness';
 import { useFavorites } from '../lib/favorites';
 import { useLeague } from '../lib/league';
@@ -130,6 +131,7 @@ function NbaScores() {
   const nbaPush = useRef(false);
   const { data: polled, error, loading, reload, updatedAt } = useData((fresh) => getNbaScoreboard(key, { fresh }), [key], {
     pollMs: (d) => relaxed(scoresDelay(d), nbaPush.current),
+    remember: `scores:nba:${key}`,
   });
   const games = useScoresPush('nba', polled, reload, nbaPush);
 
@@ -145,6 +147,7 @@ function NbaScores() {
 
   return (
     <div>
+      <PullToRefresh onRefresh={reload} hint />
       <PageTitle
         eyebrow={date.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}
         right={
@@ -192,6 +195,7 @@ function NflScores() {
   const nflPush = useRef(false);
   const { data: polled, error, loading, reload, updatedAt } = useData((fresh) => getNflScoreboard(sel, { fresh }), [w], {
     pollMs: (d) => relaxed(scoresDelay(d?.games), nflPush.current),
+    remember: `scores:nfl:${w ?? ''}`,
   });
   const pushed = useScoresPush('nfl', polled?.games, reload, nflPush);
   const data = useMemo(() => (polled ? { ...polled, games: pushed ?? polled.games } : polled), [polled, pushed]);
@@ -228,6 +232,7 @@ function NflScores() {
 
   return (
     <div>
+      <PullToRefresh onRefresh={reload} hint />
       <PageTitle
         eyebrow={current ? `${current.label.replace('Wk', 'Week')} · ${current.detail ?? ''}` : 'NFL'}
         right={

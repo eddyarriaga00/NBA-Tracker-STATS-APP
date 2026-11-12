@@ -137,7 +137,7 @@ export default function Standings() {
   const view = valid.includes(rawView) ? rawView : valid[0];
   const [pickedSeason, setSeason] = useState(null);
   const season = pickedSeason && seasonOptions(lg, 'standings').some((o) => o.value === pickedSeason) ? pickedSeason : currentSeason(lg);
-  const { data, error, loading, reload } = useData((fresh) => getStandings(lg, season, { fresh }), [lg, season]);
+  const { data, error, loading, reload } = useData((fresh) => getStandings(lg, season, { fresh }), [lg, season], { remember: `standings:${lg}:${season}` });
   const current = data?.find((c) => c.name?.startsWith(conf)) ?? data?.[0];
   const era = playoffFormat(lg, season, current?.teams ?? []);
   // Old NFL seasons where ESPN's seed numbers are league-wide or missing: don't show them.

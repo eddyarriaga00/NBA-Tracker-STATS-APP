@@ -79,7 +79,7 @@ function StatLeaders({ lg, tabs }) {
   const key = cats.some((c) => c.key === picked) ? picked : cats[0].key;
   const [pickedSeason, setSeason] = useState(null);
   const season = pickedSeason && seasonOptions(lg, 'leaders').some((o) => o.value === pickedSeason) ? pickedSeason : currentSeason(lg);
-  const { data, error, loading, reload } = useData((fresh) => getLeaders(lg, season, { fresh }), [lg, season]);
+  const { data, error, loading, reload } = useData((fresh) => getLeaders(lg, season, { fresh }), [lg, season], { remember: `leaders:${lg}:${season}` });
   const cat = cats.find((c) => c.key === key);
   const list = data?.categories[key] ?? [];
   const num = (v) => parseFloat(String(v).replace(/,/g, '')) || 0;
@@ -151,7 +151,8 @@ function StatLeaders({ lg, tabs }) {
                   </div>
                 </div>
                 <span className="num w-14 text-right font-display text-[17px] font-bold md:w-16 md:text-[20px]">{p.value}</span>
-                <BioButton lg={lg} id={p.id} />
+                {/* On a phone the name needs this room; the player's page has the same Bio button. */}
+                <BioButton lg={lg} id={p.id} className="max-sm:hidden" />
               </Link>
             ))}
           </Card>

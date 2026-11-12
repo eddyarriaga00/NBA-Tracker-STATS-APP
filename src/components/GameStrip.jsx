@@ -14,7 +14,7 @@ export default function GameStrip({ g, id = g.id }) {
   const { data } = useData(
     async (fresh) => (lg === 'nba' ? getNbaScoreboard(day, { fresh }) : (await getNflScoreboard(null, { fresh })).games.filter((x) => toKey(new Date(x.date)) === day)),
     ['strip', lg, day],
-    { pollMs: scoresDelay }
+    { pollMs: scoresDelay, remember: `strip:${lg}:${day}` }
   );
   const here = useRef(null);
   const n = data?.length ?? 0;

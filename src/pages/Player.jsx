@@ -549,7 +549,7 @@ export default function Player() {
   const { id } = useParams();
   const lg = useLeague();
   const [tab, setTab] = useState('log');
-  const { data: p, error, loading, reload } = useData((fresh) => getPlayer(lg, id, { fresh }), [lg, id]);
+  const { data: p, error, loading, reload } = useData((fresh) => getPlayer(lg, id, { fresh }), [lg, id], { remember: `player:${lg}:${id}` });
 
   const tabs = [
     { value: 'log', label: 'Games' },

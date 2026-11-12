@@ -89,6 +89,11 @@ body {
 @keyframes flash { 0% { color: var(--accent); } 100% { color: inherit; } }
 .score-flash { animation: flash 1.2s ease-out; }
 
+/* Page transitions: a quick cross-fade, and the tapped score card growing into the game header. */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.2s; animation-timing-function: ease-out; }
+::view-transition-group(game-hero) { animation-duration: 0.34s; animation-timing-function: cubic-bezier(.2,.8,.2,1); }
+::view-transition-old(game-hero), ::view-transition-new(game-hero) { animation-duration: 0.26s; height: 100%; object-fit: cover; object-position: top; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

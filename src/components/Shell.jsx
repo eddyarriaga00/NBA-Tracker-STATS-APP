@@ -98,7 +98,6 @@ export default function Shell() {
   usePushSync(); // and lets the server alert this device when it's closed
   const closeSearch = useCallback(() => setSearchOpen(false), []);
 
-  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
   useEffect(() => { if (LEAGUES[pathname.split('/')[1]]) rememberLeague(league); }, [league, pathname]);
   useEffect(() => {
     const key = (e) => {

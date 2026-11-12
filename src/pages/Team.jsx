@@ -197,7 +197,7 @@ export default function Team() {
   const wanted = params.get('season');
   useEffect(() => { setSeason(Number(wanted) || null); }, [lg, id, wanted]);
   const season = pickedSeason && seasonOptions(lg, 'team').some((o) => o.value === pickedSeason) ? pickedSeason : currentSeason(lg);
-  const { data: t, error, loading, reload } = useData((fresh) => getTeam(lg, id, season, { fresh }), [lg, id, season]);
+  const { data: t, error, loading, reload } = useData((fresh) => getTeam(lg, id, season, { fresh }), [lg, id, season], { remember: `team:${lg}:${id}:${season}` });
   const view = tab === 'moves' && season !== currentSeason(lg) ? 'schedule' : tab; // moves are only listed for this season
 
   const form = useMemo(() => (t ? t.schedule.filter((e) => e.state === 'post').slice(-5) : []), [t]);

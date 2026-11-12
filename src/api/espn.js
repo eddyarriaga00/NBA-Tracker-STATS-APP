@@ -453,6 +453,25 @@ export async function getNflQuarters(id, opts) {
   return { ...q, named: items.some((it) => it.participants?.length) };
 }
 
+/** The best player of a game so far, by the same rating as Top Players. */
+function starOf(lg, s) {
+  try {
+    const best = (lg === 'nba' ? nbaRatings(s) : nflRatings(s)).sort((a, b) => b.rating - a.rating)[0];
+    if (!best?.athlete?.id || !(best.rating > 0)) return null;
+    return {
+      id: best.athlete.id,
+      name: best.athlete.displayName,
+      headshot: headshotOf(best.athlete) || `https://a.espncdn.com/i/headshots/${lg}/players/full/${best.athlete.id}.png`,
+      pos: best.athlete.position?.abbreviation ?? '',
+      teamId: String(best.team?.id ?? ''),
+      line: best.line,
+      rating: Math.round(best.rating * 10) / 10,
+    };
+  } catch {
+    return null; // never let this break the rest of the game page
+  }
+}
+
 export async function getGame(lg, id, opts) {
   // Live refreshes also read the scoreboard: it often has the new score first.
   const day = opts?.fresh ? gameDay.get(`${lg}:${id}`) : null;
@@ -566,6 +585,7 @@ export async function getGame(lg, id, opts) {
     id,
     league: lg,
     quarters,
+    star: starOf(lg, s),
     preview: normPreview(lg, s, away, home),
     round: await playoffRound(lg, s, id, home?.id).catch(() => ''),
     seasonYear: s.header?.season?.year ?? null, // so team links from an old game open that season
