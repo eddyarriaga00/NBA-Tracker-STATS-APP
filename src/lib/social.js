@@ -22,7 +22,11 @@ const fail = (error) => {
 
 let mine = null; // this device's profile, once known
 
+/** User ids are UUIDs; anything else in a link can't be a person. */
+export const isUserId = (id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id ?? ''));
+
 export async function getProfile(id) {
+  if (!isUserId(id)) return null;
   const sb = await getClient();
   const { data, error } = await sb.from('profiles').select('*').eq('user_id', id).maybeSingle();
   fail(error);

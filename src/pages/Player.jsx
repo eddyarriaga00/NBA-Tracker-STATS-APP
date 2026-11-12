@@ -204,13 +204,18 @@ function SimpleTable({ head, rows, first = 'Season', sticky = true }) {
 /** Game log with a season picker; the current season comes with the player page. */
 function SeasonGameLog({ initial, lg, id }) {
   const cur = currentSeason(lg);
-  const [season, setSeason] = useState(cur);
-  const seasons = (initial?.seasons?.length ? initial.seasons : [cur, cur - 1, cur - 2]).filter((y) => y <= cur);
-  const opts = [...new Set([cur, ...seasons])].sort((a, b) => b - a).map((y) => ({ value: y, label: seasonLabel(lg, y) }));
+  // The log that comes with the page is the player's latest season with games:
+  // this season for most, but his last one for a retired or injured player.
+  const known = (initial?.seasons ?? []).filter((y) => y <= cur);
+  const latest = known.length ? Math.max(...known) : cur;
+  const [season, setSeason] = useState(latest);
+  const opts = [...new Set(known.length ? known : [cur])].sort((a, b) => b - a).map((y) => ({ value: y, label: seasonLabel(lg, y) }));
   const { data, error, loading, reload } = useData(
-    (fresh) => (season === cur && initial ? Promise.resolve(initial) : getGamelog(lg, id, season, { fresh })),
+    (fresh) => (season === latest && initial ? Promise.resolve(initial) : getGamelog(lg, id, season, { fresh })),
     [lg, id, season]
   );
+  // Players from before ESPN kept game-by-game records have no log at all.
+  if (!known.length && !initial?.rows?.length) return <Card className="px-4 py-10 text-center text-[14px] text-label-2">ESPN has no game-by-game record for this player.</Card>;
   return (
     <div>
       <div className="mb-3 flex items-center justify-between px-1">
@@ -230,9 +235,22 @@ function SeasonGameLog({ initial, lg, id }) {
   );
 }
 
+/**
+ * The column a player is best judged by: points in the NBA; in the NFL, yards
+ * for the offense, tackles for defenders and points for kickers.
+ */
+function mainStat(lg, labels) {
+  const want = lg === 'nba' ? ['PTS'] : labels.includes('TOT') ? ['TOT'] : labels.includes('XP') ? ['PTS', 'FG'] : ['YDS'];
+  for (const w of want) {
+    const i = labels.indexOf(w);
+    if (i >= 0) return i;
+  }
+  return 0;
+}
+
 function GameLog({ log, lg }) {
   const options = log.labels.map((l, i) => ({ value: i, label: l }));
-  const defaultIdx = Math.max(0, log.labels.indexOf(lg === 'nba' ? 'PTS' : 'YDS'));
+  const defaultIdx = mainStat(lg, log.labels);
   const [stat, setStat] = useState(defaultIdx);
   const [limit, setLimit] = useState(15);
   const go = useNavigate();
@@ -337,7 +355,8 @@ function BestGames({ seasons, lg, id }) {
         .filter((o) => !/%|AVG|RTG|QBR|LNG|MIN|PF|^TO$|\+\/-/i.test(o.raw)),
     [data]
   );
-  const fallback = options.find((o) => o.raw === (lg === 'nba' ? 'PTS' : 'YDS'))?.value ?? options[0]?.value ?? 0;
+  const main = data ? mainStat(lg, data.labels) : 0;
+  const fallback = options.some((o) => o.value === main) ? main : options[0]?.value ?? 0;
   const sel = stat ?? fallback;
   const top = useMemo(() => {
     if (!data) return [];

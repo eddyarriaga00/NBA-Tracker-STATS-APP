@@ -62,8 +62,8 @@ function Injuries({ inj }) {
   );
 }
 
-function TeamRow({ t, state, dim, hasBall, redZone, hide, extra, edge }) {
-  const showScore = state !== 'pre' && t.score != null && !hide;
+function TeamRow({ t, state, dim, hasBall, redZone, hide, extra, edge, noScore }) {
+  const showScore = state !== 'pre' && t.score != null && !hide && !noScore;
   return (
     <div className="relative flex items-center gap-3">
       {/* The winner's side of the card carries a thin edge in the team's colour. */}
@@ -167,8 +167,10 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
   const spoilers = useSpoilers();
   const morph = useMorph(g.id);
   const { dark } = useTheme();
-  const hide = spoilers.hidden(g);
-  const final = status.state === 'post' && !hide;
+  // Postponed, cancelled, or no score on record: there's no result to show (or to hide).
+  const off = !!(status.postponed || status.noScore);
+  const hide = spoilers.hidden(g) && !off;
+  const final = status.state === 'post' && !hide && !off;
   const edgeOf = (t) => (final && t.winner ? edgeColor(t.color, dark) : null);
   const live = status.state === 'in';
   const poss = live && !hide ? situation?.possession : null;
@@ -199,6 +201,8 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
         </button>
       </span>
     );
+  } else if (status.noScore) {
+    footer = <span>ESPN has no score on record for this game.</span>;
   } else if (live && situation?.downDistance) {
     const team = poss === home.id ? home.abbr : poss === away.id ? away.abbr : '';
     footer = (
@@ -261,8 +265,8 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
         </div>
         {g.note && <div className="truncate px-4 pt-1 text-[12px] font-medium text-accent">{g.note}</div>}
         <div className="space-y-2 px-3.5 pb-3 pt-2.5 md:space-y-3 md:px-4 md:pb-3.5 md:pt-3">
-          <TeamRow t={away} state={status.state} dim={final && !away.winner} hasBall={poss && poss === away.id} redZone={situation?.redZone} hide={hide} extra={extraFor(away)} edge={edgeOf(away)} />
-          <TeamRow t={home} state={status.state} dim={final && !home.winner} hasBall={poss && poss === home.id} redZone={situation?.redZone} hide={hide} extra={extraFor(home)} edge={edgeOf(home)} />
+          <TeamRow t={away} state={status.state} dim={final && !away.winner} hasBall={poss && poss === away.id} redZone={situation?.redZone} hide={hide} extra={extraFor(away)} edge={edgeOf(away)} noScore={off} />
+          <TeamRow t={home} state={status.state} dim={final && !home.winner} hasBall={poss && poss === home.id} redZone={situation?.redZone} hide={hide} extra={extraFor(home)} edge={edgeOf(home)} noScore={off} />
         </div>
         {live && !hide && g.league === 'nfl' && situation && (
           <div className="px-3.5 pb-2.5 md:px-4">

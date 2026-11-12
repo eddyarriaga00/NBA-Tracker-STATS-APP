@@ -18,7 +18,8 @@ const secondsLeft = (clock) => {
  *   label is safe to show in spoiler-free mode (it never says who leads).
  */
 export function gameHeat(g) {
-  if (!g || g.status.state === 'pre') return null;
+  // No badge for a game that wasn't played, or one ESPN has no score for.
+  if (!g || g.status.state === 'pre' || g.status.postponed || g.status.noScore) return null;
   const lg = g.league;
   const a = g.away.score ?? 0;
   const h = g.home.score ?? 0;

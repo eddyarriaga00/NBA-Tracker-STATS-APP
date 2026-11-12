@@ -189,7 +189,9 @@ function weekChipLabel(type, w) {
 function NflScores() {
   const [params, setParams] = useSearchParams();
   const w = params.get('w');
-  const sel = w && /^\d-\d+-\d{4}$/.test(w) ? (([type, week, year]) => ({ type, week, year }))(w.split('-')) : null;
+  // A week from the link, if it's one that can exist (season type 1-3, week 1-25, a year ESPN covers).
+  const asked = w && /^\d-\d+-\d{4}$/.test(w) ? (([type, week, year]) => ({ type, week, year }))(w.split('-')) : null;
+  const sel = asked && asked.type >= 1 && asked.type <= 3 && asked.week >= 1 && asked.week <= 25 && asked.year >= 1999 && asked.year <= new Date().getFullYear() + 1 ? asked : null;
   const strip = useRef(null);
 
   const nflPush = useRef(false);
@@ -220,7 +222,7 @@ function NflScores() {
   const current = chips.find((c) => c.key === curKey);
   const live = data?.games.filter((g) => g.status.state === 'in').length ?? 0;
   const idx = chips.findIndex((c) => c.key === curKey);
-  const thisWeek = !w && !!data;
+  const thisWeek = !sel && !!data;
   const streaks = useStreaks('nfl', thisWeek);
   const after = chips[idx + 1];
   const nextWeek = useMemo(() => (after ? { type: after.type, week: after.week, year: data.year } : null), [after?.key, data?.year]); // eslint-disable-line react-hooks/exhaustive-deps

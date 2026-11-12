@@ -121,6 +121,8 @@ const teamAbbr = (t) => (t?.abbreviation === 'HOU' && /oilers/i.test(t?.displayN
 const headshotOf = (a) => (typeof a?.headshot === 'string' ? a.headshot : a?.headshot?.href);
 const hex = (c, fallback = '#888888') => (c ? `#${c}` : fallback);
 
+const OFF_STATUS = ['STATUS_POSTPONED', 'STATUS_CANCELED', 'STATUS_SUSPENDED'];
+
 function normStatus(status, date, timeValid = true) {
   const t = status?.type ?? {};
   const state = t.state ?? 'pre'; // pre | in | post
@@ -128,16 +130,26 @@ function normStatus(status, date, timeValid = true) {
   if (state === 'pre' && t.name === 'STATUS_SCHEDULED' && date && timeValid !== false) {
     label = new Date(date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   }
-  if (state === 'post') label = t.shortDetail?.startsWith('Final') ? t.shortDetail : 'Final';
+  // ESPN files postponed and cancelled games under "post" too; they never were a final.
+  const off = OFF_STATUS.includes(t.name);
+  if (state === 'post') label = off ? t.shortDetail || t.description || 'Postponed' : t.shortDetail?.startsWith('Final') ? t.shortDetail : 'Final';
   return {
     state,
     label,
     period: status?.period ?? 0,
     clock: status?.displayClock ?? '',
-    postponed: ['STATUS_POSTPONED', 'STATUS_CANCELED', 'STATUS_SUSPENDED'].includes(t.name),
+    postponed: off,
     half: t.name === 'STATUS_HALFTIME' || /^halftime$/i.test(t.shortDetail ?? ''),
   };
 }
+
+/**
+ * ESPN's record of some old games has no score at all (both sides 0, no winner).
+ * Neither league has had a real 0–0 final in living memory, so that means
+ * "not on record", and the app says so instead of showing a 0–0 result.
+ */
+const markNoScore = (status, home, away) =>
+  status.state === 'post' && !status.postponed && !(home?.score > 0) && !(away?.score > 0) ? { ...status, noScore: true } : status;
 
 function totalRecord(c) {
   const list = c.records ?? c.record ?? [];
@@ -152,7 +164,7 @@ function normCompetitor(c) {
     tbd,
     id: t.id,
     abbr: teamAbbr(t),
-    name: t.shortDisplayName ?? t.name,
+    name: t.shortDisplayName ?? t.name ?? t.displayName ?? t.location ?? t.abbreviation ?? '',
     location: t.location,
     full: t.displayName,
     color: hex(t.color),
@@ -212,14 +224,18 @@ function normGame(lg, e) {
   const home = comps.find((c) => c.homeAway === 'home') ?? comps[0];
   const away = comps.find((c) => c.homeAway === 'away') ?? comps[1];
   const broadcast = comp.broadcast || comp.broadcasts?.flatMap((b) => b.names ?? []).join(', ') || '';
+  // "No time set yet" (NFL flex games) is sometimes only on the competition, not the event.
+  const timeValid = (e.timeValid ?? comp.timeValid) !== false;
+  const h = normCompetitor(home);
+  const a = normCompetitor(away);
   return {
     id: e.id,
     league: lg,
     date: e.date,
-    status: normStatus(e.status ?? comp.status, e.date, e.timeValid),
-    timeValid: e.timeValid !== false,
-    home: normCompetitor(home),
-    away: normCompetitor(away),
+    status: markNoScore(normStatus(e.status ?? comp.status, e.date, timeValid), h, a),
+    timeValid,
+    home: h,
+    away: a,
     leaders: cardLeaders(lg, comp, away, home),
     situation: normSituation(comp.situation),
     venue: comp.venue?.fullName ?? '',
@@ -754,7 +770,7 @@ export async function getGame(lg, id, opts) {
       .filter((v) => v.src || v.web),
     winProb: normWinProb(lg, s),
     date: comp.date,
-    status: normStatus(comp.status, comp.date, comp.timeValid ?? s.header?.timeValid),
+    status: markNoScore(normStatus(comp.status, comp.date, comp.timeValid ?? s.header?.timeValid), home, away),
     timeValid: (comp.timeValid ?? s.header?.timeValid) !== false,
     home,
     away,
@@ -1385,7 +1401,8 @@ export async function getTeam(lg, id, season, opts) {
     (e, i, arr) => arr.findIndex((x) => x.id === e.id) === i
   );
   const t = r.team ?? sch.team ?? {};
-  if (!t.displayName && !t.abbreviation) {
+  const placeholder = (!t.displayName || t.displayName === 'TBD') && !t.abbreviation && !allEvents.length;
+  if ((!t.displayName && !t.abbreviation) || placeholder) {
     const err = new Error("We couldn't find that team. The link may be wrong or out of date.");
     err.notFound = true;
     throw err;
@@ -1431,6 +1448,9 @@ export async function getTeam(lg, id, season, opts) {
       id: e.id,
       date: e.date,
       state: c.status?.type?.state ?? 'pre',
+      // Postponed or cancelled, or an old game ESPN has no score for: not a result either way.
+      noScore: c.status?.type?.state === 'post' && (OFF_STATUS.includes(c.status?.type?.name) || (!(Number(score(me)) > 0) && !(Number(score(opp)) > 0))),
+      offLabel: OFF_STATUS.includes(c.status?.type?.name) ? c.status?.type?.shortDetail || 'Postponed' : '',
       label: c.status?.type?.shortDetail ?? '',
       home: me.homeAway === 'home',
       opp: { id: opp.team?.id, abbr: teamAbbr(opp.team), name: opp.team?.shortDisplayName ?? opp.team?.displayName },

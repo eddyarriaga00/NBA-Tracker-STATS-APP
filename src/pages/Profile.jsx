@@ -5,7 +5,7 @@ import { useNickname } from '../components/Comments';
 import { PillButton, UserAvatar } from '../components/People';
 import { BackButton, Card, Empty, SectionTitle, TeamLogo } from '../components/ui';
 import { getProfileStats } from '../lib/account';
-import { addFriend, answerFriend, friendStatus, getProfile, removeFriend, saveProfile, uploadAvatar } from '../lib/social';
+import { addFriend, answerFriend, friendStatus, getProfile, removeFriend, saveProfile, uploadAvatar, isUserId } from '../lib/social';
 import { currentUserId } from '../lib/supabase';
 import { toast } from '../lib/toast';
 import { useData } from '../lib/useData';
@@ -156,7 +156,7 @@ export default function Profile() {
   const [saved, setSaved] = useState(null);
   useEffect(() => { currentUserId().then(setMe).catch(() => setMe(null)); }, []);
   const { data, loading, error } = useData(() => getProfile(id), ['profile', id]);
-  const { data: stats } = useData(() => getProfileStats(id), ['profile-stats', id]);
+  const { data: stats } = useData(() => (isUserId(id) ? getProfileStats(id) : Promise.resolve(null)), ['profile-stats', id]);
   const p = saved?.user_id === id ? saved : data;
   const mine = me === id;
 

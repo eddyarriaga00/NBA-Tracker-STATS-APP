@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Composer } from '../components/Comments';
 import { UserAvatar } from '../components/People';
 import { Card } from '../components/ui';
-import { deleteMessage, friendStatus, getProfile, loadMessages, markRead, sendMessage, watchSocial } from '../lib/social';
+import { deleteMessage, friendStatus, getProfile, isUserId, loadMessages, markRead, sendMessage, watchSocial } from '../lib/social';
 import { useData } from '../lib/useData';
 
 const dayLabel = (iso) => {
@@ -27,6 +27,8 @@ export default function DM() {
   const count = useRef(0);
 
   const load = useCallback(() => {
+    // A link that isn't a real person: say so, and don't ask the server about it.
+    if (!isUserId(id)) { setError('We couldn’t find that person.'); return; }
     loadMessages(id)
       .then((r) => {
         setMe(r.me);
@@ -34,7 +36,7 @@ export default function DM() {
         setError('');
         if (r.messages.some((m) => m.recipient === r.me && !m.read_at) && document.visibilityState === 'visible') markRead(id).catch(() => {});
       })
-      .catch((e) => setError(e.message));
+      .catch(() => setError('Couldn’t load messages. Check your connection and try again.'));
     friendStatus(id).then((s) => setFriends(s === 'friends')).catch(() => {});
   }, [id]);
 
@@ -91,7 +93,7 @@ export default function DM() {
 
         <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-2 pt-1">
           {!messages && !error && <div className="py-10 text-center text-[14px] text-label-2">Loading…</div>}
-          {error && !messages && <div className="py-10 text-center text-[14px] text-label-2">Couldn’t load messages. {error}</div>}
+          {error && !messages && <div className="py-10 text-center text-[14px] text-label-2">{error}</div>}
           {messages?.length === 0 && (
             <div className="flex h-full flex-col items-center justify-center gap-2 py-10 text-center">
               <UserAvatar profile={p} size={64} />

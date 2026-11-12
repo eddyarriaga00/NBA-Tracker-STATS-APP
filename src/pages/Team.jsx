@@ -29,7 +29,7 @@ const timeOf = (e) => (e.timeValid === false ? 'Time TBD' : fmtTime(e.date));
 function GameRow({ e, lg }) {
   const done = e.state === 'post';
   const [spoilerFree] = useSetting('spoilerFree');
-  const hide = spoilerFree && e.state !== 'pre' && isRecent(e);
+  const hide = spoilerFree && e.state !== 'pre' && isRecent(e) && !e.noScore;
   return (
     <Link to={`/${lg}/game/${e.id}`} className="flex items-center gap-2.5 px-4 py-2.5 transition hover:bg-fill/40 active:bg-fill md:gap-3">
       <div className="w-[86px] shrink-0 md:w-[120px]">
@@ -46,6 +46,8 @@ function GameRow({ e, lg }) {
       <span className="min-w-0 flex-1 truncate text-[14px] font-semibold md:text-[15px]">{e.opp.name}</span>
       {hide ? (
         <span className="shrink-0 text-[13px] text-label-2">{done ? 'Final' : 'Live'}</span>
+      ) : done && e.noScore ? (
+        <span className="shrink-0 text-[12.5px] text-label-3">{e.offLabel || 'No score on record'}</span>
       ) : done ? (
         <span className="num shrink-0 text-[14px]">
           <span className={`mr-1.5 font-bold ${e.win ? 'text-win' : 'text-live'}`}>{e.win ? 'W' : 'L'}</span>
@@ -67,14 +69,15 @@ const ordinal = (n) => `${n}${['th', 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 <
 const signed = (n, digits = 0) => `${n > 0 ? '+' : ''}${Number(n).toFixed(digits)}`;
 
 /** The season in a handful of numbers: two rows of four on a phone, one row on a wide screen. */
-function TeamFacts({ lg, id, season }) {
-  const { data } = useData((fresh) => getTeamInfo(lg, id, season, { fresh }), [lg, id, season], { remember: `teaminfo:${lg}:${id}:${season}` });
+function TeamFacts({ lg, data }) {
   if (!data?.record || !data.games) return null;
+  // Old seasons come without division and conference records; ESPN sends "0-0" for those.
+  const real = (v) => v && v !== '0-0' && v !== '0-0-0';
   const tiles = [
     data.home && ['Home', data.home],
     data.road && ['Away', data.road],
-    data.division && ['vs Division', data.division],
-    data.conference && ['vs Conference', data.conference],
+    real(data.division) && ['vs Division', data.division],
+    real(data.conference) && ['vs Conference', data.conference],
     data.ppg != null && ['Points / game', data.ppg.toFixed(1)],
     data.oppPpg != null && ['Allowed / game', data.oppPpg.toFixed(1)],
     data.diff != null && [lg === 'nba' ? 'Margin / game' : 'Point diff', signed(data.diff, lg === 'nba' ? 1 : 0), data.diff > 0 ? 'text-win' : data.diff < 0 ? 'text-live' : ''],
@@ -98,6 +101,9 @@ function History({ lg, id, t }) {
   const [ref, near] = useSeen(500);
   const cur = currentSeason(lg);
   const first = firstSeason(lg, 'team');
+  const f = franchise(lg, id);
+  // No further back than the franchise itself (ESPN files some older seasons under a team that inherited the number).
+  const oldest = Math.max(first, f ? (lg === 'nba' ? f.first + 1 : f.first) : first);
   const [rows, setRows] = useState([]);
   const [asked, setAsked] = useState(0); // seasons requested so far
   const [want, setWant] = useState(10);
@@ -106,7 +112,7 @@ function History({ lg, id, t }) {
   useEffect(() => {
     if (!near || asked >= want) return;
     const years = [];
-    for (let y = cur - 1 - asked; y >= first && years.length < want - asked; y--) years.push(y);
+    for (let y = cur - 1 - asked; y >= oldest && years.length < want - asked; y--) years.push(y);
     if (!years.length) { setAsked(want); return; }
     let on = true;
     setBusy(true);
@@ -115,10 +121,9 @@ function History({ lg, id, t }) {
       .catch(() => {})
       .finally(() => { if (on) { setAsked(want); setBusy(false); } });
     return () => { on = false; };
-  }, [near, want, asked, lg, id, cur, first]);
+  }, [near, want, asked, lg, id, cur, oldest]);
   const { data: venue } = useData(() => (near ? getTeamVenue(lg, id) : Promise.resolve(null)), [lg, id, near, 'venue']);
 
-  const f = franchise(lg, id);
   const won = titles(lg, id);
   const facts = [
     f && ['First season', seasonLabel(lg, lg === 'nba' ? f.first + 1 : f.first)],
@@ -126,7 +131,7 @@ function History({ lg, id, t }) {
     [lg === 'nba' ? 'NBA titles' : 'Super Bowl wins', won.length ? `${won.length}` : 'None yet', won.length ? `${yearRuns(won)}${lg === 'nfl' ? (won.length === 1 ? ' season' : ' seasons') : ''}` : ''],
     venue && [lg === 'nba' ? 'Home arena' : 'Home stadium', venue.name, [venue.place, lg === 'nfl' && (venue.indoor ? 'Indoors' : 'Outdoors'), lg === 'nfl' && (venue.grass ? 'Grass' : 'Turf')].filter(Boolean).join(' · ')],
   ].filter(Boolean);
-  const more = cur - 1 - asked >= first;
+  const more = cur - 1 - asked >= oldest;
 
   return (
     <div ref={ref}>
@@ -346,19 +351,26 @@ export default function Team() {
   const wanted = params.get('season');
   useEffect(() => { setSeason(Number(wanted) || null); }, [lg, id, wanted]);
   const season = pickedSeason && seasonOptions(lg, 'team').some((o) => o.value === pickedSeason) ? pickedSeason : currentSeason(lg);
+  const { data: info } = useData((fresh) => getTeamInfo(lg, id, season, { fresh }), [lg, id, season], { remember: `teaminfo:${lg}:${id}:${season}` });
   const { data: t, error, loading, reload } = useData((fresh) => getTeam(lg, id, season, { fresh }), [lg, id, season], { remember: `team:${lg}:${id}:${season}` });
   const view = tab === 'moves' && season !== currentSeason(lg) ? 'schedule' : tab; // moves are only listed for this season
 
-  const form = useMemo(() => (t ? t.schedule.filter((e) => e.state === 'post').slice(-5) : []), [t]);
+  const form = useMemo(() => (t ? t.schedule.filter((e) => e.state === 'post' && !e.noScore).slice(-5) : []), [t]);
   const next = t?.schedule.find((e) => e.state !== 'post');
   const seasonRecord = useMemo(() => {
     if (!t || t.isCurrent) return '';
-    const reg = t.schedule.filter((e) => e.state === 'post' && !e.playoff);
+    const played = t.schedule.filter((e) => e.state === 'post' && !e.noScore);
+    const reg = played.filter((e) => !e.playoff);
     const w = reg.filter((e) => e.win).length;
-    const po = t.schedule.filter((e) => e.state === 'post' && e.playoff);
+    const po = played.filter((e) => e.playoff);
     const pw = po.filter((e) => e.win).length;
-    return `${seasonLabel(lg, season)}: ${w}-${reg.length - w}${po.length ? ` · Playoffs ${pw}-${po.length - pw}` : ''}`;
-  }, [t, lg, season]);
+    // ESPN's old schedules have games with no score; its record sheet is the reliable count.
+    const record = info?.games ? info.record : reg.length ? `${w}-${reg.length - w}` : '';
+    if (!record && !po.length) return seasonLabel(lg, season);
+    return `${seasonLabel(lg, season)}: ${record}${po.length ? ` · Playoffs ${pw}-${po.length - pw}` : ''}`;
+  }, [t, lg, season, info]);
+  // A season the team has nothing on record for (before it existed, or a gap year).
+  const emptySeason = !!t && !t.isCurrent && !t.schedule.length && !info?.games;
   const c = t ? visibleColor(t.color, dark) : '#888';
 
   return (
@@ -437,7 +449,7 @@ export default function Team() {
             )}
           </div>
 
-          <TeamFacts lg={lg} id={id} season={season} />
+          <TeamFacts lg={lg} data={info} />
 
           <div className="mt-6 flex items-center gap-2">
             <Segmented
@@ -449,10 +461,16 @@ export default function Team() {
             <SeasonPicker options={seasonOptions(lg, 'team')} value={season} onChange={setSeason} />
           </div>
           <div className="mt-4">
-            {view === 'schedule' && <Schedule t={t} lg={lg} />}
-            {view === 'stats' && <TeamStats lg={lg} id={id} season={season} />}
-            {view === 'moves' && <TeamMoves lg={lg} id={id} />}
-            {view === 'roster' && (
+            {emptySeason && (
+              <Card className="mb-3 px-4 py-6 text-center">
+                <div className="text-[15px] font-semibold">Nothing on record for {seasonLabel(lg, season)}</div>
+                <p className="mx-auto mt-1 max-w-sm text-[13px] text-label-2">ESPN has no games for the {t.short ?? t.name} that season. Pick another season above.</p>
+              </Card>
+            )}
+            {!emptySeason && view === 'schedule' && <Schedule t={t} lg={lg} />}
+            {!emptySeason && view === 'stats' && <TeamStats lg={lg} id={id} season={season} />}
+            {!emptySeason && view === 'moves' && <TeamMoves lg={lg} id={id} />}
+            {!emptySeason && view === 'roster' && (
               <>
                 <Roster t={t} lg={lg} />
               </>

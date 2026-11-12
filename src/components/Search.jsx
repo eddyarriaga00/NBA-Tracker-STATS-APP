@@ -100,6 +100,8 @@ export default function Search({ open, onClose, league }) {
   useEffect(() => {
     const term = q.trim();
     if (term.length < 2) { setPlayers([]); setBusy(false); return; }
+    // While the new answer loads, keep only earlier results that still fit what's typed.
+    setPlayers((old) => old.filter((p) => matches(String(p.name ?? '').toLowerCase(), term.toLowerCase())));
     setBusy(true);
     let alive = true;
     const t = setTimeout(() => {

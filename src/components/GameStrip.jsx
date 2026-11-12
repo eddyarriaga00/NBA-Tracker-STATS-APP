@@ -53,7 +53,7 @@ export default function GameStrip({ g, id = g.id }) {
             </div>
             <div className="num mt-0.5 flex items-center gap-1.5 text-[14px] font-bold">
               <TeamLogo abbr={x.away.abbr} size={18} />
-              {pre ? <span className="text-[12px] font-semibold text-label-2">{x.away.abbr} @ {x.home.abbr}</span> : hide ? <span className="text-label-3">– · –</span> : (
+              {pre ? <span className="text-[12px] font-semibold text-label-2">{x.away.abbr} @ {x.home.abbr}</span> : hide || x.status.postponed || x.status.noScore ? <span className="text-label-3">– · –</span> : (
                 <span><span className={x.status.state === 'post' && !x.away.winner ? 'text-label-2' : ''}>{x.away.score}</span><span className="px-1 text-label-3">·</span><span className={x.status.state === 'post' && !x.home.winner ? 'text-label-2' : ''}>{x.home.score}</span></span>
               )}
               <TeamLogo abbr={x.home.abbr} size={18} />

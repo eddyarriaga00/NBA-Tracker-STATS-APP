@@ -93,6 +93,12 @@ function Hero({ g, hide, onReveal }) {
                 {new Date(g.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
               </div>
             </>
+          ) : status.postponed || status.noScore ? (
+            // Never played, or played with no score on ESPN's record: say so instead of "0 – 0".
+            <>
+              <div className="font-display text-[22px] font-bold tracking-tight md:text-[28px]">{status.postponed ? status.label || 'Postponed' : 'Final'}</div>
+              <div className="max-w-[160px] text-center text-[12.5px] leading-snug text-label-2">{status.postponed ? day : `${day} · no score on record`}</div>
+            </>
           ) : hide ? (
             <>
               <div className="text-[13px] font-semibold text-label-2">Score hidden</div>
@@ -221,7 +227,7 @@ function Situation({ g }) {
 
 function Linescore({ g }) {
   const n = Math.max(g.away.linescores.length, g.home.linescores.length);
-  if (!n) return null;
+  if (!n || g.status.postponed || g.status.noScore) return null;
   const cols = Array.from({ length: Math.max(n, 4) }, (_, i) => i + 1);
   return (
     <Card className="mt-3 overflow-x-auto px-4 py-3">

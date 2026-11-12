@@ -136,6 +136,7 @@ export default function Shell() {
                 <NavLink
                   key={t.label}
                   to={t.to}
+                  end={t.end}
                   aria-current={isActive(t) ? 'page' : undefined}
                   className={`rounded-full px-3.5 py-1.5 text-[14px] font-semibold transition ${
                     isActive(t) ? 'bg-fill text-label' : 'text-label-2 hover:text-label'
@@ -174,6 +175,7 @@ export default function Shell() {
               <NavLink
                 key={t.label}
                 to={t.to}
+                end={t.end}
                 aria-current={isActive(t) ? 'page' : undefined}
                 className={`flex flex-col items-center gap-0.5 pb-1 pt-1.5 text-[10px] font-medium transition ${
                   isActive(t) ? 'text-accent' : 'text-label-3'
