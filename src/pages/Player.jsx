@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { currentSeason, firstSeason, getGamelog, getPlayer, seasonLabel } from '../api/espn';
+import { currentSeason, firstSeason, getCareerGames, getGamelog, getPlayer, seasonLabel } from '../api/espn';
 import { Icon } from '../components/icons';
 import { BioButton } from '../components/BioSheet';
 import { BackButton, Card, Chips, ErrorState, SeasonPicker, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
@@ -268,6 +268,106 @@ function GameLog({ log, lg }) {
   );
 }
 
+const BEST_KEYS = { nba: ['PTS', 'REB', 'AST'], nfl: [] };
+
+/** The best single games of a career, by whichever stat is picked. */
+function BestGames({ seasons, lg, id }) {
+  const cur = currentSeason(lg);
+  const list = seasons?.length ? seasons : [cur, cur - 1, cur - 2];
+  const { data, error, loading, reload } = useData((fresh) => getCareerGames(lg, id, list, { fresh }), [lg, id, list.join()]);
+  const [stat, setStat] = useState(null);
+  const [when, setWhen] = useState('all');
+  const [limit, setLimit] = useState(10);
+
+  const options = useMemo(
+    () =>
+      (data?.labels ?? [])
+        .map((l, i, all) => {
+          // NFL logs repeat labels (passing YDS, rushing YDS), so those get their category in front.
+          const twice = all.indexOf(l) !== all.lastIndexOf(l);
+          const cat = (data.names[i] ?? '').match(/^(Pass|Rush|Rec)/)?.[1];
+          return { value: i, label: twice && cat ? `${cat} ${l}` : l, raw: l };
+        })
+        .filter((o) => !/%|AVG|RTG|QBR|LNG|MIN|PF|^TO$|\+\/-/i.test(o.raw)),
+    [data]
+  );
+  const fallback = options.find((o) => o.raw === (lg === 'nba' ? 'PTS' : 'YDS'))?.value ?? options[0]?.value ?? 0;
+  const sel = stat ?? fallback;
+  const top = useMemo(() => {
+    if (!data) return [];
+    return data.rows
+      .filter((r) => (when === 'all' ? true : when === 'po' ? r.playoff : !r.playoff))
+      .map((r) => ({ r, v: num(String(r.stats[sel] ?? '').split(/[-/]/)[0]) }))
+      .filter((x) => x.v > 0)
+      .sort((a, b) => b.v - a.v || new Date(b.r.date) - new Date(a.r.date));
+  }, [data, sel, when]);
+
+  if (loading && !data) {
+    return (
+      <div>
+        <div className="mb-2 px-1 text-[13px] text-label-2">Going through {list.length} {list.length === 1 ? 'season' : 'seasons'} of games…</div>
+        <Skeleton className="h-[360px] !rounded-2xl" />
+      </div>
+    );
+  }
+  if (error && !data) return <ErrorState error={error} onRetry={reload} />;
+  if (!data?.rows.length) return <Card className="py-10 text-center text-label-2">No games on record.</Card>;
+
+  const keys = BEST_KEYS[lg].map((k) => [k, data.labels.indexOf(k)]).filter(([, i]) => i >= 0 && i !== sel);
+  const hasPlayoffs = data.rows.some((r) => r.playoff);
+  return (
+    <div>
+      <Chips value={sel} onChange={(v) => { setStat(v); setLimit(10); }} options={options} />
+      {hasPlayoffs && (
+        <Segmented
+          className="mt-3"
+          value={when}
+          onChange={(v) => { setWhen(v); setLimit(10); }}
+          options={[
+            { value: 'all', label: 'All games' },
+            { value: 'reg', label: 'Regular season' },
+            { value: 'po', label: 'Playoffs' },
+          ]}
+        />
+      )}
+      <div className="mb-1 mt-3 px-1 text-[13px] text-label-2">
+        Most {(data.names[sel] ?? data.labels[sel]).replace('Made-Attempted', 'Made').toLowerCase()} in a game · {data.rows.length} career games
+        {data.missed > 0 && ` · ${data.missed} ${data.missed === 1 ? 'season' : 'seasons'} could not be loaded`}
+      </div>
+      {top.length ? (
+        <Card className="divide-y divide-sep overflow-hidden">
+          {top.slice(0, limit).map(({ r, v }, i) => (
+            <Link key={r.id} to={`/${lg}/game/${r.id}`} className="flex items-center gap-3 px-4 py-2.5 transition hover:bg-fill/40">
+              <span className={`num w-5 text-center text-[13px] font-bold ${i < 3 ? 'text-accent' : 'text-label-3'}`}>{i + 1}</span>
+              <span className="num w-12 text-[24px] font-bold leading-none tracking-tight">{r.stats[sel]}</span>
+              <TeamLogo abbr={r.opp} size={26} />
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1.5 text-[14px] font-semibold">
+                  <span className="truncate">{r.atVs} {r.opp}</span>
+                  <span className={`text-[12px] font-bold ${r.result === 'W' ? 'text-win' : r.result === 'L' ? 'text-live' : 'text-label-2'}`}>{r.result}</span>
+                  <span className="text-[12px] font-normal text-label-2">{r.score}</span>
+                  {r.playoff && <span className="rounded bg-accent/12 px-1 text-[10px] font-bold text-accent">PO</span>}
+                </span>
+                <span className="block truncate text-[12px] text-label-2">
+                  {new Date(r.date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {keys.map(([k, ix]) => ` · ${r.stats[ix]} ${k}`).join('')}
+                </span>
+              </span>
+            </Link>
+          ))}
+        </Card>
+      ) : (
+        <Card className="py-10 text-center text-label-2">Nothing to rank here.</Card>
+      )}
+      {top.length > limit && (
+        <button onClick={() => setLimit((l) => l + 15)} className="mt-2 w-full rounded-xl py-2 text-[14px] font-semibold text-accent hover:bg-fill">
+          Show more
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Splits({ splits }) {
   if (!splits?.rows.length) return <Card className="py-10 text-center text-label-2">No stats available.</Card>;
   return (
@@ -366,6 +466,7 @@ export default function Player() {
 
   const tabs = [
     { value: 'log', label: 'Games' },
+    { value: 'best', label: 'Best' },
     { value: 'splits', label: 'Splits' },
     { value: 'career', label: 'Career' },
     { value: 'news', label: 'News' },
@@ -400,6 +501,7 @@ export default function Player() {
           </div>
           <div className="mt-3">
             {tab === 'log' && <SeasonGameLog initial={p.gamelog} lg={lg} id={id} />}
+            {tab === 'best' && <BestGames seasons={p.gamelog?.seasons} lg={lg} id={id} />}
             {tab === 'splits' && <Splits splits={p.splits} />}
             {tab === 'career' && <Career career={p.career} lg={lg} />}
             {tab === 'news' && <News news={p.news} />}

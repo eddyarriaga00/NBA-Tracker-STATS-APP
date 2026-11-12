@@ -1470,6 +1470,34 @@ export async function getGamelog(lg, id, season, opts) {
   return normGamelog(d);
 }
 
+/**
+ * Every game of a player's career, from one game log per season. Seasons that
+ * fail to load are skipped and counted in `missed`.
+ */
+export async function getCareerGames(lg, id, seasons, opts) {
+  const cur = currentSeason(lg);
+  const list = [...new Set(seasons)].filter((y) => y <= cur).sort((a, b) => b - a);
+  const logs = new Array(list.length).fill(null);
+  let next = 0;
+  const worker = async () => {
+    while (next < list.length) {
+      const i = next++;
+      const y = list[i];
+      try {
+        const d = await get(`${web(lg)}/athletes/${id}/gamelog?season=${y}`, { ttl: y === cur ? 5 * 60_000 : 24 * 60 * 60_000, patient: y < cur - 1, ...opts });
+        logs[i] = normGamelog(d);
+      } catch {
+        logs[i] = null;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: 4 }, worker));
+  const ref = logs.find((l) => l?.rows.length);
+  if (!ref) return { labels: [], names: [], rows: [], missed: logs.filter((l) => !l).length };
+  const key = ref.labels.join('|');
+  const rows = logs.filter((l) => l && l.labels.join('|') === key).flatMap((l) => l.rows);
+  return { labels: ref.labels, names: ref.names, rows, missed: logs.filter((l) => !l).length };
+}
 
 // ---------- Awards & contracts (ESPN core API) ----------
 
