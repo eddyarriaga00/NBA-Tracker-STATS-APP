@@ -20,6 +20,7 @@ import { useLeague } from '../lib/league';
 import { useTheme } from '../lib/theme';
 import { useData } from '../lib/useData';
 import { gameDelay } from '../lib/livePolling';
+import { relaxed, useGamePush } from '../lib/livePush';
 import Freshness from '../components/Freshness';
 import { formatLine, sumLines } from '../lib/quarterStats';
 import { nflQuarterGroups } from '../lib/nflQuarterStats';
@@ -931,14 +932,17 @@ export default function Game() {
   const room = `${lg}:game:${id}`;
   const counts = useCommentCounts([room]);
   const spoilers = useSpoilers();
+  const pushing = useRef(false);
   const { data: fetched, error, loading, reload, updatedAt } = useData((fresh) => getGame(lg, id, { fresh }), [lg, id], {
-    pollMs: gameDelay,
+    pollMs: (d) => relaxed(gameDelay(d), pushing.current),
   });
   // Hopping between games keeps the last one on screen, dimmed, until the next arrives,
   // so the page never collapses to a loading skeleton and jumps.
   const last = useRef(null);
   if (fetched) last.current = fetched;
-  const g = fetched ?? (loading && last.current?.league === lg ? last.current : null);
+  const shown = fetched ?? (loading && last.current?.league === lg ? last.current : null);
+  // Score and clock arrive by push, a second or so ahead of the full refresh.
+  const g = useGamePush(lg, shown, reload, pushing);
   const stale = !fetched && !!g;
   const hide = g ? spoilers.hidden(g) : false;
   const reveal = () => g && spoilers.reveal(g);

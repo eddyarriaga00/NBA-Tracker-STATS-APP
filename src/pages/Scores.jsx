@@ -12,6 +12,7 @@ import { Icon } from '../components/icons';
 import { Empty, ErrorState, PageTitle, SeasonPicker, Segmented, Skeleton } from '../components/ui';
 import { SORTS, sectionGames, useGameSort } from '../lib/gameSort';
 import { scoresDelay } from '../lib/livePolling';
+import { relaxed, useScoresPush } from '../lib/livePush';
 import Freshness from '../components/Freshness';
 import { useFavorites } from '../lib/favorites';
 import { useLeague } from '../lib/league';
@@ -126,9 +127,11 @@ function NbaScores() {
   const date = useMemo(() => fromKey(key), [key]);
   const isToday = key === toKey(new Date());
 
-  const { data: games, error, loading, reload, updatedAt } = useData((fresh) => getNbaScoreboard(key, { fresh }), [key], {
-    pollMs: scoresDelay,
+  const nbaPush = useRef(false);
+  const { data: polled, error, loading, reload, updatedAt } = useData((fresh) => getNbaScoreboard(key, { fresh }), [key], {
+    pollMs: (d) => relaxed(scoresDelay(d), nbaPush.current),
   });
+  const games = useScoresPush('nba', polled, reload, nbaPush);
 
   const select = (d) => {
     const k = toKey(d);
@@ -186,9 +189,12 @@ function NflScores() {
   const sel = w && /^\d-\d+-\d{4}$/.test(w) ? (([type, week, year]) => ({ type, week, year }))(w.split('-')) : null;
   const strip = useRef(null);
 
-  const { data, error, loading, reload, updatedAt } = useData((fresh) => getNflScoreboard(sel, { fresh }), [w], {
-    pollMs: (d) => scoresDelay(d?.games),
+  const nflPush = useRef(false);
+  const { data: polled, error, loading, reload, updatedAt } = useData((fresh) => getNflScoreboard(sel, { fresh }), [w], {
+    pollMs: (d) => relaxed(scoresDelay(d?.games), nflPush.current),
   });
+  const pushed = useScoresPush('nfl', polled?.games, reload, nflPush);
+  const data = useMemo(() => (polled ? { ...polled, games: pushed ?? polled.games } : polled), [polled, pushed]);
 
   const curKey = data ? `${data.type}-${data.week}` : null;
   const chips = useMemo(() => {

@@ -1,4 +1,6 @@
 // How often pages refresh. Tune live speed here.
+// Live scores and clocks also arrive by push (lib/fastcast.js), within about a
+// second; while that's connected these timers are only a safety net.
 // ESPN refreshes each feed about every 10 seconds; checking every 3 catches a
 // new score within a few seconds of ESPN publishing it. (Measured Nov 2026.)
 export const LIVE_MS = 3_000;
