@@ -150,17 +150,18 @@ function Series({ preview }) {
 const statusColor = (s) =>
   /out|injured reserve|suspend/i.test(s) ? 'bg-live/12 text-live' : /doubt|question/i.test(s) ? 'bg-[#ffd60a]/20 text-[#806000] dark:text-[#ffd60a]' : 'bg-fill text-label-2';
 
-function Injuries({ preview, home, away }) {
+export function Injuries({ preview, home, away, title = 'Injury Report' }) {
   const lg = useLeague();
   const [open, setOpen] = useState({});
   const teams = [away, home]
+    .filter(Boolean)
     .map((t) => ({ t, list: preview.injuries.find((x) => x.teamId === t.id)?.list ?? [] }))
     .filter((x) => x.list.length);
   if (!teams.length) return null;
   return (
     <>
-      <SectionTitle>Injury Report</SectionTitle>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <SectionTitle>{title}</SectionTitle>
+      <div className={`grid grid-cols-1 gap-3 ${teams.length > 1 ? 'md:grid-cols-2' : ''}`}>
         {teams.map(({ t, list }) => {
           const all = open[t.id];
           const shown = all ? list : list.slice(0, 4);

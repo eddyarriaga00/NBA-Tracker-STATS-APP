@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { getGame, getNflQuarters, teamHref } from '../api/espn';
 import Comments, { useCommentCounts } from '../components/Comments';
-import Preview from '../components/Preview';
+import Preview, { Injuries } from '../components/Preview';
 import Highlights from '../components/Highlights';
 import ShotChart from '../components/ShotChart';
 import { HeatBadge } from '../components/GameCard';
@@ -246,13 +246,25 @@ function GameLeaders({ g }) {
   );
 }
 
+/** Athlete id -> injury status, for players listed on today's injury report. */
+const InjuryCtx = createContext(null);
+
+function InjuryTag({ id }) {
+  const hurt = useContext(InjuryCtx)?.get(String(id));
+  if (!hurt) return null;
+  return <span className={`ml-1.5 font-bold ${/out|reserve|suspend/i.test(hurt) ? 'text-live' : 'text-[#806000] dark:text-[#ffd60a]'}`}>{hurt}</span>;
+}
+
 function PlayerCell({ a, lg, width = 'max-w-[124px]' }) {
   return (
     <Link to={`/${lg}/player/${a.id}`} className="flex items-center gap-2.5">
       <Headshot src={a.headshot} size={30} />
       <div className="min-w-0">
         <div className={`${width} truncate text-[14px] font-semibold md:max-w-none`}>{a.short}</div>
-        <div className="text-[11px] text-label-2">{[a.pos, a.jersey && `#${a.jersey}`].filter(Boolean).join(' · ')}</div>
+        <div className="text-[11px] text-label-2">
+          {[a.pos, a.jersey && `#${a.jersey}`].filter(Boolean).join(' · ')}
+          <InjuryTag id={a.id} />
+        </div>
       </div>
     </Link>
   );
@@ -338,6 +350,7 @@ function PlayerLines({ labels, groups, lg }) {
                       <span className="block truncate text-[10.5px] text-label-2">
                         {[a.pos, a.jersey && `#${a.jersey}`].filter(Boolean).join(' · ')}
                         {a.starter && <span className="ml-1 rounded bg-fill px-1 text-[9.5px] font-bold text-label-2">S</span>}
+                        <InjuryTag id={a.id} />
                       </span>
                     </span>
                   </Link>
@@ -868,6 +881,12 @@ export default function Game() {
   });
   const hide = g ? spoilers.hidden(g) : false;
   const reveal = () => g && spoilers.reveal(g);
+  // ESPN's injury list is as of today, so it only belongs on a game that's on now or just ended.
+  const injuriesNow = g?.preview?.injuries?.length > 0 && (g.status.state === 'in' || Date.now() - Date.parse(g.date) < 36 * 36e5);
+  const hurt = useMemo(() => {
+    if (!injuriesNow) return null;
+    return new Map(g.preview.injuries.flatMap((t) => t.list.filter((p) => p.id).map((p) => [String(p.id), p.status])));
+  }, [g, injuriesNow]);
 
   const comments = (
     <>
@@ -950,9 +969,15 @@ export default function Game() {
                         <LeadTracker g={g} />
                         <SectionTitle>Team Stats</SectionTitle>
                         <TeamStats g={g} />
+                        {injuriesNow && <Injuries preview={g.preview} home={g.home} away={g.away} />}
                       </>
                     )}
-                    {(tab === 'away' || tab === 'home') && <BoxScore g={g} side={tab} />}
+                    {(tab === 'away' || tab === 'home') && (
+                      <InjuryCtx.Provider value={hurt}>
+                        <BoxScore g={g} side={tab} />
+                        {injuriesNow && <Injuries preview={g.preview} home={g[tab]} title="Injured" />}
+                      </InjuryCtx.Provider>
+                    )}
                     {tab === 'plays' && (lg === 'nfl' ? <Drives g={g} /> : <Plays g={g} />)}
                     {tab === 'shots' && lg === 'nba' && <ShotChart g={g} />}
                   </div>
