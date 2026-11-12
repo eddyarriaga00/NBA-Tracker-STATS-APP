@@ -1095,6 +1095,9 @@ export default function Game() {
               )}
               <Situation g={g} />
               <Linescore g={g} />
+              {g.limited && (
+                <p className="mt-3 px-1 text-[12.5px] leading-snug text-label-2">ESPN’s record of this game is incomplete, so the box score and plays aren’t available here.</p>
+              )}
               {state === 'pre' && <Preview g={g} />}
 
               {state !== 'pre' && (

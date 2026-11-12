@@ -453,6 +453,133 @@ export async function getNflQuarters(id, opts) {
   return { ...q, named: items.some((it) => it.participants?.length) };
 }
 
+// ---------- Games ESPN's main feed is missing ----------
+// Now and then ESPN's summary feed has no record of a game that plainly
+// happened (it answers "not found"), while the scoreboard and its core feed
+// still have it. This rebuilds the same shape from those, so the game page
+// works as usual instead of saying the link is broken.
+
+const CORE_BOX_KEYS = ['minutes', 'points', 'fieldGoalsMade-fieldGoalsAttempted', 'threePointFieldGoalsMade-threePointFieldGoalsAttempted', 'freeThrowsMade-freeThrowsAttempted', 'rebounds', 'assists', 'turnovers', 'steals', 'blocks', 'offensiveRebounds', 'defensiveRebounds', 'fouls', 'plusMinus'];
+const CORE_BOX_LABELS = ['MIN', 'PTS', 'FG', '3PT', 'FT', 'REB', 'AST', 'TO', 'STL', 'BLK', 'OREB', 'DREB', 'PF', '+/-'];
+const flatStats = (d) => Object.fromEntries((d?.splits?.categories ?? []).flatMap((c) => c.stats ?? []).map((x) => [x.name, x.displayValue]));
+
+/** Every page of a paged core list. */
+async function corePages(url, o, size = 400) {
+  const first = await get(`${url}?limit=${size}&page=1`, o);
+  const rest = await Promise.all(
+    Array.from({ length: Math.max(0, (first.pageCount ?? 1) - 1) }, (_, i) => get(`${url}?limit=${size}&page=${i + 2}`, o).catch(() => null))
+  );
+  return [first, ...rest].flatMap((d) => d?.items ?? []);
+}
+
+/** One team's box score from the core feed: team totals, and (NBA) each player's line. */
+async function coreTeamBox(lg, base, teamId, o) {
+  const [stats, roster] = await Promise.all([
+    get(`${base}/competitors/${teamId}/statistics`, o).catch(() => null),
+    lg === 'nba' ? get(`${base}/competitors/${teamId}/roster`, o).catch(() => null) : null,
+  ]);
+  const f = flatStats(stats);
+  const pair = (a, b) => (f[a] != null && f[b] != null ? `${f[a]}-${f[b]}` : '');
+  const team = {
+    team: { id: String(teamId) },
+    statistics: (lg === 'nba'
+      ? [
+          ['Field Goal %', f.fieldGoalPct], ['Three Point %', f.threePointFieldGoalPct ?? f.threePointPct], ['Free Throw %', f.freeThrowPct],
+          ['Rebounds', f.totalRebounds ?? f.rebounds], ['Offensive Rebounds', f.offensiveRebounds], ['Assists', f.assists], ['Steals', f.steals],
+          ['Blocks', f.blocks], ['Total Turnovers', f.totalTurnovers ?? f.turnovers], ['Points in Paint', f.pointsInPaint],
+          ['Fast Break Points', f.fastBreakPoints], ['Largest Lead', f.largestLead],
+        ]
+      : []
+    ).filter(([, v]) => v != null).map(([label, displayValue]) => ({ label, displayValue })),
+  };
+  if (lg !== 'nba' || !roster?.entries?.length) return { team, players: null };
+
+  const line = (x) =>
+    CORE_BOX_KEYS.map((k) => {
+      if (k.includes('-')) return k.split('-').map((n) => x[n] ?? '0').join('-');
+      if (k === 'plusMinus') return x[k] == null ? '' : Number(x[k]) > 0 ? `+${Number(x[k])}` : String(x[k]);
+      return x[k] ?? '0';
+    });
+  const athletes = await pool(roster.entries, 8, async (e) => {
+    const out = !!e.didNotPlay || !e.statistics?.$ref;
+    const [who, mine] = await Promise.all([
+      e.athlete?.$ref ? get(secure(e.athlete.$ref), { ...o, ttl: 24 * 60 * 60_000 }).catch(() => null) : null,
+      out ? null : get(secure(e.statistics.$ref), o).catch(() => null),
+    ]);
+    const id = String(e.playerId ?? who?.id ?? '');
+    return {
+      athlete: {
+        id,
+        displayName: who?.displayName ?? e.displayName ?? '',
+        shortName: who?.shortName ?? e.displayName ?? '',
+        headshot: who?.headshot,
+        jersey: e.jersey ?? who?.jersey ?? '',
+        position: { abbreviation: who?.position?.abbreviation ?? '' },
+      },
+      starter: !!e.starter,
+      didNotPlay: !mine,
+      reason: mine ? '' : e.reason ?? '',
+      stats: mine ? line(flatStats(mine)) : [],
+    };
+  });
+  const list = athletes.filter((a) => a?.athlete.id);
+  // Starters, then the bench by minutes, then those who didn't play: the order ESPN lists them in.
+  const mins = (a) => Number(a.stats[0]) || 0;
+  list.sort((a, b) => (b.starter - a.starter) || (a.didNotPlay - b.didNotPlay) || (mins(b) - mins(a)));
+  const totals = ['', f.points ?? '', pair('fieldGoalsMade', 'fieldGoalsAttempted'), pair('threePointFieldGoalsMade', 'threePointFieldGoalsAttempted'), pair('freeThrowsMade', 'freeThrowsAttempted'),
+    f.totalRebounds ?? f.rebounds ?? '', f.assists ?? '', f.turnovers ?? '', f.steals ?? '', f.blocks ?? '', f.offensiveRebounds ?? '', f.defensiveRebounds ?? '', f.fouls ?? '', ''];
+  return { team, players: { team: { id: String(teamId) }, statistics: [{ keys: CORE_BOX_KEYS, labels: CORE_BOX_LABELS, names: CORE_BOX_LABELS, totals, athletes: list }] } };
+}
+
+/** A game in the summary feed's shape, pieced together from the scoreboard and the core feed. */
+async function coreSummary(lg, id, opts) {
+  // These are records of a finished game: no need to re-read ~60 small files on every refresh.
+  const o = { ...opts, fresh: false, ttl: 30 * 60_000 };
+  const base = `${CORE(lg)}/events/${id}/competitions/${id}`;
+  const [ev, comp] = await Promise.all([get(`${CORE(lg)}/events/${id}`, o), get(base, o).catch(() => ({}))]);
+  const when = comp.date ?? ev.date;
+  const day = new Date(when).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replaceAll('-', '');
+  const board = await get(`${site(lg)}/scoreboard?dates=${day}`, o);
+  const be = (board.events ?? []).find((e) => e.id === String(id));
+  const bc = be?.competitions?.[0];
+  if (!bc) {
+    const err = new Error("We couldn't find that. The link may be wrong or out of date.");
+    err.notFound = true;
+    throw err;
+  }
+  const teamIds = (bc.competitors ?? []).map((c) => c.team?.id ?? c.id);
+  const fixPlay = (p) => ({
+    ...p,
+    team: p.team?.$ref ? { id: refId(p.team.$ref, 'teams') } : undefined,
+    participants: (p.participants ?? []).map((x) => ({ athlete: { id: refId(x.athlete?.$ref, 'athletes') } })),
+  });
+  // Each piece is optional: one that fails leaves its section empty, not the page broken.
+  const [plays, probs, ...boxes] = await Promise.all([
+    lg === 'nba' ? corePages(`${base}/plays`, o).then((list) => list.map(fixPlay)).catch(() => []) : [],
+    corePages(`${base}/probabilities`, o, 1000).catch(() => []),
+    ...teamIds.map((tid) => coreTeamBox(lg, base, tid, o).catch(() => null)),
+  ]);
+  return {
+    viaCore: true,
+    header: {
+      id: String(id),
+      timeValid: ev.timeValid,
+      season: { year: Number(refId(ev.season?.$ref, 'seasons')) || undefined, type: Number(refId(ev.seasonType?.$ref, 'types')) || undefined },
+      competitions: [{
+        ...bc,
+        date: bc.date ?? when,
+        status: be.status ?? bc.status,
+        broadcasts: (bc.broadcasts ?? []).flatMap((b) => (b.names ?? []).map((n) => ({ media: { shortName: n } }))),
+      }],
+    },
+    boxscore: { teams: boxes.map((b) => b?.team).filter(Boolean), players: boxes.map((b) => b?.players).filter(Boolean) },
+    plays,
+    winprobability: probs.map((x) => ({ homeWinPercentage: x.homeWinPercentage, tiePercentage: x.tiePercentage, playId: refId(x.play?.$ref, 'plays') })),
+    leaders: (bc.competitors ?? []).map((c) => ({ team: { id: c.team?.id }, leaders: c.leaders ?? [] })),
+    gameInfo: { venue: comp.venue?.fullName ? comp.venue : bc.venue, attendance: comp.attendance || bc.attendance },
+  };
+}
+
 /** The best player of a game so far, by the same rating as Top Players. */
 function starOf(lg, s) {
   try {
@@ -476,7 +603,11 @@ export async function getGame(lg, id, opts) {
   // Live refreshes also read the scoreboard: it often has the new score first.
   const day = opts?.fresh ? gameDay.get(`${lg}:${id}`) : null;
   const [s, board] = await Promise.all([
-    get(`${site(lg)}/summary?event=${id}`, opts),
+    // ESPN's summary is missing for the odd game; the core feed can stand in for it.
+    get(`${site(lg)}/summary?event=${id}`, opts).catch((e) => {
+      if (!e?.notFound) throw e;
+      return coreSummary(lg, id, opts);
+    }),
     day ? get(`${site(lg)}/scoreboard?dates=${day}`, opts).catch(() => null) : null,
   ]);
   const comp = s.header?.competitions?.[0] ?? {};
@@ -585,6 +716,8 @@ export async function getGame(lg, id, opts) {
     id,
     league: lg,
     quarters,
+    // True when ESPN's own record of the game is incomplete and some sections couldn't be filled.
+    limited: !!s.viaCore && !(s.boxscore?.players ?? []).length,
     star: starOf(lg, s),
     preview: normPreview(lg, s, away, home),
     round: await playoffRound(lg, s, id, home?.id).catch(() => ''),
