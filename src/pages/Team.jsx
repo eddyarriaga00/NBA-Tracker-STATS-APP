@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { currentSeason, getTeam, getTeamStats, seasonLabel, seasonOptions } from '../api/espn';
 import { TeamMoves } from '../components/Moves';
+import Comments, { useCommentCounts } from '../components/Comments';
 import { BackButton, Card, ErrorState, Headshot, SeasonPicker, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
 import { visibleColor } from '../lib/color';
 import { useFavorites } from '../lib/favorites';
@@ -194,6 +195,10 @@ export default function Team() {
   const [tab, setTab] = useState('schedule');
   const [spoilerFree] = useSetting('spoilerFree');
   const { isFav, toggle } = useFavorites();
+  // One comment thread per team, shared by every season of its page.
+  const room = `${lg}:team:${id}`;
+  const said = useCommentCounts([room])[room] ?? 0;
+  const toComments = () => document.getElementById('team-comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const [params] = useSearchParams();
   const [pickedSeason, setSeason] = useState(() => Number(params.get('season')) || null); // links from old playoff results
   // A link to another team or season while this page is already open.
@@ -246,6 +251,11 @@ export default function Team() {
                 <div className="text-[13px] text-label-2">{t.standing}</div>
                 {/* ESPN only knows today's coach, so don't show it on past seasons. */}
                 {t.coach && t.isCurrent && <div className="mt-1 text-[12px] text-label-2">Head coach: {t.coach}</div>}
+                {/* The comments sit under the schedule; this jumps to them. */}
+                <button onClick={toComments} className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-fill px-2.5 py-1 text-[12px] font-semibold text-accent active:opacity-70">
+                  <Icon.Chat className="h-3.5 w-3.5" />
+                  {said ? `${said} ${said === 1 ? 'comment' : 'comments'}` : 'Comment'}
+                </button>
               </div>
             </div>
           </Card>
@@ -304,6 +314,13 @@ export default function Team() {
                 <Roster t={t} lg={lg} />
               </>
             )}
+          </div>
+
+          <div id="team-comments" className="scroll-mt-16">
+            <SectionTitle right={said ? <span className="text-[13px] text-label-2">{said}</span> : null}>Comments</SectionTitle>
+            <Card className="overflow-hidden">
+              <Comments key={room} room={room} emptyText={`No comments yet. Say something about the ${t.short ?? t.name}.`} />
+            </Card>
           </div>
         </div>
       )}
