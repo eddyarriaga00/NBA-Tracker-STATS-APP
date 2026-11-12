@@ -7,7 +7,7 @@ import { useData } from '../lib/useData';
 import { TeamLogo } from './ui';
 
 /** The day's other games along the top of a game page, to hop between them. */
-export default function GameStrip({ g }) {
+export default function GameStrip({ g, id = g.id }) {
   const lg = g.league;
   const day = toKey(new Date(g.date));
   const spoilers = useSpoilers();
@@ -18,15 +18,23 @@ export default function GameStrip({ g }) {
   );
   const here = useRef(null);
   const n = data?.length ?? 0;
-  useEffect(() => { here.current?.scrollIntoView({ inline: 'center', block: 'nearest' }); }, [n, g.id]);
-  if (n < 2 || !data.some((x) => String(x.id) === String(g.id))) return null;
+  // Centre the open game: instantly the first time, gliding when hopping to another.
+  const first = useRef(true);
+  useEffect(() => {
+    const el = here.current;
+    const box = el?.parentElement;
+    if (!el || !box) return;
+    box.scrollTo({ left: el.offsetLeft - (box.clientWidth - el.clientWidth) / 2, behavior: first.current ? 'auto' : 'smooth' });
+    first.current = false;
+  }, [n, id]);
+  if (n < 2 || !data.some((x) => String(x.id) === String(id))) return null;
   // Live first, then upcoming, then finished; this game stays wherever that puts it.
   const rank = { in: 0, pre: 1, post: 2 };
   const games = [...data].sort((a, b) => rank[a.status.state] - rank[b.status.state] || new Date(a.date) - new Date(b.date));
   return (
-    <div className="no-scrollbar -mx-3 mb-2 flex gap-2 overflow-x-auto px-3 md:mx-0 md:px-0">
+    <div className="no-scrollbar relative -mx-3 mb-2 flex gap-2 overflow-x-auto px-3 py-0.5 md:mx-0 md:px-0.5">
       {games.map((x) => {
-        const cur = String(x.id) === String(g.id);
+        const cur = String(x.id) === String(id);
         const live = x.status.state === 'in';
         const hide = spoilers.hidden(x);
         const pre = x.status.state === 'pre';
@@ -37,7 +45,7 @@ export default function GameStrip({ g }) {
             to={`/${lg}/game/${x.id}`}
             replace
             aria-current={cur ? 'page' : undefined}
-            className={`shrink-0 rounded-xl px-2.5 py-1.5 transition active:scale-95 ${cur ? 'bg-card ring-2 ring-accent' : 'bg-card/70'}`}
+            className={`shrink-0 rounded-xl px-2.5 py-1.5 ring-2 transition-all duration-200 active:scale-95 ${cur ? 'bg-card ring-accent' : 'bg-card/70 ring-transparent'}`}
           >
             <div className={`flex items-center justify-center gap-1 text-[10.5px] font-semibold ${live ? 'text-live' : 'text-label-2'}`}>
               {live && <span className="live-dot h-[5px] w-[5px] rounded-full bg-live" />}

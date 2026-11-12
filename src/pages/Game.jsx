@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { getGame, getNflQuarters, teamHref } from '../api/espn';
 import Comments, { useCommentCounts } from '../components/Comments';
@@ -10,11 +10,10 @@ import { Icon } from '../components/icons';
 import { downloadICS, gameUrl } from '../lib/calendar';
 import { useSpoilers } from '../lib/settings';
 import { toast } from '../lib/toast';
-import WinProbability from '../components/WinProbability';
 import { GamePick } from '../components/Picks';
 import FootballField from '../components/FootballField';
 import GameStrip from '../components/GameStrip';
-import LeadTracker from '../components/LeadTracker';
+import GameFlow from '../components/GameFlow';
 import { BackButton, Card, ErrorState, Headshot, LiveBadge, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
 import { visibleColor } from '../lib/color';
 import { useLeague } from '../lib/league';
@@ -411,7 +410,57 @@ function TeamLine({ team, labels, totals }) {
   );
 }
 
-function BoxScore({ g, side }) {
+/** Both teams' box scores on one screen, sharing one quarter picker. */
+function Boxes({ g, focus }) {
+  const lg = useLeague();
+  const [period, setPeriod] = useState('game');
+  const live = g.status.state === 'in';
+  let periods;
+  let livePeriod = null;
+  if (lg === 'nfl') {
+    const n = g.status.state === 'pre' ? 0 : Math.max(live ? 1 : 4, g.status.period || 0, ...g.drives.map((d) => d.period || 0));
+    periods = Array.from({ length: n }, (_, i) => i + 1);
+    livePeriod = live ? g.status.period : null;
+  } else {
+    periods = g.quarters?.periods ?? [];
+    livePeriod = g.quarters?.livePeriod ?? null;
+  }
+  const sel = period !== 'game' && periods.includes(period) ? period : 'game';
+  const awayRef = useRef(null);
+  const homeRef = useRef(null);
+  const refs = { away: awayRef, home: homeRef };
+  // A link from a player (?tab=home) lands on that team's half.
+  useEffect(() => {
+    if (focus) refs[focus].current?.scrollIntoView({ block: 'start' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus, g.id]);
+  const jump = (side) => refs[side].current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  return (
+    <div>
+      {periods.length > 0 && <PeriodChips periods={periods} sel={sel} onPick={setPeriod} live={livePeriod} />}
+      <div className="space-y-5 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
+        {['away', 'home'].map((side) => {
+          const t = g[side];
+          const other = side === 'away' ? 'home' : 'away';
+          return (
+            <section key={side} ref={refs[side]} className="min-w-0 scroll-mt-16">
+              <div className="mb-2 flex items-center gap-2 px-1">
+                <TeamLogo abbr={t.abbr} size={22} />
+                <span className="min-w-0 flex-1 truncate text-[15px] font-bold">{t.name}</span>
+                <button onClick={() => jump(other)} className="flex shrink-0 items-center gap-1 rounded-full bg-fill px-2 py-[3px] text-[11.5px] font-semibold text-label-2 active:opacity-60 lg:hidden">
+                  <TeamLogo abbr={g[other].abbr} size={13} /> {g[other].abbr} {side === 'away' ? '↓' : '↑'}
+                </button>
+              </div>
+              <BoxScore g={g} side={side} period={sel} />
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function BoxScore({ g, side, period }) {
   const lg = useLeague();
   const team = g[side];
   const box = g.box.find((b) => b.teamId === team.id) ?? g.box[side === 'away' ? 0 : 1];
@@ -419,12 +468,12 @@ function BoxScore({ g, side }) {
   const picker = null;
   if (!box) return <>{picker}<div className="py-10 text-center text-label-2">Box score not available yet.</div></>;
 
-  if (lg === 'nfl') return <NflBox g={g} box={box} lg={lg} />;
+  if (lg === 'nfl') return <NflBox g={g} box={box} lg={lg} period={period} />;
 
   return (
     <div>
       {picker}
-      <NbaBox g={g} box={box} lg={lg} team={team} />
+      <NbaBox g={g} box={box} lg={lg} team={team} period={period} />
     </div>
   );
 }
@@ -448,8 +497,9 @@ function PeriodChips({ periods, sel, onPick, live }) {
   );
 }
 
-function NflBox({ g, box, lg }) {
-  const [period, setPeriod] = useState('game');
+function NflBox({ g, box, lg, period: ctl }) {
+  const [own, setPeriod] = useState('game');
+  const period = ctl ?? own;
   const [q, setQ] = useState(null);
   const [failed, setFailed] = useState(false);
   const live = g.status.state === 'in';
@@ -489,7 +539,7 @@ function NflBox({ g, box, lg }) {
 
   return (
     <div>
-      {periods.length > 0 && <PeriodChips periods={periods} sel={sel} onPick={setPeriod} live={live ? g.status.period : null} />}
+      {ctl === undefined && periods.length > 0 && <PeriodChips periods={periods} sel={sel} onPick={setPeriod} live={live ? g.status.period : null} />}
       {note === 'loading' ? (
         <div className="space-y-3">
           <Skeleton className="h-36" />
@@ -516,9 +566,10 @@ function NflBox({ g, box, lg }) {
   );
 }
 
-function NbaBox({ g, box, lg, team }) {
+function NbaBox({ g, box, lg, team, period: ctl }) {
   const q = g.quarters;
-  const [period, setPeriod] = useState('game');
+  const [own, setPeriod] = useState('game');
+  const period = ctl ?? own;
   const periods = q?.periods ?? [];
   const sel = period !== 'game' && periods.includes(period) ? period : 'game';
 
@@ -562,7 +613,7 @@ function NbaBox({ g, box, lg, team }) {
 
   return (
     <>
-      {periods.length > 0 && (
+      {ctl === undefined && periods.length > 0 && (
         <div className="no-scrollbar -mx-3 mb-3 flex items-center gap-1.5 overflow-x-auto px-3 md:mx-0 md:px-0">
           {['game', ...periods].map((p) => (
             <button
@@ -820,26 +871,26 @@ function Actions({ g }) {
   };
   return (
     <>
-    <div className="mt-3 flex flex-wrap items-center gap-2">
+    <div className="mt-2.5 flex flex-wrap items-center gap-2">
       <HeatBadge g={g} />
       <span className="flex-1" />
       {canFollow && (
         <button
           onClick={() => follow(every ? null : 20)}
           aria-pressed={!!every}
-          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold active:scale-95 ${every ? 'bg-accent text-white' : 'bg-fill text-accent'}`}
+          className={`flex h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold active:scale-95 ${every ? 'bg-accent text-white' : 'bg-fill text-accent'}`}
         >
-          <span className={`h-2 w-2 rounded-full ${every ? 'bg-white' : 'bg-live'}`} />
+          <span className={`h-1.5 w-1.5 rounded-full ${every ? 'bg-white' : 'bg-live'}`} />
           {every ? 'Following live' : 'Follow live'}
         </button>
       )}
       {g.status.state === 'pre' && g.timeValid && !g.status.postponed && (
-        <button onClick={addToCalendar} className="flex items-center gap-1.5 rounded-full bg-fill px-3 py-1.5 text-[13px] font-semibold text-accent active:scale-95">
-          <Icon.CalendarPlus className="h-4 w-4" /> Add to Calendar
+        <button onClick={addToCalendar} aria-label="Add to calendar" title="Add to calendar" className="flex h-8 w-8 items-center justify-center rounded-full bg-fill text-accent active:scale-95">
+          <Icon.CalendarPlus className="h-4 w-4" />
         </button>
       )}
-      <button onClick={share} className="flex items-center gap-1.5 rounded-full bg-fill px-3 py-1.5 text-[13px] font-semibold text-accent active:scale-95">
-        <Icon.Share className="h-4 w-4" /> Share
+      <button onClick={share} aria-label="Share" title="Share" className="flex h-8 w-8 items-center justify-center rounded-full bg-fill text-accent active:scale-95">
+        <Icon.Share className="h-4 w-4" />
       </button>
     </div>
     {canFollow && every && (
@@ -872,15 +923,23 @@ function HiddenNotice({ onReveal }) {
 export default function Game() {
   const { id } = useParams();
   const lg = useLeague();
-  // ?tab=away|home opens straight on that team's box score (used by player links).
+  // ?tab=away|home opens the box score on that team (used by player links).
   const [query] = useSearchParams();
-  const [tab, setTab] = useState(() => (['away', 'home', 'plays'].includes(query.get('tab')) ? query.get('tab') : 'game'));
+  const asked = query.get('tab');
+  const [tab, setTab] = useState(() => (asked === 'away' || asked === 'home' ? 'box' : asked === 'plays' ? 'plays' : 'game'));
+  const [focus, setFocus] = useState(() => (asked === 'away' || asked === 'home' ? asked : null));
   const room = `${lg}:game:${id}`;
   const counts = useCommentCounts([room]);
   const spoilers = useSpoilers();
-  const { data: g, error, loading, reload, updatedAt } = useData((fresh) => getGame(lg, id, { fresh }), [lg, id], {
+  const { data: fetched, error, loading, reload, updatedAt } = useData((fresh) => getGame(lg, id, { fresh }), [lg, id], {
     pollMs: gameDelay,
   });
+  // Hopping between games keeps the last one on screen, dimmed, until the next arrives,
+  // so the page never collapses to a loading skeleton and jumps.
+  const last = useRef(null);
+  if (fetched) last.current = fetched;
+  const g = fetched ?? (loading && last.current?.league === lg ? last.current : null);
+  const stale = !fetched && !!g;
   const hide = g ? spoilers.hidden(g) : false;
   const reveal = () => g && spoilers.reveal(g);
   // ESPN's injury list is as of today, so it only belongs on a game that's on now or just ended.
@@ -898,12 +957,26 @@ export default function Game() {
       </Card>
     </>
   );
+  const state = g?.status.state;
+  // Pick'em is for upcoming and recent games, not ones from years ago.
+  const pick = g && Date.now() - Date.parse(g.date) < 3 * 864e5 ? (
+    <div className="mt-3">
+      <GamePick g={g} />
+    </div>
+  ) : null;
+  const tabs = [
+    { value: 'game', label: 'Game' },
+    { value: 'box', label: 'Box score' },
+    { value: 'plays', label: lg === 'nfl' ? 'Drives' : 'Plays' },
+    ...(lg === 'nba' ? [{ value: 'shots', label: 'Shots' }] : []),
+  ];
+  const shownTab = tabs.some((t) => t.value === tab) ? tab : 'game';
 
   return (
     <div>
       <div className="flex items-start justify-between">
         <BackButton label="Scores" fallback={`/${lg}`} />
-        {g?.status.state === 'in' && !hide && <Freshness updatedAt={updatedAt} error={error} className="mt-1" />}
+        {state === 'in' && !hide && !stale && <Freshness updatedAt={updatedAt} error={error} className="mt-1" />}
       </div>
 
       {loading && !g ? (
@@ -916,18 +989,14 @@ export default function Game() {
         <ErrorState error={error} onRetry={reload} />
       ) : (
         <div className="rise">
+          <GameStrip g={g} id={id} />
+          <div className={`transition-opacity duration-200 ${stale ? 'pointer-events-none opacity-40' : ''}`}>
           {g.round && (
             <div className="mb-2 px-1 text-[12.5px] font-semibold uppercase tracking-wide text-accent">Playoffs · {g.round}</div>
           )}
-          <GameStrip g={g} />
           <Hero g={g} hide={hide} onReveal={reveal} />
           <Actions g={g} />
-          {/* Pick'em is for upcoming and recent games, not ones from years ago. */}
-          {Date.now() - Date.parse(g.date) < 3 * 864e5 && (
-            <div className="mt-3">
-              <GamePick g={g} />
-            </div>
-          )}
+          {state !== 'post' && pick}
           {hide ? (
             <>
               <HiddenNotice onReveal={reveal} />
@@ -946,57 +1015,45 @@ export default function Game() {
               )}
               <Situation g={g} />
               <Linescore g={g} />
-              {g.status.state !== 'pre' && g.winProb && (
-                <WinProbability wp={g.winProb} home={g.home} away={g.away} live={g.status.state === 'in'} />
-              )}
-              {g.status.state === 'pre' && <Preview g={g} />}
+              {state === 'pre' && <Preview g={g} />}
 
-              {g.status.state !== 'pre' && (
+              {state !== 'pre' && (
                 <>
-                  <Segmented
-                    className="mt-6"
-                    value={tab}
-                    onChange={setTab}
-                    options={[
-                      { value: 'game', label: 'Game' },
-                      { value: 'away', label: g.away.abbr },
-                      { value: 'home', label: g.home.abbr },
-                      { value: 'plays', label: lg === 'nfl' ? 'Drives' : 'Plays' },
-                      ...(lg === 'nba' ? [{ value: 'shots', label: 'Shots' }] : []),
-                    ]}
-                  />
+                  <Segmented className="mt-4" value={shownTab} onChange={(v) => { setTab(v); setFocus(null); }} options={tabs} />
                   <div className="mt-3">
-                    {tab === 'game' && (
+                    {shownTab === 'game' && (
                       <>
-                        <LeadTracker g={g} />
+                        <GameFlow g={g} />
+                        <GameLeaders g={g} />
                         <SectionTitle>Team Stats</SectionTitle>
                         <TeamStats g={g} />
                         {injuriesNow && <Injuries preview={g.preview} home={g.home} away={g.away} />}
                       </>
                     )}
-                    {(tab === 'away' || tab === 'home') && (
+                    {shownTab === 'box' && (
                       <InjuryCtx.Provider value={hurt}>
-                        <BoxScore g={g} side={tab} />
-                        {injuriesNow && <Injuries preview={g.preview} home={g[tab]} title="Injured" />}
+                        <Boxes g={g} focus={focus} />
                       </InjuryCtx.Provider>
                     )}
-                    {tab === 'plays' && (lg === 'nfl' ? <Drives g={g} /> : <Plays g={g} />)}
-                    {tab === 'shots' && lg === 'nba' && <ShotChart g={g} />}
+                    {shownTab === 'plays' && (lg === 'nfl' ? <Drives g={g} /> : <Plays g={g} />)}
+                    {shownTab === 'shots' && lg === 'nba' && <ShotChart g={g} />}
                   </div>
                 </>
               )}
 
               <Highlights videos={g.videos} />
+              {state === 'post' && pick}
 
               <div className="grid grid-cols-1 gap-x-4 md:grid-cols-2">
                 <div>{comments}</div>
                 <div>
-                  <GameLeaders g={g} />
+                  {state === 'pre' && <GameLeaders g={g} />}
                   <GameInfo g={g} />
                 </div>
               </div>
             </>
           )}
+          </div>
         </div>
       )}
     </div>

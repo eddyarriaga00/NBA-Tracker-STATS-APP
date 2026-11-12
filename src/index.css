@@ -55,6 +55,8 @@
 }
 
 html, body { background: var(--bg); }
+/* No rubber-band past the top or bottom of the page. */
+html, body { overscroll-behavior-y: none; }
 /* Never let anything make the page wider than the screen (stops sideways zoom/scroll on phones). */
 html, body { max-width: 100%; overflow-x: hidden; }
 @supports (overflow: clip) { html, body { overflow-x: clip; } }
