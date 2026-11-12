@@ -1844,14 +1844,17 @@ function nflRatings(s) {
 const rated = new Map(); // `${lg}:${gameId}` -> that game's players (finished games never change)
 
 /**
- * The best players of one finished game (a normalized scoreboard game), best
+ * The best players of one finished or live game (a normalized scoreboard game), best
  * first. Remembered for the session, so each box score is only read once.
  */
 export async function getGameTop(lg, g, limit = 10) {
   const key = `${lg}:${g.id}`;
-  if (rated.has(key)) return rated.get(key);
+  const live = g.status?.state === 'in';
+  // A live game's numbers keep moving, so its list is only reused for a minute.
+  const had = rated.get(key);
+  if (had && (!had.until || had.until > Date.now())) return had.list;
   const url = `${site(lg)}/summary?event=${g.id}`;
-  const s = await get(url, { ttl: 60_000 });
+  const s = await get(url, { ttl: 60_000, fresh: live });
   const list = (lg === 'nba' ? nbaRatings(s) : nflRatings(s))
     .sort((a, b) => b.rating - a.rating)
     .slice(0, limit)
@@ -1863,7 +1866,8 @@ export async function getGameTop(lg, g, limit = 10) {
         name: p.athlete.displayName,
         headshot: headshotOf(p.athlete) || `https://a.espncdn.com/i/headshots/${lg}/players/full/${p.athlete.id}.png`,
         teamAbbr: mine.abbr,
-        result: `${mine.winner ? 'W' : opp.winner ? 'L' : 'T'} ${mine.score}-${opp.score} ${mine === g.home ? 'vs' : '@'} ${opp.abbr}`,
+        result: `${live ? '' : `${mine.winner ? 'W' : opp.winner ? 'L' : 'T'} `}${mine.score}-${opp.score} ${mine === g.home ? 'vs' : '@'} ${opp.abbr}`,
+        live,
         gameId: g.id,
         side: mine === g.home ? 'home' : 'away',
         rating: Math.round(p.rating * 10) / 10,
@@ -1871,7 +1875,7 @@ export async function getGameTop(lg, g, limit = 10) {
       };
     });
   // Box scores are big (about half a megabyte each); keep only what's shown.
-  if (list.length) { rated.set(key, list); cache.delete(url); }
+  if (list.length) { rated.set(key, { list, until: live ? Date.now() + 60_000 : 0 }); cache.delete(url); }
   return list;
 }
 

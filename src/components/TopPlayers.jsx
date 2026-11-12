@@ -18,7 +18,7 @@ const HOW = {
 };
 
 /**
- * The best players across the finished games of a day (NBA) or week (NFL),
+ * The best players across the finished and live games of a day (NBA) or week (NFL),
  * ranked. Fills in as each game ends; loads when scrolled into view.
  */
 export default function TopPlayers({ lg, games, label }) {
@@ -26,8 +26,11 @@ export default function TopPlayers({ lg, games, label }) {
   const [spoilerFree] = useSetting('spoilerFree');
   const [shown, setShown] = useState(false); // spoiler-free: tap to reveal
   const [all, setAll] = useState(false);
-  const done = (games ?? []).filter((g) => g.status.state === 'post');
-  const ids = done.map((g) => g.id).sort().join(',');
+  const counted = (g) => g.status.state === 'post' || g.status.state === 'in';
+  const done = (games ?? []).filter(counted);
+  const liveCount = done.filter((g) => g.status.state === 'in').length;
+  // Live games are read again as their scores move.
+  const ids = done.map((g) => (g.status.state === 'in' ? `${g.id}:${g.away.score}-${g.home.score}` : g.id)).sort().join(',');
   const open = !!(seen && ids && (!spoilerFree || shown));
   // Games are read three at a time and the ranking fills in as each one arrives,
   // so one slow box score never holds up the rest.
@@ -38,7 +41,7 @@ export default function TopPlayers({ lg, games, label }) {
   useEffect(() => {
     if (!open) return;
     let alive = true;
-    const todo = gamesRef.current.filter((g) => g.status.state === 'post');
+    const todo = gamesRef.current.filter((g) => g.status.state === 'post' || g.status.state === 'in');
     setState((s) => (s.key === key ? { ...s, left: todo.length } : { key, lists: {}, left: todo.length }));
     let i = 0;
     const worker = async () => {
@@ -65,7 +68,9 @@ export default function TopPlayers({ lg, games, label }) {
     <section ref={ref} className="mt-6">
       <h2 className="mb-1.5 flex items-baseline gap-1.5 px-1 text-[11.5px] font-semibold uppercase tracking-wide text-label-2 md:text-[13px]">
         <span>Top players{label ? ` · ${label}` : ''}</span>
-        {done.length < total ? (
+        {liveCount > 0 ? (
+          <span className="font-normal normal-case tracking-normal text-label-3">{done.length - liveCount} final · {liveCount} live</span>
+        ) : done.length < total ? (
           <span className="font-normal normal-case tracking-normal text-label-3">{done.length} of {total} games final</span>
         ) : mine?.left > 0 && got > 0 ? (
           <span className="font-normal normal-case tracking-normal text-label-3">adding {mine.left} more {mine.left === 1 ? 'game' : 'games'}…</span>
@@ -93,6 +98,7 @@ export default function TopPlayers({ lg, games, label }) {
                     <span className="num block truncate text-[12.5px] text-label">{p.line}</span>
                     <span className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-label-2">
                       <TeamLogo abbr={p.teamAbbr} size={14} league={lg} />
+                      {p.live && <span className="flex shrink-0 items-center gap-1 font-semibold text-live"><span className="live-dot h-[5px] w-[5px] rounded-full bg-live" />Live</span>}
                       <span className="num truncate">{p.result}</span>
                     </span>
                   </span>
