@@ -143,6 +143,47 @@ function Facts({ bio }) {
   );
 }
 
+// Biggest honors first; anything not listed keeps ESPN's order after these.
+const AWARD_ORDER = [
+  /^(NFL )?MVP$/, /^(Finals|Super Bowl) MVP$/, /Defensive Player of the Year/, /Offensive Player of the Year/, /^(Offensive |Defensive )?Rookie of the Year/,
+  /Sixth Man/, /Most Improved/, /Clutch Player/, /Comeback Player/, /Walter Payton/, /All-NBA 1st|All-Pro 1st|First.Team All-Pro/, /All-NBA 2nd|All-Pro 2nd/, /All-NBA 3rd/,
+  /All-Defensive 1st/, /All-Defensive 2nd/, /Conference Finals MVP/, /All-Star MVP|Pro Bowl MVP/, /Cup MVP/, /All-Rookie/,
+];
+const awardRank = (name) => { const i = AWARD_ORDER.findIndex((r) => r.test(name)); return i < 0 ? AWARD_ORDER.length : i; };
+
+/** A player's awards and honors, biggest first. */
+function Awards({ awards, lg }) {
+  const [all, setAll] = useState(false);
+  const list = useMemo(() => [...(awards ?? [])].map((a, i) => ({ ...a, i })).sort((x, y) => awardRank(x.name) - awardRank(y.name) || x.i - y.i), [awards]);
+  if (!list.length) return null;
+  const shown = all ? list : list.slice(0, 4);
+  return (
+    <>
+      <SectionTitle right={<span className="text-[13px] text-label-2">{list.length} {list.length === 1 ? 'honor' : 'honors'}</span>}>Awards</SectionTitle>
+      <Card className="overflow-hidden">
+        <div className="grid grid-cols-1 gap-px bg-sep md:grid-cols-2">
+          {shown.map((a) => (
+            <div key={a.id ?? a.name} className="flex items-center gap-3 bg-card px-3.5 py-2.5 md:px-4">
+              <span className="num flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#ffd60a]/15 text-[13px] font-bold text-[#806000] dark:text-[#ffd60a]">
+                {a.count || `${a.seasons.length || 1}x`}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[14.5px] font-semibold">{a.name}</span>
+                <span className="block text-[12px] leading-snug text-label-2">{a.seasons.map((y) => seasonLabel(lg, y)).join(', ')}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+        {list.length > 4 && (
+          <button onClick={() => setAll((v) => !v)} className="w-full border-t border-sep py-2 text-[13px] font-semibold text-accent active:bg-fill">
+            {all ? 'Show fewer' : `Show all ${list.length}`}
+          </button>
+        )}
+      </Card>
+    </>
+  );
+}
+
 function SimpleTable({ head, rows, first = 'Season', sticky = true }) {
   return (
     <div className="no-scrollbar overflow-x-auto">
@@ -503,6 +544,7 @@ export default function Player() {
             }}
           />
           <Facts bio={p.bio} />
+          <Awards awards={p.awards} lg={lg} />
           <div id="player-tabs" className="scroll-mt-20">
             <Segmented className="mt-7" value={tab} onChange={setTab} options={tabs} />
           </div>
