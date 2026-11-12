@@ -6,6 +6,7 @@ import FootballField from './FootballField';
 import { gameHeat } from '../lib/excitement';
 import { useSpoilers } from '../lib/settings';
 import { nextLabel, useCardExtras, usePregame } from '../lib/cardExtras';
+import { useSeen } from '../lib/useSeen';
 import { edgeColor } from '../lib/color';
 import { useTheme } from '../lib/theme';
 import RollingNumber from './RollingNumber';
@@ -172,14 +173,16 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
   const live = status.state === 'in';
   const poss = live && !hide ? situation?.possession : null;
   const ctx = useCardExtras();
-  const pre = usePregame(g, !!ctx);
+  // Form and injuries load for any upcoming game once its card is near the screen.
+  const [cardRef, near] = useSeen(500);
+  const pre = usePregame(g, near);
   const extraFor = (t) =>
-    ctx && !hide
+    (ctx || pre) && !hide
       ? {
-          streak: ctx.streaks?.[t.id],
+          streak: ctx?.streaks?.[t.id],
           form: pre?.[t.id]?.form,
           inj: pre?.[t.id],
-          next: status.state === 'post' ? ctx.next?.[t.id] : null,
+          next: status.state === 'post' ? ctx?.next?.[t.id] : null,
         }
       : null;
 
@@ -220,6 +223,7 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
 
   return (
     <Link
+      ref={cardRef}
       to={`/${g.league}/game/${g.id}`}
       className="rise block transition active:scale-[0.985]"
       // The tapped card grows into the game page's header (and back again).

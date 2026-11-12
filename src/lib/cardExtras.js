@@ -66,9 +66,14 @@ export function nextLabel(n) {
   return `${day} ${n.home ? 'vs' : '@'} ${n.opp}`;
 }
 
-/** Injuries and last five games for a game starting in the next day and a half. */
+/**
+ * Injuries and last five games for an upcoming game in the next eight days,
+ * which covers a whole NFL week (Thursday through Monday), not only the next
+ * game up. `on` is false until the card is near the screen, so a long list
+ * only asks for the games you actually scroll to.
+ */
 export function usePregame(g, on) {
-  const soon = on && g.status.state === 'pre' && !g.status.postponed && Date.parse(g.date) - Date.now() < 36 * HOUR;
+  const soon = on && g.status.state === 'pre' && !g.status.postponed && Date.parse(g.date) - Date.now() < 8 * 24 * HOUR;
   const { data } = useData(() => (soon ? getPregame(g.league, g.id) : null), [g.league, g.id, soon]);
   return useMemo(() => {
     if (!data) return null;
