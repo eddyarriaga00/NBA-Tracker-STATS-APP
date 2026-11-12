@@ -89,6 +89,9 @@ function OfflineNotice() {
 
 // Follows the visible screen when iPhone leaves it shifted (see lib/viewportFix.js).
 const PINNED = { transform: 'translateY(var(--vv-shift, 0px))' };
+// Each bar is its own layer in a page transition, so it holds still while the page changes under it.
+const TOP_BAR = { ...PINNED, viewTransitionName: 'app-header' };
+const BOTTOM_BAR = { ...PINNED, viewTransitionName: 'app-nav' };
 
 export default function Shell() {
   const { pathname } = useLocation();
@@ -122,7 +125,7 @@ export default function Shell() {
     <LeagueCtx.Provider value={league}>
       <BioProvider>
       <div className="min-h-dvh">
-        <header style={PINNED} className="sticky top-0 z-40 border-b border-sep bg-bar pt-[env(safe-area-inset-top)] backdrop-blur-xl backdrop-saturate-150">
+        <header style={TOP_BAR} className="app-bar sticky top-0 z-40 border-b border-sep bg-bar pt-[env(safe-area-inset-top)] backdrop-blur-xl backdrop-saturate-150">
           <div className="mx-auto flex h-12 max-w-5xl items-center gap-2.5 px-3 md:h-14 md:gap-3 md:px-4">
             <NavLink to={`/${league}`} className="flex shrink-0 items-center gap-2" aria-label="Home">
               <img src="./favicon.svg" alt="" className="h-7 w-7 md:h-8 md:w-8" />
@@ -165,7 +168,7 @@ export default function Shell() {
           </ErrorBoundary>
         </main>
 
-        <nav style={PINNED} className="fixed inset-x-0 bottom-0 z-40 border-t border-sep bg-bar pb-[env(safe-area-inset-bottom)] backdrop-blur-xl backdrop-saturate-150 lg:hidden">
+        <nav style={BOTTOM_BAR} className="app-bar fixed inset-x-0 bottom-0 z-40 border-t border-sep bg-bar pb-[env(safe-area-inset-bottom)] backdrop-blur-xl backdrop-saturate-150 lg:hidden">
           <div className="mx-auto grid max-w-lg grid-cols-5">
             {tabs.map((t) => (
               <NavLink

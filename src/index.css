@@ -17,6 +17,7 @@
   --live: #ff3b30;
   --win: #34c759;
   --bar: rgba(249, 249, 251, 0.78);
+  --bar-solid: #f8f8fa;
   color-scheme: light;
 }
 .dark {
@@ -33,6 +34,7 @@
   --live: #ff453a;
   --win: #30d158;
   --bar: rgba(22, 22, 24, 0.74);
+  --bar-solid: #121214;
   color-scheme: dark;
 }
 
@@ -91,6 +93,14 @@ body {
 
 /* Page transitions: a quick cross-fade, and the tapped score card growing into the game header. */
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.2s; animation-timing-function: ease-out; }
+/* The top bar and bottom tabs are separate layers that don't animate: the new
+   one simply shows, in place, while the page fades under it. */
+::view-transition-group(app-header), ::view-transition-group(app-nav) { animation: none; }
+::view-transition-old(app-header), ::view-transition-old(app-nav) { display: none; }
+::view-transition-new(app-header), ::view-transition-new(app-nav) { animation: none; mix-blend-mode: normal; }
+/* A layer's picture can't include the blur of what's behind it, so for the
+   moment of a transition the bars are a solid colour instead of frosted glass. */
+html.vt .app-bar { background: var(--bar-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
 ::view-transition-group(game-hero) { animation-duration: 0.34s; animation-timing-function: cubic-bezier(.2,.8,.2,1); }
 ::view-transition-old(game-hero), ::view-transition-new(game-hero) { animation-duration: 0.26s; height: 100%; object-fit: cover; object-position: top; }
 

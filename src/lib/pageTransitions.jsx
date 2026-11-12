@@ -7,6 +7,13 @@ import { setMorph } from './morph';
 const scrolled = new Map();
 if (typeof history !== 'undefined' && 'scrollRestoration' in history) history.scrollRestoration = 'manual';
 
+// How many transitions are running (a second tap can start one before the first ends).
+let running = 0;
+const solidBars = (on) => {
+  running = Math.max(0, running + (on ? 1 : -1));
+  document.documentElement.classList.toggle('vt', running > 0);
+};
+
 const calm = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 const isGame = (pathname) => /^\/[a-z]+\/game\//.test(pathname);
 
@@ -99,6 +106,8 @@ export default function TransitionRoutes({ children, preload }) {
       if (cancelled) return;
       let t;
       let swapped = false;
+      // While the transition runs the bars are solid (see index.css); set before the browser takes its first picture.
+      solidBars(true);
       const once = (sync) => {
         if (swapped) return;
         swapped = true;
@@ -107,6 +116,7 @@ export default function TransitionRoutes({ children, preload }) {
       try {
         t = document.startViewTransition(() => once(true));
       } catch {
+        solidBars(false);
         once(false);
         return;
       }
@@ -118,7 +128,10 @@ export default function TransitionRoutes({ children, preload }) {
         try { t.skipTransition(); } catch { /* already over */ }
       }, 450);
       // Once you're off a game page, no card needs to pair with its header any more.
-      t.finished.catch(() => {}).finally(() => { if (!isGame(want.current.location.pathname)) setMorph(null); });
+      t.finished.catch(() => {}).finally(() => {
+        solidBars(false);
+        if (!isGame(want.current.location.pathname)) setMorph(null);
+      });
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
