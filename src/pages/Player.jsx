@@ -145,7 +145,7 @@ function Facts({ bio }) {
 
 // Biggest honors first; anything not listed keeps ESPN's order after these.
 const AWARD_ORDER = [
-  /^(NFL )?MVP$/, /^(Finals|Super Bowl) MVP$/, /Defensive Player of the Year/, /Offensive Player of the Year/, /^(Offensive |Defensive )?Rookie of the Year/,
+  /^(NFL )?MVP$/, /^(Finals|Super Bowl) MVP$/, /Defensive Player of the Year/, /Offensive Player of the Year/, /Rookie of the Year/,
   /Sixth Man/, /Most Improved/, /Clutch Player/, /Comeback Player/, /Walter Payton/, /All-NBA 1st|All-Pro 1st|First.Team All-Pro/, /All-NBA 2nd|All-Pro 2nd/, /All-NBA 3rd/,
   /All-Defensive 1st/, /All-Defensive 2nd/, /Conference Finals MVP/, /All-Star MVP|Pro Bowl MVP/, /Cup MVP/, /All-Rookie/,
 ];
