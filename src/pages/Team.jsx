@@ -25,8 +25,8 @@ function GameRow({ e, lg }) {
   const [spoilerFree] = useSetting('spoilerFree');
   const hide = spoilerFree && e.state !== 'pre' && isRecent(e);
   return (
-    <Link to={`/${lg}/game/${e.id}`} className="flex items-center gap-3 px-4 py-2.5 transition hover:bg-fill/40">
-      <div className="w-[108px] shrink-0 md:w-[120px]">
+    <Link to={`/${lg}/game/${e.id}`} className="flex items-center gap-2.5 px-4 py-2.5 transition hover:bg-fill/40 active:bg-fill md:gap-3">
+      <div className="w-[86px] shrink-0 md:w-[120px]">
         <div className="text-[13px] font-semibold">{fmtDate(e.date)}</div>
         {(e.week || e.playoff) && (
           <div className={`text-[11px] leading-tight ${e.playoff ? 'font-semibold text-accent' : 'text-label-2'}`}>
@@ -39,7 +39,7 @@ function GameRow({ e, lg }) {
       <TeamLogo abbr={e.opp.abbr} size={26} />
       <span className="min-w-0 flex-1 truncate text-[14px] font-semibold md:text-[15px]">{e.opp.name}</span>
       {hide ? (
-        <span className="shrink-0 text-[13px] text-label-2">{done ? 'Final · hidden' : 'Live · hidden'}</span>
+        <span className="shrink-0 text-[13px] text-label-2">{done ? 'Final' : 'Live'}</span>
       ) : done ? (
         <span className="num shrink-0 text-[14px]">
           <span className={`mr-1.5 font-bold ${e.win ? 'text-win' : 'text-live'}`}>{e.win ? 'W' : 'L'}</span>
@@ -235,10 +235,10 @@ export default function Team() {
                 {isFav(lg, t.id) ? 'Favorite' : 'Follow'}
               </button>
             )}
-            <div className="relative flex items-center gap-3 p-4 pr-24 md:gap-4 md:p-7 md:pr-32">
+            <div className="relative flex items-center gap-3 p-4 md:gap-4 md:p-7">
               <TeamLogo abbr={t.abbr} size={60} className="md:h-28 md:w-28" />
               <div className="min-w-0">
-                <h1 className="font-display text-[22px] font-bold leading-tight tracking-tight md:text-[34px]">{t.name}</h1>
+                <h1 className="pr-[104px] font-display text-[22px] font-bold leading-tight tracking-tight md:pr-28 md:text-[34px]">{t.name}</h1>
                 <div className="mt-0.5 text-[14px] font-semibold md:mt-1 md:text-[15px]">{t.record || seasonRecord}</div>
                 <div className="text-[13px] text-label-2">{t.standing}</div>
                 {/* ESPN only knows today's coach, so don't show it on past seasons. */}

@@ -97,7 +97,10 @@ export function MoveRow({ m, lg, showDay = false, load = true }) {
           <Link to={`/${lg}/team/${m.team.id}`} aria-label={m.team.name} className="active:opacity-60"><TeamLogo abbr={m.team.abbr} size={28} league={lg} /></Link>
           <Swap className="h-4 w-4 shrink-0 text-label-3" />
           <Link to={`/${lg}/team/${m.other.id}`} aria-label={m.other.name} className="active:opacity-60"><TeamLogo abbr={m.other.abbr} size={28} league={lg} /></Link>
-          <span className="min-w-0 flex-1 truncate text-[14.5px] font-semibold">{m.team.short} · {m.other.short}</span>
+          <span className="min-w-0 flex-1 truncate text-[14.5px] font-semibold">
+            <span className="min-[430px]:hidden">{m.team.abbr} · {m.other.abbr}</span>
+            <span className="max-[429px]:hidden">{m.team.short} · {m.other.short}</span>
+          </span>
           {when}
           {badge}
         </div>

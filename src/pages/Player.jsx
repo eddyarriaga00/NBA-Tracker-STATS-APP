@@ -194,6 +194,8 @@ function GameLog({ log, lg }) {
   const [stat, setStat] = useState(defaultIdx);
   const [limit, setLimit] = useState(15);
   const go = useNavigate();
+  // The picked stat leads the table, so it's on screen without scrolling sideways.
+  const order = [stat, ...log.labels.map((_, i) => i).filter((i) => i !== stat)];
 
   const chart = useMemo(() => log.rows.slice(0, 15).reverse().map((r) => ({ r, v: num(String(r.stats[stat] ?? '').split(/[-/]/)[0]) })), [log, stat]);
   const max = Math.max(...chart.map((c) => c.v), 1);
@@ -217,7 +219,7 @@ function GameLog({ log, lg }) {
               title={`${new Date(r.date).toLocaleDateString()} ${r.atVs} ${r.opp}: ${v}`}
               className="group relative flex h-full flex-1 flex-col justify-end"
             >
-              <span className="num pointer-events-none mb-0.5 text-center text-[10px] font-semibold text-label-2 opacity-0 transition group-hover:opacity-100 md:opacity-100">{v}</span>
+              <span className="num pointer-events-none mb-0.5 text-center text-[9.5px] font-semibold text-label-2 md:text-[10px]">{v}</span>
               <div
                 className={`w-full rounded-t-[4px] transition-all duration-500 group-hover:opacity-80 ${r.result === 'W' ? 'bg-accent' : 'bg-label-3'}`}
                 style={{ height: `${Math.max((v / max) * 100, 2)}%` }}
@@ -239,7 +241,7 @@ function GameLog({ log, lg }) {
       <Card className="mt-3 overflow-hidden">
         <SimpleTable
           first="Game"
-          head={log.labels}
+          head={order.map((i) => log.labels[i])}
           rows={log.rows.slice(0, limit).map((r) => (
             <tr key={r.id} onClick={() => go(`/${lg}/game/${r.id}`)} className="cursor-pointer border-t border-sep transition hover:bg-fill/40 active:bg-fill">
               <td className="sticky left-0 z-10 bg-card py-2.5 pl-4 pr-3">
@@ -253,8 +255,8 @@ function GameLog({ log, lg }) {
                   {r.playoff && <span className="rounded bg-accent/12 px-1 text-[10px] font-bold text-accent">PO</span>}
                 </Link>
               </td>
-              {r.stats.map((s, i) => (
-                <td key={i} className={`px-2.5 text-center ${i === stat ? 'font-bold' : 'text-label-2'}`}>{s}</td>
+              {order.map((i) => (
+                <td key={i} className={`px-2.5 text-center ${i === stat ? 'font-bold' : 'text-label-2'}`}>{r.stats[i]}</td>
               ))}
             </tr>
           ))}

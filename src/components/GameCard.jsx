@@ -35,6 +35,12 @@ function Form({ form }) {
   );
 }
 
+// A game can list six local channels; the card names the first and counts the rest.
+const shortBroadcast = (b) => {
+  const list = String(b ?? '').split(/,\s*/).filter(Boolean);
+  return list.length > 1 ? `${list[0]} +${list.length - 1}` : list[0] ?? '';
+};
+
 function Injuries({ inj }) {
   const outs = inj.out ?? [];
   const gtd = inj.gtd ?? [];
@@ -215,7 +221,7 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
       <Card className={`overflow-hidden transition hover:shadow-[0_6px_24px_rgba(0,0,0,0.08)] dark:hover:bg-card-2 ${favorite ? 'ring-1 ring-[#ffcc00]/60' : ''}`}>
         <div className="flex items-center justify-between gap-3 px-3.5 pt-2.5 text-[12px] md:px-4 md:pt-3 md:text-[13px]">
           {live ? (
-            <span className="flex min-w-0 items-center gap-2">
+            <span className="flex min-w-0 items-center gap-2 [&>*:first-child]:shrink-0 [&>*:first-child]:whitespace-nowrap">
               <LiveBadge label={status.label} />
               {!hide && situation?.stoppage && situation.stoppage.label !== 'Halftime' && (
                 <span className={`truncate rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${situation.stoppage.kind === 'injury' ? 'bg-live/12 text-live' : 'bg-[#ffd60a]/20 text-[#806000] dark:text-[#ffd60a]'}`}>{situation.stoppage.icon} {situation.stoppage.label}</span>
@@ -232,7 +238,7 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
           <span className="flex min-w-0 items-center gap-2 text-label-2">
             <HeatBadge g={g} />
             {favorite && <Icon.Star filled className="h-3.5 w-3.5 shrink-0 text-[#ffcc00]" />}
-            <span className="truncate">{g.broadcast}</span>
+            <span className="truncate">{shortBroadcast(g.broadcast)}</span>
             {comments > 0 && (
               <span className="flex shrink-0 items-center gap-1 rounded-full bg-fill px-2 py-0.5 text-[11px] font-semibold text-label-2">
                 <Icon.Chat className="h-3 w-3" />

@@ -1945,6 +1945,7 @@ export async function getMoves(lg, page = 1, { team, ...opts } = {}) {
   const teamWords = new Set(teams.flatMap((x) => x.name.toLowerCase().split(/\s+/)));
   const moves = [];
   const trades = new Set();
+  const said = new Set();
   for (const [i, t] of (d.transactions ?? []).entries()) {
     const tm = t.team ?? d.team; // a single team's list names the team once, at the top
     const team = { id: tm?.id, abbr: tm?.abbreviation, name: tm?.displayName, short: tm?.name };
@@ -1972,6 +1973,10 @@ export async function getMoves(lg, page = 1, { team, ...opts } = {}) {
           trades.add(pair);
         }
       }
+      // ESPN repeats some moves a day later, word for word; keep the newest.
+      const same = `${team.id}:${text.toLowerCase()}`;
+      if (kind !== 'trade' && said.has(same)) return;
+      said.add(same);
       if (gets) gets = gets.map((g) => ({ ...g, players: namesIn(`Got ${g.what}`, teamWords) }));
       moves.push({ key: `${team ? `t${team}:` : ''}${page}:${i}:${j}`, day, text: `${text}.`, kind, team, other, gets, players: namesIn(text, teamWords) });
     });
