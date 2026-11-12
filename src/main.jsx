@@ -59,6 +59,9 @@ function UserKeyed({ Page }) {
 }
 const Home = () => <Navigate to={`/${leagueFromPath('/')}`} replace />;
 
+// iPhone ignores the page's zoom settings in Safari; its own pinch gesture has to be declined here.
+for (const type of ['gesturestart', 'gesturechange']) document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ThemeProvider>
