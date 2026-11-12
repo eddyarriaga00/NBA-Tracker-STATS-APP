@@ -8,6 +8,7 @@ import { visibleColor } from '../lib/color';
 import { useLeague } from '../lib/league';
 import { useTheme } from '../lib/theme';
 import { useData } from '../lib/useData';
+import { wonTitle } from '../lib/champions';
 
 const num = (v) => {
   const n = parseFloat(String(v ?? '').replace(/,/g, ''));
@@ -438,26 +439,46 @@ function SeasonCell({ to, className, children }) {
   return to ? <Link to={to} className={`${className} text-accent active:opacity-60`}>{children}</Link> : <span className={className}>{children}</span>;
 }
 
-function Career({ career, lg }) {
+// Short tags for the honors worth marking on a season line.
+const SEASON_TAGS = [
+  [/^(NFL )?MVP$/, 'MVP'], [/^Finals MVP$/, 'FMVP'], [/^Super Bowl MVP$/, 'SB MVP'], [/Defensive Player of the Year/, 'DPOY'], [/Offensive Player of the Year/, 'OPOY'],
+  [/Rookie of the Year/, 'ROY'], [/Sixth Man/, '6MOY'], [/Most Improved/, 'MIP'], [/Clutch Player/, 'CPOY'], [/Comeback Player/, 'CBPOY'],
+];
+const GOLD = 'bg-[color-mix(in_srgb,#ffd60a_11%,var(--card))]';
+
+function Career({ career, lg, awards }) {
   const [key, setKey] = useState(career?.[0]?.key);
+  // season year -> tags for the awards won that season
+  const tags = useMemo(() => {
+    const m = new Map();
+    // In SEASON_TAGS order, so MVP always comes before Finals MVP and so on.
+    for (const [r, tag] of SEASON_TAGS) {
+      for (const a of awards ?? []) if (r.test(a.name)) for (const y of a.seasons) m.set(y, [...(m.get(y) ?? []), tag]);
+    }
+    return m;
+  }, [awards]);
   const cat = career?.find((c) => c.key === key) ?? career?.[0];
   if (!cat) return <Card className="py-10 text-center text-label-2">No career stats available.</Card>;
-  return (
-    <div>
-      {career.length > 1 && (
-        <Chips className="mb-3" value={cat.key} onChange={setKey} options={career.map((c) => ({ value: c.key, label: c.title }))} />
-      )}
-      <Card className="overflow-hidden">
-        <SimpleTable
-          head={['Team', ...cat.labels]}
-          rows={[
-            ...[...cat.rows].reverse().map((r, i) => {
+  let anyChamp = false;
+  let anyTag = false;
+  const rows = [...cat.rows].reverse().map((r, i) => {
               // Tap a season to open that team's page for that year.
               const to = r.teamId && r.year >= firstSeason(lg, 'team') ? `/${lg}/team/${r.teamId}?season=${r.year}` : null;
+              const champ = wonTitle(lg, r.year, r.teamId);
+              const won = tags.get(r.year) ?? [];
+              if (champ) anyChamp = true;
+              if (won.length) anyTag = true;
+              const bg = champ ? GOLD : '';
               return (
-              <tr key={`${r.season}${r.team}${i}`} className="border-t border-sep">
-                <td className="sticky left-0 z-10 bg-card py-2 pl-4 pr-3 font-semibold">
+              <tr key={`${r.season}${r.team}${i}`} className={`border-t border-sep ${bg}`}>
+                <td className={`sticky left-0 z-10 py-2 pl-4 pr-3 font-semibold ${bg || 'bg-card'}`}>
                   <SeasonCell to={to} className="block whitespace-nowrap">{r.season}</SeasonCell>
+                  {(champ || won.length > 0) && (
+                    <span className="mt-0.5 flex items-center gap-1 whitespace-nowrap text-[10px] font-bold leading-none text-[#806000] dark:text-[#ffd60a]">
+                      {champ && <span aria-label="Champion" title="Champion">🏆</span>}
+                      {won.map((t) => <span key={t} className="rounded bg-[#ffd60a]/20 px-1 py-[2px]">{t}</span>)}
+                    </span>
+                  )}
                 </td>
                 <td className="px-2.5">
                   <SeasonCell to={to} className="flex items-center gap-1.5 text-[12px] font-semibold">
@@ -468,7 +489,17 @@ function Career({ career, lg }) {
                 {r.stats.map((s, j) => <td key={j} className="px-2.5 text-center text-label-2">{s}</td>)}
               </tr>
               );
-            }),
+  });
+  return (
+    <div>
+      {career.length > 1 && (
+        <Chips className="mb-3" value={cat.key} onChange={setKey} options={career.map((c) => ({ value: c.key, label: c.title }))} />
+      )}
+      <Card className="overflow-hidden">
+        <SimpleTable
+          head={['Team', ...cat.labels]}
+          rows={[
+            ...rows,
             cat.totals?.length ? (
               <tr key="totals" className="border-t-2 border-sep font-semibold">
                 <td className="sticky left-0 z-10 bg-card py-2.5 pl-4">Career</td>
@@ -479,6 +510,14 @@ function Career({ career, lg }) {
           ]}
         />
       </Card>
+      {(anyChamp || anyTag) && (
+        <p className="mt-1.5 px-1 text-[11.5px] leading-snug text-label-3">
+          {anyChamp && '🏆 and a gold row mark a season the team won the title. '}
+          {anyTag && (lg === 'nba'
+            ? 'Tags are awards won that season: FMVP is Finals MVP, DPOY is Defensive Player of the Year, ROY is Rookie of the Year.'
+            : 'Tags are awards won that season: SB MVP is Super Bowl MVP, OPOY and DPOY are Offensive and Defensive Player of the Year, ROY is Rookie of the Year.')}
+        </p>
+      )}
     </div>
   );
 }
@@ -552,7 +591,7 @@ export default function Player() {
             {tab === 'log' && <SeasonGameLog initial={p.gamelog} lg={lg} id={id} />}
             {tab === 'best' && <BestGames seasons={p.gamelog?.seasons} lg={lg} id={id} />}
             {tab === 'splits' && <Splits splits={p.splits} />}
-            {tab === 'career' && <Career career={p.career} lg={lg} />}
+            {tab === 'career' && <Career career={p.career} lg={lg} awards={p.awards} />}
             {tab === 'news' && <News news={p.news} />}
           </div>
         </div>
