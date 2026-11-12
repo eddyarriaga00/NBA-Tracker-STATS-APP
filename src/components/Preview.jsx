@@ -182,7 +182,7 @@ export function Injuries({ preview, home, away, title = 'Injury Report' }) {
                         {[p.detail, p.returnDate && `Est. return ${shortDate(p.returnDate)}`].filter(Boolean).join(' · ')}
                       </div>
                     </div>
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${statusColor(p.status)}`}>{p.status}</span>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${statusColor(p.status)}`}>{/injured reserve/i.test(p.status) ? 'IR' : p.status}</span>
                   </Link>
                 ))}
               </div>

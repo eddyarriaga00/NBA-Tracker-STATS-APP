@@ -682,7 +682,8 @@ function normPreview(lg, s, away, home) {
         pos: i.athlete?.position?.abbreviation ?? '',
         headshot: headshotOf(i.athlete),
         status: i.status ?? i.type?.description ?? '',
-        detail: [i.details?.type, i.details?.location === 'Body' ? '' : i.details?.detail].filter(Boolean).join(' · '),
+        // "Concussion · Concussion" and "Knee · Not Specified" say nothing twice.
+        detail: [...new Set([i.details?.type, i.details?.location === 'Body' ? '' : i.details?.detail].filter((x) => x && !/^not specified$/i.test(x)))].join(' · '),
         returnDate: i.details?.returnDate ?? '',
       })),
     }))
@@ -1246,6 +1247,7 @@ export async function getTeam(lg, id, season, opts) {
       playIn: e.seasonType?.type === 5,
       note: c.notes?.[0]?.headline ?? '',
       weekNum: e.week?.number,
+      timeValid: e.timeValid !== false && c.timeValid !== false, // false: the league hasn't set a kickoff time yet
       broadcast: c.broadcasts?.[0]?.media?.shortName ?? '',
     };
   });

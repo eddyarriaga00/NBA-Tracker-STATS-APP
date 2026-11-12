@@ -19,6 +19,9 @@ import { useData } from '../lib/useData';
 
 const fmtDate = (d) => new Date(d).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 const fmtTime = (d) => new Date(d).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+// A game with no time yet is stored as midnight Eastern, so its day is read in Eastern time.
+const dayOf = (e) => (e.timeValid === false ? new Date(e.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/New_York' }) : fmtDate(e.date));
+const timeOf = (e) => (e.timeValid === false ? 'Time TBD' : fmtTime(e.date));
 
 function GameRow({ e, lg }) {
   const done = e.state === 'post';
@@ -27,7 +30,7 @@ function GameRow({ e, lg }) {
   return (
     <Link to={`/${lg}/game/${e.id}`} className="flex items-center gap-2.5 px-4 py-2.5 transition hover:bg-fill/40 active:bg-fill md:gap-3">
       <div className="w-[86px] shrink-0 md:w-[120px]">
-        <div className="text-[13px] font-semibold">{fmtDate(e.date)}</div>
+        <div className="text-[13px] font-semibold">{dayOf(e)}</div>
         {(e.week || e.playoff) && (
           <div className={`text-[11px] leading-tight ${e.playoff ? 'font-semibold text-accent' : 'text-label-2'}`}>
             {e.playoff ? 'Playoffs' : e.week}
@@ -49,7 +52,7 @@ function GameRow({ e, lg }) {
         <span className="shrink-0 text-[13px] font-semibold text-live">Live · {e.us}–{e.them}</span>
       ) : (
         <span className="shrink-0 text-right text-[13px] text-label-2">
-          {fmtTime(e.date)}
+          {timeOf(e)}
           {e.broadcast && <span className="block text-[11px]">{e.broadcast}</span>}
         </span>
       )}
@@ -256,7 +259,7 @@ export default function Team() {
                     <div className="mt-1 flex items-center gap-2 text-[16px] font-semibold">
                       {next.home ? 'vs' : '@'} <TeamLogo abbr={next.opp.abbr} size={24} /> {next.opp.name}
                     </div>
-                    <div className="text-[13px] text-label-2">{fmtDate(next.date)} · {fmtTime(next.date)}{next.broadcast ? ` · ${next.broadcast}` : ''}</div>
+                    <div className="text-[13px] text-label-2">{dayOf(next)} · {timeOf(next)}{next.broadcast ? ` · ${next.broadcast}` : ''}</div>
                   </div>
                 </Card>
               </Link>

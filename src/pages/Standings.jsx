@@ -67,6 +67,9 @@ function Table({ teams, dividers = {}, showSeed = true, title, season }) {
   const lg = useLeague();
   const cols = COLS[lg];
   const span = cols.length + 1;
+  // The last column a phone shows (the ones after it are desktop-only) needs the card's right margin.
+  const lastOnPhone = cols.reduce((n, c, i) => (c[3] ? n : i), 0);
+  const pad = (i) => `px-1.5 md:px-2 last:pr-4 ${i === lastOnPhone ? 'max-md:pr-3.5' : ''}`;
   return (
     <Card className="rise overflow-hidden">
       {title && <div className="px-4 pt-3 text-[15px] font-bold">{title}</div>}
@@ -75,8 +78,8 @@ function Table({ teams, dividers = {}, showSeed = true, title, season }) {
           <thead>
             <tr className="border-b border-sep text-[11px] font-semibold uppercase tracking-wide text-label-2">
               <th className="sticky left-0 z-10 bg-card py-2.5 pl-4 text-left font-semibold">Team</th>
-              {cols.map(([h, , , desk]) => (
-                <th key={h} className={`px-2 text-right last:pr-4 ${desk ? 'hidden md:table-cell' : ''}`}>{h}</th>
+              {cols.map(([h, , , desk], i) => (
+                <th key={h} className={`${pad(i)} text-right ${desk ? 'hidden md:table-cell' : ''}`}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -85,15 +88,15 @@ function Table({ teams, dividers = {}, showSeed = true, title, season }) {
               dividers[i] && <Divider key={`d${i}`} label={dividers[i]} cols={span} />,
               <tr key={t.id} className="transition-colors hover:bg-fill/50">
                 <td className="sticky left-0 z-10 bg-card py-2 pl-3 pr-2 md:py-2.5">
-                  <Link to={teamHref(lg, t.id, season)} className="flex items-center gap-3">
+                  <Link to={teamHref(lg, t.id, season)} className="flex items-center gap-2.5 md:gap-3">
                     {showSeed && <span className="w-5 text-right text-[13px] text-label-2">{t.seed < 99 ? t.seed : ''}</span>}
                     <TeamLogo abbr={t.abbr} size={22} className="md:h-[26px] md:w-[26px]" />
                     <span className="font-semibold">{t.name}</span>
                     {t.clinch && <span className="text-[11px] font-semibold text-label-2">{t.clinch}</span>}
                   </Link>
                 </td>
-                {cols.map(([h, get, cls, desk]) => (
-                  <td key={h} className={`px-2 text-right last:pr-4 ${typeof cls === 'function' ? cls(t) : cls} ${desk ? 'hidden md:table-cell' : ''}`}>
+                {cols.map(([h, get, cls, desk], i) => (
+                  <td key={h} className={`${pad(i)} text-right ${typeof cls === 'function' ? cls(t) : cls} ${desk ? 'hidden md:table-cell' : ''}`}>
                     {get(t)}
                   </td>
                 ))}

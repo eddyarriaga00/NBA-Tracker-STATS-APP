@@ -38,7 +38,7 @@ function Pair({ a, b, sub, onPick }) {
         <Headshot src={b.headshot} size={36} className="-ml-2.5 ring-2 ring-card" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[14.5px] font-semibold">{a.name} <span className="font-normal text-label-3">vs</span> {b.name}</span>
+        <span className="block text-[14.5px] font-semibold leading-snug">{a.name} <span className="font-normal text-label-3">vs</span> {b.name}</span>
         {sub && <span className="block truncate text-[12px] text-label-2">{sub}</span>}
       </span>
       <svg aria-hidden width="8" height="13" viewBox="0 0 8 13" className="shrink-0 text-label-3">
@@ -108,7 +108,8 @@ function PlayerPicker({ lg, onPick, exclude }) {
           ref={ref}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder={`Search ${lg.toUpperCase()} players`}
+          placeholder="Search"
+          aria-label={`Search ${lg.toUpperCase()} players`}
           className="w-full bg-transparent text-[16px] outline-none placeholder:text-label-3"
           autoCapitalize="off"
           autoCorrect="off"
@@ -275,7 +276,7 @@ export default function Compare() {
       {pa && pb && (
         <>
           {splitOptions.length > 1 && (
-            <Segmented className="mt-4" value={split} onChange={setView} options={splitOptions.slice(0, 4).map((l) => ({ value: l, label: l.replace('Regular Season', 'This Season') }))} />
+            <Segmented className="mt-4" value={split} onChange={setView} options={splitOptions.slice(0, 4).map((l) => ({ value: l, label: l.replace('Regular Season', 'This Season').replace('Last 5 Games', 'Last 5') }))} />
           )}
           <Card className="mt-3 overflow-hidden">
             <div className="px-4 pb-1 pt-3 text-[15px] font-bold">{split === 'Regular Season' ? 'This Season' : split}</div>

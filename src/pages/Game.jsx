@@ -128,9 +128,9 @@ function StarPlayer({ g }) {
               {g.status.state === 'post' ? '★ Player of the game' : '★ Top performer so far'}
             </div>
             <div className="truncate text-[16px] font-bold leading-tight">{p.name}</div>
-            <div className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-label-2">
-              {team && <TeamLogo abbr={team.abbr} size={14} />}
-              <span className="num truncate text-label">{p.line}</span>
+            <div className="mt-0.5 flex items-start gap-1.5 text-[12.5px] leading-snug text-label-2">
+              {team && <TeamLogo abbr={team.abbr} size={14} className="mt-[2px] shrink-0" />}
+              <span className="num text-label">{p.line}</span>
             </div>
           </div>
           <div className="shrink-0 text-right">
@@ -252,13 +252,17 @@ function GameLeaders({ g }) {
   const Player = ({ p, right }) =>
     p ? (
       <Link to={`/${lg}/player/${p.id}`} className={`flex min-w-0 flex-1 items-center gap-2.5 ${right ? 'flex-row-reverse text-right' : ''}`}>
-        <Headshot src={p.headshot} size={34} className="md:h-10 md:w-10" />
+        <Headshot src={p.headshot} size={big ? 34 : 30} className="md:h-10 md:w-10" />
         <div className="min-w-0">
-          <div className="truncate text-[14px] font-semibold">{p.name}</div>
+          {/* Football rows are tighter: a long "C. Schwesinger" drops the initial on a phone. */}
+          <div className={`truncate font-semibold ${big ? 'text-[14px]' : 'text-[13px] md:text-[14px]'}`}>
+            {!big && p.name.length > 12 ? <><span className="md:hidden">{p.name.replace(/^\S+\.\s+/, '')}</span><span className="max-md:hidden">{p.name}</span></> : p.name}
+          </div>
           {big ? (
             <div className="num font-display text-[18px] font-bold leading-tight md:text-[20px]">{p.value}</div>
           ) : (
-            <div className="truncate text-[12px] text-label-2 num">{p.value}</div>
+            // Football lines are long ("19/31, 297 YDS, 2 TD"): let them take a second line.
+            <div className="num text-[11.5px] leading-snug text-label-2 md:text-[12px]">{p.value}</div>
           )}
         </div>
       </Link>
@@ -271,7 +275,7 @@ function GameLeaders({ g }) {
       <SectionTitle>{g.status.state === 'pre' ? 'Season Leaders' : 'Game Leaders'}</SectionTitle>
       <Card className="divide-y divide-sep">
         {rows.map(([k, label, a, h]) => (
-          <div key={k} className="flex items-center gap-3 px-4 py-3">
+          <div key={k} className={`flex items-center px-4 py-3 ${big ? 'gap-3' : 'gap-2 px-3.5'}`}>
             <Player p={a} />
             <div className="w-14 shrink-0 text-center text-[10.5px] font-semibold uppercase tracking-wide text-label-2 md:w-16 md:text-[11px]">{label}</div>
             <Player p={h} right />
@@ -288,15 +292,18 @@ const InjuryCtx = createContext(null);
 function InjuryTag({ id }) {
   const hurt = useContext(InjuryCtx)?.get(String(id));
   if (!hurt) return null;
-  return <span className={`ml-1.5 font-bold ${/out|reserve|suspend/i.test(hurt) ? 'text-live' : 'text-[#806000] dark:text-[#ffd60a]'}`}>{hurt}</span>;
+  return <span className={`ml-1.5 font-bold ${/out|reserve|suspend/i.test(hurt) ? 'text-live' : 'text-[#806000] dark:text-[#ffd60a]'}`}>{/injured reserve/i.test(hurt) ? 'IR' : hurt}</span>;
 }
+
+// "Emmanuel McNeil-Warren" doesn't fit a phone column; "E. McNeil-Warren" does.
+const fitName = (n = '') => (n.length > 16 ? n.replace(/^(\S)\S*\s+/, '$1. ') : n);
 
 function PlayerCell({ a, lg, width = 'max-w-[124px]' }) {
   return (
     <Link to={`/${lg}/player/${a.id}`} className="flex items-center gap-2.5">
       <Headshot src={a.headshot} size={30} />
       <div className="min-w-0">
-        <div className={`${width} truncate text-[14px] font-semibold md:max-w-none`}>{a.short}</div>
+        <div className={`${width} truncate text-[14px] font-semibold md:max-w-none`}><span className="md:hidden">{fitName(a.short)}</span><span className="max-md:hidden">{a.short}</span></div>
         <div className="text-[11px] text-label-2">
           {[a.pos, a.jersey && `#${a.jersey}`].filter(Boolean).join(' · ')}
           <InjuryTag id={a.id} />
@@ -380,9 +387,9 @@ function PlayerLines({ labels, groups, lg }) {
               {list.map((a) => (
                 <div key={a.id} className="flex items-center border-t border-sep">
                   <Link to={`/${lg}/player/${a.id}`} className="sticky left-0 z-10 flex w-[132px] shrink-0 items-center gap-2 bg-card py-2 pl-3 pr-1.5 md:w-[190px]">
-                    <Headshot src={a.headshot} size={34} />
+                    <Headshot src={a.headshot} size={30} />
                     <span className="min-w-0">
-                      <span className="block truncate text-[13.5px] font-semibold leading-tight">{a.short}</span>
+                      <span className="line-clamp-2 text-[13px] font-semibold leading-[1.15] [overflow-wrap:anywhere] md:text-[13.5px]">{a.short}</span>
                       <span className="block truncate text-[10.5px] text-label-2">
                         {[a.pos, a.jersey && `#${a.jersey}`].filter(Boolean).join(' · ')}
                         {a.starter && <span className="ml-1 rounded bg-fill px-1 text-[9.5px] font-bold text-label-2">S</span>}
