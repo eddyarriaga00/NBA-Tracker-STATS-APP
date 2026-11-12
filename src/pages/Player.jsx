@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { currentSeason, firstSeason, getCareerGames, getGamelog, getPlayer, seasonLabel } from '../api/espn';
 import { Icon } from '../components/icons';
 import { BioButton } from '../components/BioSheet';
@@ -193,6 +193,7 @@ function GameLog({ log, lg }) {
   const defaultIdx = Math.max(0, log.labels.indexOf(lg === 'nba' ? 'PTS' : 'YDS'));
   const [stat, setStat] = useState(defaultIdx);
   const [limit, setLimit] = useState(15);
+  const go = useNavigate();
 
   const chart = useMemo(() => log.rows.slice(0, 15).reverse().map((r) => ({ r, v: num(String(r.stats[stat] ?? '').split(/[-/]/)[0]) })), [log, stat]);
   const max = Math.max(...chart.map((c) => c.v), 1);
@@ -240,8 +241,8 @@ function GameLog({ log, lg }) {
           first="Game"
           head={log.labels}
           rows={log.rows.slice(0, limit).map((r) => (
-            <tr key={r.id} className="border-t border-sep">
-              <td className="sticky left-0 z-10 bg-card py-2 pl-4 pr-3">
+            <tr key={r.id} onClick={() => go(`/${lg}/game/${r.id}`)} className="cursor-pointer border-t border-sep transition hover:bg-fill/40 active:bg-fill">
+              <td className="sticky left-0 z-10 bg-card py-2.5 pl-4 pr-3">
                 <Link to={`/${lg}/game/${r.id}`} className="flex items-center gap-2">
                   <span className="w-12 text-[12px] text-label-2">{new Date(r.date).toLocaleDateString([], { month: 'numeric', day: 'numeric' })}</span>
                   <span className="w-3 text-[11px] text-label-2">{r.atVs}</span>
@@ -264,6 +265,7 @@ function GameLog({ log, lg }) {
           Show more games
         </button>
       )}
+      <p className="mt-1.5 px-1 text-[11.5px] text-label-3">Tap any game or bar to open it.</p>
     </div>
   );
 }
@@ -337,7 +339,7 @@ function BestGames({ seasons, lg, id }) {
       {top.length ? (
         <Card className="divide-y divide-sep overflow-hidden">
           {top.slice(0, limit).map(({ r, v }, i) => (
-            <Link key={r.id} to={`/${lg}/game/${r.id}`} className="flex items-center gap-3 px-4 py-2.5 transition hover:bg-fill/40">
+            <Link key={r.id} to={`/${lg}/game/${r.id}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-fill/40 active:bg-fill">
               <span className={`num w-5 text-center text-[13px] font-bold ${i < 3 ? 'text-accent' : 'text-label-3'}`}>{i + 1}</span>
               <span className="num w-12 text-[24px] font-bold leading-none tracking-tight">{r.stats[sel]}</span>
               <TeamLogo abbr={r.opp} size={26} />
@@ -353,6 +355,9 @@ function BestGames({ seasons, lg, id }) {
                   {keys.map(([k, ix]) => ` · ${r.stats[ix]} ${k}`).join('')}
                 </span>
               </span>
+              <svg aria-hidden width="8" height="13" viewBox="0 0 8 13" className="shrink-0 text-label-3">
+                <path d="M1.5 1.5l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </Link>
           ))}
         </Card>

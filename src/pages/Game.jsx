@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { getGame, getNflQuarters, teamHref } from '../api/espn';
 import Comments, { useCommentCounts } from '../components/Comments';
 import Preview, { Injuries } from '../components/Preview';
@@ -872,7 +872,9 @@ function HiddenNotice({ onReveal }) {
 export default function Game() {
   const { id } = useParams();
   const lg = useLeague();
-  const [tab, setTab] = useState('game');
+  // ?tab=away|home opens straight on that team's box score (used by player links).
+  const [query] = useSearchParams();
+  const [tab, setTab] = useState(() => (['away', 'home', 'plays'].includes(query.get('tab')) ? query.get('tab') : 'game'));
   const room = `${lg}:game:${id}`;
   const counts = useCommentCounts([room]);
   const spoilers = useSpoilers();

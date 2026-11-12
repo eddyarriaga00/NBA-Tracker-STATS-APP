@@ -1865,6 +1865,7 @@ export async function getGameTop(lg, g, limit = 10) {
         teamAbbr: mine.abbr,
         result: `${mine.winner ? 'W' : opp.winner ? 'L' : 'T'} ${mine.score}-${opp.score} ${mine === g.home ? 'vs' : '@'} ${opp.abbr}`,
         gameId: g.id,
+        side: mine === g.home ? 'home' : 'away',
         rating: Math.round(p.rating * 10) / 10,
         line: p.line,
       };

@@ -8,6 +8,7 @@ import ErrorBoundary from './ErrorBoundary';
 import { BioProvider } from './BioSheet';
 import Search from './Search';
 import Toaster from './Toaster';
+import InstallTip from './InstallTip';
 import { AccountSheet } from './Account';
 import { useGameAlerts } from '../lib/alerts';
 import { usePushSync } from '../lib/push';
@@ -190,6 +191,7 @@ export default function Shell() {
 
         <Search open={searchOpen} onClose={closeSearch} league={league} />
         <Toaster />
+        <InstallTip />
         <AccountSheet />
       </div>
       </BioProvider>

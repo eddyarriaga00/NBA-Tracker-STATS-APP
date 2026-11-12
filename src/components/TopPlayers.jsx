@@ -5,6 +5,12 @@ import { useSetting } from '../lib/settings';
 import { useSeen } from '../lib/useSeen';
 import { Card, Headshot, Skeleton, TeamLogo } from './ui';
 
+const Chevron = () => (
+  <svg aria-hidden width="8" height="13" viewBox="0 0 8 13" className="shrink-0 text-label-3">
+    <path d="M1.5 1.5l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 const UNIT = { nba: 'Game score', nfl: 'Fantasy pts' };
 const HOW = {
   nba: 'Ranked by Game Score: points, rebounds, assists, steals and blocks, minus misses, turnovers and fouls.',
@@ -76,22 +82,27 @@ export default function TopPlayers({ lg, games, label }) {
         <Card className="rise overflow-hidden">
           <div className="divide-y divide-sep">
             {rows.map((p, i) => (
-              <Link key={`${p.gameId}:${p.id}`} to={`/${lg}/player/${p.id}`} className="flex items-center gap-3 px-3.5 py-2.5 active:bg-fill md:px-4">
-                <span className={`num w-5 shrink-0 text-center text-[15px] font-bold ${i === 0 ? 'text-accent' : 'text-label-3'}`}>{i + 1}</span>
-                <Headshot src={p.headshot} size={40} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[15px] font-semibold">{p.name}</span>
-                  <span className="num block truncate text-[12.5px] text-label">{p.line}</span>
-                  <span className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-label-2">
-                    <TeamLogo abbr={p.teamAbbr} size={14} league={lg} />
-                    <span className="num truncate">{p.result}</span>
+              <div key={`${p.gameId}:${p.id}`} className="flex items-center">
+                <span className={`num w-9 shrink-0 pl-3.5 text-center text-[15px] font-bold md:pl-4 ${i === 0 ? 'text-accent' : 'text-label-3'}`}>{i + 1}</span>
+                <Link to={`/${lg}/player/${p.id}`} aria-label={`${p.name} profile`} className="shrink-0 py-2.5 pl-2 active:opacity-60">
+                  <Headshot src={p.headshot} size={40} />
+                </Link>
+                <Link to={`/${lg}/game/${p.gameId}?tab=${p.side}`} className="flex min-w-0 flex-1 items-center gap-2 py-2.5 pl-3 pr-2.5 active:bg-fill md:pr-3">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[15px] font-semibold">{p.name}</span>
+                    <span className="num block truncate text-[12.5px] text-label">{p.line}</span>
+                    <span className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-label-2">
+                      <TeamLogo abbr={p.teamAbbr} size={14} league={lg} />
+                      <span className="num truncate">{p.result}</span>
+                    </span>
                   </span>
-                </span>
-                <span className="shrink-0 text-right">
-                  <span className="num block text-[17px] font-bold leading-tight">{p.rating.toFixed(1)}</span>
-                  <span className="block text-[10px] font-medium text-label-3">{UNIT[lg]}</span>
-                </span>
-              </Link>
+                  <span className="shrink-0 text-right">
+                    <span className="num block text-[17px] font-bold leading-tight">{p.rating.toFixed(1)}</span>
+                    <span className="block text-[10px] font-medium text-label-3">{UNIT[lg]}</span>
+                  </span>
+                  <Chevron />
+                </Link>
+              </div>
             ))}
           </div>
           {list.length > 5 && (
@@ -101,7 +112,7 @@ export default function TopPlayers({ lg, games, label }) {
           )}
         </Card>
       )}
-      {list?.length > 0 && (!spoilerFree || shown) && <p className="mt-1.5 px-1 text-[11.5px] leading-snug text-label-3">{HOW[lg]}</p>}
+      {list?.length > 0 && (!spoilerFree || shown) && <p className="mt-1.5 px-1 text-[11.5px] leading-snug text-label-3">{HOW[lg]} Tap a row for the game, or the photo for the player.</p>}
     </section>
   );
 }
