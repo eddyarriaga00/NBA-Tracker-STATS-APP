@@ -32,6 +32,16 @@ import { liveFollowAvailable, useLiveFollow } from '../lib/liveFollow';
 const periodName = (n) => (n <= 4 ? `Q${n}` : n === 5 ? 'OT' : `${n - 4}OT`);
 const titleCase = (s) => s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
 
+/** "Wed, Nov 11", with the year when the game isn't from this year. */
+function gameDay(g) {
+  const d = new Date(g.date);
+  if (Number.isNaN(d.getTime())) return '';
+  const opts = { weekday: 'short', month: 'short', day: 'numeric' };
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+  if (g.timeValid === false) opts.timeZone = 'America/New_York'; // no set time: stored as midnight Eastern
+  return d.toLocaleDateString([], opts);
+}
+
 function Hero({ g, hide, onReveal }) {
   const { dark } = useTheme();
   const lg = useLeague();
@@ -40,6 +50,7 @@ function Hero({ g, hide, onReveal }) {
   const pre = status.state === 'pre';
   const a = visibleColor(away.color, dark, away.alt);
   const h = visibleColor(home.color, dark, home.alt);
+  const day = gameDay(g);
 
   const Side = ({ t }) => (
     <Link
@@ -88,7 +99,10 @@ function Hero({ g, hide, onReveal }) {
               <button onClick={onReveal} className="rounded-full bg-accent px-4 py-1.5 text-[14px] font-semibold text-white active:scale-95">
                 Reveal
               </button>
-              {status.state === 'in' ? <LiveBadge label={status.label} /> : <span className="text-[12px] text-label-2">{status.state === 'post' ? 'Final' : status.label}</span>}
+              <div className="flex flex-col items-center gap-0.5">
+                {status.state === 'in' ? <LiveBadge label={status.label} /> : <span className="text-[12px] text-label-2">{status.state === 'post' ? 'Final' : status.label}</span>}
+                <span className="text-[11.5px] text-label-3">{day}</span>
+              </div>
             </>
           ) : (
             <>
@@ -97,7 +111,11 @@ function Hero({ g, hide, onReveal }) {
                 <span className="text-[18px] text-label-3">–</span>
                 {score(home)}
               </div>
-              {status.state === 'in' ? <LiveBadge label={status.label} /> : <span className="text-[13px] font-semibold text-label-2">{status.label}</span>}
+              {/* The status ("Final", "Q3 4:12"), with the day the game was played under it. */}
+              <div className="flex flex-col items-center gap-0.5">
+                {status.state === 'in' ? <LiveBadge label={status.label} /> : <span className="text-[13px] font-semibold text-label-2">{status.label}</span>}
+                <span className="text-[12px] text-label-2 md:text-[13px]">{day}</span>
+              </div>
             </>
           )}
         </div>
