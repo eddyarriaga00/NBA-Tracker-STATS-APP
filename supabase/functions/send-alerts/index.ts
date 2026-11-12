@@ -1,6 +1,9 @@
 // Supabase Edge Function: called every minute (pg_cron). Each call checks ESPN
 // six times, 10 seconds apart, and sends web push alerts: game starting,
 // halftime, final, close games late, and big performances.
+// In between, it listens to ESPN's push feed (the one espn.com uses) and checks
+// again the moment a game starts, reaches halftime, turns close or ends, so
+// those alerts go out a second or two after the fact instead of up to ten.
 // Each alert goes out once per game, tracked in alert_game_state.
 import webpush from 'npm:web-push@3.6.7';
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -123,6 +126,194 @@ async function loadGames(): Promise<Game[]> {
 
 const PATH = { nba: 'basketball/nba', nfl: 'football/nfl' };
 
+// ---- ESPN's push feed: used only to know *when* to look, never as the data ----
+const FASTCAST = 'https://fastcast.semfs.engsvc.go.com/public/websockethost';
+const TOPICS: Record<string, 'nba' | 'nfl'> = { 'event-basketball-nba': 'nba', 'event-football-nfl': 'nfl' };
+const followed = new Set<string>(); // games someone follows live: every score matters there
+const seen = new Map<string, Game>(); // each game as the last look had it
+
+/**
+ * A small WebSocket client over a plain TLS connection. The runtime's own
+ * WebSocket insists on HTTP/2 for secure sockets, which the feed doesn't speak.
+ * Text messages only, which is all the feed sends.
+ */
+class MiniSocket {
+  onopen: () => void = () => {};
+  onmessage: (ev: { data: string }) => void = () => {};
+  onclose: (ev: { code: number }) => void = () => {};
+  onerror: (ev: { message: string }) => void = () => {};
+  #conn: Deno.TlsConn | null = null;
+  #closed = false;
+  constructor(host: string, port: number, path: string) {
+    this.#run(host, port, path).catch((e) => {
+      if (!this.#closed) this.onerror({ message: String(e?.message ?? e) });
+      this.#end(1006);
+    });
+  }
+  #end(code: number) {
+    if (this.#closed) return;
+    this.#closed = true;
+    try { this.#conn?.close(); } catch { /* already closed */ }
+    this.onclose({ code });
+  }
+  async #run(host: string, port: number, path: string) {
+    const conn = (this.#conn = await Deno.connectTls({ hostname: host, port, alpnProtocols: ['http/1.1'] }));
+    const key = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
+    await conn.write(new TextEncoder().encode(
+      `GET ${path} HTTP/1.1\r\nHost: ${host}:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\nOrigin: https://www.espn.com\r\n\r\n`));
+    let buf = new Uint8Array(0);
+    const chunk = new Uint8Array(32 * 1024);
+    const more = async () => {
+      const n = await conn.read(chunk);
+      if (n === null) return false;
+      const next = new Uint8Array(buf.length + n);
+      next.set(buf);
+      next.set(chunk.subarray(0, n), buf.length);
+      buf = next;
+      return true;
+    };
+    // The reply to the handshake ends at the first blank line.
+    let headEnd = -1;
+    while (headEnd < 0) {
+      if (!(await more())) throw new Error('closed during handshake');
+      for (let i = 0; i + 3 < buf.length; i++) if (buf[i] === 13 && buf[i + 1] === 10 && buf[i + 2] === 13 && buf[i + 3] === 10) { headEnd = i + 4; break; }
+    }
+    const head = new TextDecoder().decode(buf.subarray(0, headEnd));
+    if (!/^HTTP\/1\.1 101/.test(head)) throw new Error(`handshake refused: ${head.split('\r\n')[0]}`);
+    buf = buf.slice(headEnd);
+    this.onopen();
+    const parts: Uint8Array[] = [];
+    while (!this.#closed) {
+      // One frame: 2 header bytes, an optional longer length, then the payload (servers don't mask).
+      while (buf.length < 2) if (!(await more())) return this.#end(1006);
+      const fin = (buf[0] & 0x80) !== 0;
+      const op = buf[0] & 0x0f;
+      let len = buf[1] & 0x7f;
+      let at = 2;
+      if (len === 126) {
+        while (buf.length < 4) if (!(await more())) return this.#end(1006);
+        len = (buf[2] << 8) | buf[3];
+        at = 4;
+      } else if (len === 127) {
+        while (buf.length < 10) if (!(await more())) return this.#end(1006);
+        len = Number(new DataView(buf.buffer, buf.byteOffset + 2, 8).getBigUint64(0));
+        at = 10;
+      }
+      while (buf.length < at + len) if (!(await more())) return this.#end(1006);
+      const body = buf.slice(at, at + len);
+      buf = buf.slice(at + len);
+      if (op === 8) return this.#end(1000);
+      if (op === 9) { await this.#frame(10, body); continue; } // ping -> pong
+      if (op === 10) continue;
+      parts.push(body);
+      if (!fin) continue;
+      const size = parts.reduce((n, p) => n + p.length, 0);
+      const all = new Uint8Array(size);
+      let o = 0;
+      for (const p of parts) { all.set(p, o); o += p.length; }
+      parts.length = 0;
+      this.onmessage({ data: new TextDecoder().decode(all) });
+    }
+  }
+  async #frame(op: number, body: Uint8Array) {
+    if (!this.#conn || this.#closed) return;
+    const mask = crypto.getRandomValues(new Uint8Array(4));
+    const head = body.length < 126 ? [0x80 | op, 0x80 | body.length] : [0x80 | op, 0x80 | 126, body.length >> 8, body.length & 0xff];
+    const out = new Uint8Array(head.length + 4 + body.length);
+    out.set(head);
+    out.set(mask, head.length);
+    for (let i = 0; i < body.length; i++) out[head.length + 4 + i] = body[i] ^ mask[i % 4];
+    await this.#conn.write(out);
+  }
+  send(text: string) { this.#frame(1, new TextEncoder().encode(text)).catch(() => this.#end(1006)); }
+  close() { this.#end(1000); }
+}
+
+async function inflate(b64: string) {
+  const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  return JSON.parse(await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('deflate'))).text());
+}
+
+/** Patch the feed's list of games in place. Its paths name a game by uid, then the field. */
+function patch(events: any[], ops: any[]) {
+  for (const op of ops) {
+    try {
+      const keys = String(op.path).split('/');
+      if (keys[0] === '') keys.shift();
+      const last = keys.pop()!;
+      let at: any = events;
+      for (const k of keys) at = Array.isArray(at) && !/^\d+$/.test(k) ? at.find((x: any) => x?.uid === k) : at[k];
+      if (op.op === 'remove') delete at[last];
+      else at[last] = op.value;
+    } catch { /* a field this copy doesn't have */ }
+  }
+}
+
+/** What matters for alerts about one game in the feed, as a short string. */
+function pushSig(lg: 'nba' | 'nfl', e: any) {
+  const st = e.fullStatus ?? {};
+  const side = (h: string) => Number(e.competitors?.find((c: any) => c.homeAway === h)?.score) || 0;
+  const state = st.type?.state ?? e.status ?? 'pre';
+  const period = Number(st.period ?? e.period) || 0;
+  const clock = String(st.displayClock ?? e.clock ?? '');
+  const half = st.type?.name === 'STATUS_HALFTIME' || (state === 'in' && period === 2 && /^0?:?0?0(\.0)?$/.test(clock));
+  const g = { state, period, clock, league: lg, home: { score: side('home') }, away: { score: side('away') } } as Game;
+  const key = `${lg}:${e.id}`;
+  return { key, state, home: g.home.score, away: g.away.score, sig: `${state}|${half}|${hot(g) ?? ''}${followed.has(key) ? `|${g.home.score}-${g.away.score}` : ''}` };
+}
+
+/**
+ * Listen to the feed until `until` (ms). Calls `onChange(key, want)` when a
+ * game's alert-relevant state changes; `want` is what the feed now says.
+ */
+async function listen(until: number, onChange: (key: string, want: { state: string; home: number; away: number }) => void, stats: Record<string, unknown> = {}) {
+  const h = await (await fetch(FASTCAST, { headers: HEADERS, signal: AbortSignal.timeout(5000) })).json();
+  const ws = new MiniSocket(h.ip, h.securePort, `/FastcastService/pubsub/profiles/12000?TrafficManager-Token=${encodeURIComponent(h.token)}`);
+  const docs: Record<string, any[] | null> = {};
+  const sigs = new Map<string, string>();
+  const chains: Record<string, Promise<void>> = {};
+  let patches = 0;
+  const look = (tc: string, live: boolean) => {
+    for (const e of docs[tc] ?? []) {
+      const s = pushSig(TOPICS[tc], e);
+      const was = sigs.get(s.key);
+      sigs.set(s.key, s.sig);
+      if (live && was !== undefined && was !== s.sig) onChange(s.key, s);
+    }
+  };
+  ws.onopen = () => { stats.opened = true; ws.send(JSON.stringify({ op: 'C' })); };
+  ws.onmessage = (ev: any) => {
+    let m: any;
+    try { m = JSON.parse(String(ev.data)); } catch { return; }
+    stats.messages = (Number(stats.messages) || 0) + 1;
+    stats.ops = `${stats.ops ?? ''}${m.op}`.slice(0, 40);
+    if (m.op === 'C') { for (const tc of Object.keys(TOPICS)) ws.send(JSON.stringify({ op: 'S', sid: m.sid, tc })); return; }
+    if (!TOPICS[m.tc]) return;
+    const next = async () => {
+      if (m.op === 'H') {
+        const d = await (await fetch(m.pl, { signal: AbortSignal.timeout(5000) })).json();
+        docs[m.tc] = d?.sports?.[0]?.leagues?.[0]?.events ?? null;
+        look(m.tc, false);
+      } else if (m.op === 'R' || m.op === 'P') {
+        const p = JSON.parse(m.pl);
+        const ops = p['~c'] ? await inflate(p.pl) : typeof p.pl === 'string' ? JSON.parse(p.pl) : p.pl;
+        if (!docs[m.tc] || !Array.isArray(ops)) return;
+        patch(docs[m.tc]!, ops);
+        patches++;
+        look(m.tc, m.op === 'P');
+      }
+    };
+    chains[m.tc] = (chains[m.tc] ?? Promise.resolve()).then(next).catch((e) => { stats.failed = String(e?.message ?? e).slice(0, 120); });
+  };
+  await new Promise<void>((done) => {
+    const t = setTimeout(done, Math.max(0, until - Date.now()));
+    ws.onclose = (e: any) => { stats.closed = e.code; clearTimeout(t); done(); };
+    ws.onerror = (e: any) => { stats.error = String(e?.message ?? 'error'); clearTimeout(t); done(); };
+  });
+  try { ws.close(); } catch { /* already closed */ }
+  return patches;
+}
+
 /** One game from its summary (for picks on games no longer on today's scoreboard). */
 async function loadOne(league: 'nba' | 'nfl', id: string): Promise<Game | null> {
   const d = await json(`${ESPN}/${PATH[league]}/summary?event=${id}`);
@@ -198,6 +389,18 @@ Deno.serve(async (req) => {
     const [lg, id] = preview.split(':') as ['nba' | 'nfl', string];
     const summary = await json(`${ESPN}/${PATH[lg]}/summary?event=${id}`);
     return Response.json({ preview, alerts: worthSending(bigMoments(lg, summary)) });
+  }
+
+  // ?feed=1 listens to the push feed for a few seconds and reports what it heard (sends nothing).
+  if (new URL(req.url).searchParams.get('feed')) {
+    const changes: string[] = [];
+    try {
+      const stats: Record<string, unknown> = {};
+      const patches = await listen(Date.now() + 9000, (key, want) => changes.push(`${key} ${want.state} ${want.away}-${want.home}`), stats);
+      return Response.json({ feed: true, patches, changes, stats });
+    } catch (e: any) {
+      return Response.json({ feed: false, error: String(e?.message ?? e) });
+    }
   }
 
   if (test) {
@@ -280,8 +483,8 @@ Deno.serve(async (req) => {
   };
 
   // One look at ESPN. `n` is which look this is within the minute (0-3).
-  const pass = async (n: number) => {
-  const chatted = await chatAlerts().catch((e) => { console.error('chat', e?.message ?? e); return 0; });
+  const pass = async (n: number, quick = false) => {
+  const chatted = quick ? 0 : await chatAlerts().catch((e) => { console.error('chat', e?.message ?? e); return 0; });
   const traded = n === 0 ? await tradeAlerts().catch((e) => { console.error('trades', e?.message ?? e); return 0; }) : 0;
   const games = await loadGames();
   const graded = n === 0 ? await gradePicks(games).catch((e) => `error: ${e?.message ?? e}`) : 0;
@@ -313,6 +516,9 @@ Deno.serve(async (req) => {
   const { data: lf } = await db.from('live_follows').select('endpoint,game_key,every,sig,sent_at').in('game_key', games.map((g) => g.key));
   const followers: Record<string, any[]> = {};
   for (const f of lf ?? []) (followers[f.game_key] ??= []).push(f);
+  followed.clear();
+  for (const k of Object.keys(followers)) followed.add(k);
+  for (const g of games) seen.set(g.key, g);
   // Box scores for big performances: every other look, all live games at once.
   const summaries = new Map<string, any>();
   {
@@ -324,8 +530,12 @@ Deno.serve(async (req) => {
   }
   const now = Date.now();
 
+  const order: Record<string, number> = { pre: 0, in: 1, post: 2 };
   for (const g of games) {
     const before = prev[g.key];
+    // An answer older than one already acted on (ESPN's servers aren't always
+    // in step) must not rewind the game, or its final would be sent twice.
+    if (before && (order[g.state] ?? 0) < (order[before.state] ?? 0)) continue;
     const url = `${SITE}#/${g.league}/game/${g.id}`;
     let closeSent = before?.close_sent ?? false;
     let halfSent = before?.half_sent ?? false;
@@ -435,18 +645,43 @@ Deno.serve(async (req) => {
   return { games: games.length, devices: subscriptions.length, events, sent, graded, errors: loadErrors.length ? [...loadErrors] : undefined };
   };
 
-  // Look now, then five more times 10 seconds apart after replying, so an
-  // alert is never more than a few seconds behind ESPN.
+  // Looks never overlap: each one reads what the one before wrote.
+  let line: Promise<unknown> = Promise.resolve();
+  const queued = <T>(fn: () => Promise<T>): Promise<T> => {
+    const p = line.then(fn, fn);
+    line = p.catch(() => {});
+    return p;
+  };
+
+  // Look now, then five more times 10 seconds apart after replying. Between
+  // those, the push feed asks for an extra look the moment something happens.
   const t0 = Date.now();
-  const first = await pass(0);
-  const rest = (async () => {
+  const first = await queued(() => pass(0));
+  const timed = (async () => {
     for (const n of [1, 2, 3, 4, 5]) {
       const wait = t0 + n * 10_000 - Date.now();
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
       if (Date.now() - t0 > 55_000) break; // the next minute's call takes over
-      await pass(n).catch((e) => console.error('pass', n, e?.message ?? e));
+      await queued(() => pass(n)).catch((e) => console.error('pass', n, e?.message ?? e));
     }
   })();
+  let busy = false;
+  let extra = 0;
+  const pushed = listen(t0 + 56_000, (key, want) => {
+    if (busy) return; // one extra look at a time; it reads every game anyway
+    busy = true;
+    (async () => {
+      // ESPN's regular feed can trail its push feed by a moment: look again until it agrees.
+      for (let i = 0; i < 4 && Date.now() - t0 < 56_000; i++) {
+        if (i) await new Promise((r) => setTimeout(r, 1500));
+        extra++;
+        await queued(() => pass(1, true)).catch((e) => console.error('push pass', e?.message ?? e));
+        const g = seen.get(key);
+        if (g && g.state === want.state && (!followed.has(key) || (g.home.score === want.home && g.away.score === want.away))) break;
+      }
+    })().finally(() => { busy = false; });
+  }).then((patches) => console.log(`push feed: ${patches} patches, ${extra} extra looks`)).catch((e) => console.error('push feed', e?.message ?? e));
+  const rest = Promise.allSettled([timed, pushed]);
   // @ts-ignore EdgeRuntime exists on Supabase
   if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(rest);
   return Response.json(first);
