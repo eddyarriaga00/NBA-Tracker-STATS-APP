@@ -1166,6 +1166,69 @@ export async function getPlayer(lg, id, opts) {
 
 // ---------- Teams ----------
 
+// The team page's extra facts come from ESPN's core feed: its simpler team
+// feed has the same numbers but can't be read from a website (no CORS header).
+
+/** One season's record sheet for a team: overall, home, away, division, conference, scoring. */
+function teamRecord(lg, d) {
+  const items = d?.items ?? [];
+  const of = (type) => items.find((i) => i.type === type);
+  const total = of('total');
+  const stat = (name) => total?.stats?.find((x) => x.name === name)?.value;
+  return {
+    record: total?.summary ?? '',
+    home: of('home')?.summary ?? '',
+    road: of('road')?.summary ?? '',
+    division: of('vsdiv')?.summary ?? '',
+    conference: of('vsconf')?.summary ?? '',
+    games: stat('gamesPlayed') ?? 0,
+    ppg: stat('avgPointsFor'),
+    oppPpg: stat('avgPointsAgainst'),
+    // Basketball reads best per game (+6.8); football as the season total (+59).
+    diff: lg === 'nba' ? stat('differential') : stat('pointDifferential'),
+    rank: stat('playoffSeed') || null, // place in the conference
+    streak: stat('streak') ?? 0,
+  };
+}
+
+const recordUrl = (lg, id, yr) => `${CORE(lg)}/seasons/${yr}/types/2/teams/${id}/record`;
+
+/** A team's season at a glance (current season unless one is given). */
+export async function getTeamInfo(lg, id, season, opts) {
+  const cur = currentSeason(lg);
+  const yr = season || cur;
+  const d = await get(recordUrl(lg, id, yr), { ttl: yr !== cur ? 6 * 60 * 60_000 : 5 * 60_000, ...opts });
+  return teamRecord(lg, d);
+}
+
+/** Where a team plays: name, city, a photo, and (for football) roof and surface. */
+export async function getTeamVenue(lg, id, opts) {
+  const d = await get(`${CORE(lg)}/seasons/${currentSeason(lg)}/teams/${id}`, { ttl: 24 * 60 * 60_000, ...opts });
+  const v = d?.venue;
+  if (!v?.fullName) return null;
+  const img = v.images?.[0]?.href;
+  return {
+    name: v.fullName,
+    place: [v.address?.city, v.address?.state].filter(Boolean).join(', '),
+    indoor: !!v.indoor,
+    grass: !!v.grass,
+    // ESPN resizes its own photos; the original is a 2000px file.
+    image: img ? `https://a.espncdn.com/combiner/i?img=${new URL(img).pathname}&w=900&h=340&scale=crop` : '',
+  };
+}
+
+/** Record sheets for a list of past seasons, newest first. Seasons ESPN has nothing for are left out. */
+export async function getTeamSeasons(lg, id, years, opts) {
+  const rows = await Promise.all(
+    years.map((y) =>
+      get(recordUrl(lg, id, y), { ttl: 24 * 60 * 60_000, ...opts })
+        .then((d) => ({ year: y, ...teamRecord(lg, d) }))
+        .catch(() => null)
+    )
+  );
+  return rows.filter((r) => r?.record && r.games > 0).sort((x, y) => y.year - x.year);
+}
+
 export async function getTeam(lg, id, season, opts) {
   const o = { ttl: 60_000, ...opts };
   const cur = currentSeason(lg);

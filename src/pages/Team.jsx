@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { currentSeason, getTeam, getTeamStats, seasonLabel, seasonOptions } from '../api/espn';
+import { currentSeason, firstSeason, getTeam, getTeamInfo, getTeamSeasons, getTeamStats, getTeamVenue, seasonLabel, seasonOptions } from '../api/espn';
 import { TeamMoves } from '../components/Moves';
 import Comments, { useCommentCounts } from '../components/Comments';
 import { BackButton, Card, ErrorState, Headshot, SeasonPicker, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
@@ -11,6 +11,8 @@ import { Icon } from '../components/icons';
 import { BioButton } from '../components/BioSheet';
 import { downloadICS, gameUrl } from '../lib/calendar';
 import { useSetting } from '../lib/settings';
+import { franchise, titles, wonTitle, yearRuns } from '../lib/champions';
+import { useSeen } from '../lib/useSeen';
 
 // Spoiler-free mode hides results from the last two days.
 const RECENT_MS = 48 * 60 * 60 * 1000;
@@ -58,6 +60,145 @@ function GameRow({ e, lg }) {
         </span>
       )}
     </Link>
+  );
+}
+
+const ordinal = (n) => `${n}${['th', 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 : n % 10 < 4 ? n % 10 : 0]}`;
+const signed = (n, digits = 0) => `${n > 0 ? '+' : ''}${Number(n).toFixed(digits)}`;
+
+/** The season in a handful of numbers: two rows of four on a phone, one row on a wide screen. */
+function TeamFacts({ lg, id, season }) {
+  const { data } = useData((fresh) => getTeamInfo(lg, id, season, { fresh }), [lg, id, season], { remember: `teaminfo:${lg}:${id}:${season}` });
+  if (!data?.record || !data.games) return null;
+  const tiles = [
+    data.home && ['Home', data.home],
+    data.road && ['Away', data.road],
+    data.division && ['vs Division', data.division],
+    data.conference && ['vs Conference', data.conference],
+    data.ppg != null && ['Points / game', data.ppg.toFixed(1)],
+    data.oppPpg != null && ['Allowed / game', data.oppPpg.toFixed(1)],
+    data.diff != null && [lg === 'nba' ? 'Margin / game' : 'Point diff', signed(data.diff, lg === 'nba' ? 1 : 0), data.diff > 0 ? 'text-win' : data.diff < 0 ? 'text-live' : ''],
+    data.rank && ['In conference', ordinal(data.rank)],
+  ].filter(Boolean).slice(0, 8);
+  if (tiles.length < 4) return null;
+  return (
+    <Card className="mt-3 grid grid-cols-4 gap-px overflow-hidden bg-sep md:grid-cols-8">
+      {tiles.map(([label, value, cls]) => (
+        <div key={label} className="bg-card px-1 py-2.5 text-center">
+          <div className={`num text-[16px] font-bold leading-tight md:text-[18px] ${cls ?? ''}`}>{value}</div>
+          <div className="mt-0.5 truncate text-[10.5px] text-label-2 md:text-[11px]">{label}</div>
+        </div>
+      ))}
+    </Card>
+  );
+}
+
+/** Where the franchise came from, what it has won, where it plays, and how recent seasons went. */
+function History({ lg, id, t }) {
+  const [ref, near] = useSeen(500);
+  const cur = currentSeason(lg);
+  const first = firstSeason(lg, 'team');
+  const [rows, setRows] = useState([]);
+  const [asked, setAsked] = useState(0); // seasons requested so far
+  const [want, setWant] = useState(10);
+  const [busy, setBusy] = useState(false);
+  // Loads once the section is near the screen, ten seasons at a time.
+  useEffect(() => {
+    if (!near || asked >= want) return;
+    const years = [];
+    for (let y = cur - 1 - asked; y >= first && years.length < want - asked; y--) years.push(y);
+    if (!years.length) { setAsked(want); return; }
+    let on = true;
+    setBusy(true);
+    getTeamSeasons(lg, id, years)
+      .then((more) => { if (on) setRows((r) => [...r, ...more]); })
+      .catch(() => {})
+      .finally(() => { if (on) { setAsked(want); setBusy(false); } });
+    return () => { on = false; };
+  }, [near, want, asked, lg, id, cur, first]);
+  const { data: venue } = useData(() => (near ? getTeamVenue(lg, id) : Promise.resolve(null)), [lg, id, near, 'venue']);
+
+  const f = franchise(lg, id);
+  const won = titles(lg, id);
+  const facts = [
+    f && ['First season', seasonLabel(lg, lg === 'nba' ? f.first + 1 : f.first)],
+    f?.was && ['Began as', f.was],
+    [lg === 'nba' ? 'NBA titles' : 'Super Bowl wins', won.length ? `${won.length}` : 'None yet', won.length ? `${yearRuns(won)}${lg === 'nfl' ? (won.length === 1 ? ' season' : ' seasons') : ''}` : ''],
+    venue && [lg === 'nba' ? 'Home arena' : 'Home stadium', venue.name, [venue.place, lg === 'nfl' && (venue.indoor ? 'Indoors' : 'Outdoors'), lg === 'nfl' && (venue.grass ? 'Grass' : 'Turf')].filter(Boolean).join(' · ')],
+  ].filter(Boolean);
+  const more = cur - 1 - asked >= first;
+
+  return (
+    <div ref={ref}>
+      <SectionTitle>History</SectionTitle>
+      <Card className="overflow-hidden">
+        {venue?.image && (
+          <div className="relative h-[112px] bg-fill md:h-[170px]">
+            <img src={venue.image} alt={venue.name} loading="lazy" className="h-full w-full object-cover" onError={(e) => { e.currentTarget.parentElement.style.display = 'none'; }} />
+            <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+            <div className="absolute bottom-2 left-3.5 right-3.5 truncate text-[13px] font-semibold text-white md:left-4">{venue.name}</div>
+          </div>
+        )}
+        <div className="divide-y divide-sep">
+          {facts.map(([k, v, sub]) => (
+            <div key={k} className="flex items-baseline justify-between gap-4 px-3.5 py-2.5 md:px-4">
+              <span className="shrink-0 text-[13px] text-label-2">{k}</span>
+              <span className="min-w-0 text-right">
+                <span className="block text-[14px] font-semibold">{v}</span>
+                {sub && <span className="block text-[12px] leading-snug text-label-2">{sub}</span>}
+              </span>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="mt-3 overflow-hidden">
+        <div className="flex items-baseline justify-between px-3.5 pb-1 pt-3 md:px-4">
+          <span className="text-[15px] font-bold">Past seasons</span>
+          <span className="text-[11.5px] text-label-3">Tap a season to open it</span>
+        </div>
+        {rows.length > 0 ? (
+          <div className="divide-y divide-sep">
+            {rows.map((r) => {
+              const champ = wonTitle(lg, r.year, id);
+              return (
+                <Link
+                  key={r.year}
+                  to={`/${lg}/team/${id}?season=${r.year}`}
+                  onClick={() => window.scrollTo(0, 0)}
+                  className={`flex items-center gap-3 px-3.5 py-2.5 transition hover:bg-fill/40 active:bg-fill md:px-4 ${champ ? 'bg-[color-mix(in_srgb,#ffd60a_11%,var(--card))]' : ''}`}
+                >
+                  <span className="w-[62px] shrink-0 text-[13.5px] font-semibold text-accent">{seasonLabel(lg, r.year)}</span>
+                  <span className="num w-[52px] shrink-0 text-[14px] font-bold">{r.record}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[12.5px] text-label-2">
+                      {champ ? <span className="font-semibold text-[#806000] dark:text-[#ffd60a]">🏆 Champions · </span> : null}
+                      {r.rank ? (champ ? `#${r.rank} seed` : `${ordinal(r.rank)} in conference`) : ''}
+                    </span>
+                    {r.home && r.road && <span className="num block truncate text-[11.5px] text-label-3">{r.home} home · {r.road} away</span>}
+                  </span>
+                  <svg aria-hidden width="8" height="13" viewBox="0 0 8 13" className="shrink-0 text-label-3">
+                    <path d="M1.5 1.5l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </Link>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="px-3.5 pb-3 pt-1 md:px-4">
+            {busy || !near || asked < want ? <Skeleton className="h-[220px]" /> : <p className="py-4 text-center text-[13px] text-label-2">No past seasons on record for the {t.short ?? t.name}.</p>}
+          </div>
+        )}
+        {rows.length > 0 && more && (
+          <button onClick={() => setWant((n) => n + 10)} disabled={busy} className="w-full border-t border-sep py-2.5 text-[13.5px] font-semibold text-accent active:bg-fill disabled:opacity-50">
+            {busy ? 'Loading…' : 'Show earlier seasons'}
+          </button>
+        )}
+      </Card>
+      <p className="mt-1.5 px-1 text-[11.5px] leading-snug text-label-3">
+        {lg === 'nba' ? 'Titles count the NBA and its first three seasons as the BAA.' : 'Titles are Super Bowls, listed by season; league championships from before the Super Bowl aren’t counted.'} Season records go back to {seasonLabel(lg, first)}.
+      </p>
+    </div>
   );
 }
 
@@ -296,6 +437,8 @@ export default function Team() {
             )}
           </div>
 
+          <TeamFacts lg={lg} id={id} season={season} />
+
           <div className="mt-6 flex items-center gap-2">
             <Segmented
               className="flex-1"
@@ -315,6 +458,8 @@ export default function Team() {
               </>
             )}
           </div>
+
+          <History lg={lg} id={id} t={t} />
 
           <div id="team-comments" className="scroll-mt-16">
             <SectionTitle right={said ? <span className="text-[13px] text-label-2">{said}</span> : null}>Comments</SectionTitle>
