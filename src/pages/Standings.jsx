@@ -63,9 +63,34 @@ const COLS = {
   ],
 };
 
-function Table({ teams, dividers = {}, showSeed = true, title, season }) {
+// A number to sort a column by: records by win share, streaks as +wins / -losses.
+const sortVal = (h, t, get) => {
+  if (h === 'Diff') return Number(t.diff) || 0;
+  const v = String(get(t) ?? '');
+  if (h === 'Strk') return (v.startsWith('W') ? 1 : -1) * (parseInt(v.slice(1), 10) || 0);
+  if (h === 'GB') return -(parseFloat(v) || 0); // fewer games back is better
+  const rec = v.trim().match(/^(\d+)\D+(\d+)(?:\D+(\d+))?$/);
+  if (rec) { const [w, l, d] = rec.slice(1).map((x) => Number(x) || 0); return w + l + d ? (w + d / 2) / (w + l + d) : 0; }
+  return parseFloat(v.replace(/^\./, '0.')) || 0;
+};
+const LOW_FIRST = new Set(['L', 'PA']); // fewer is better
+
+function Table({ teams: given, dividers: givenDividers = {}, showSeed = true, title, season }) {
   const lg = useLeague();
   const cols = COLS[lg];
+  const [sort, setSort] = useState(null); // { h, desc }
+  const col = sort && cols.find((c) => c[0] === sort.h);
+  const teams = col
+    ? [...given].sort((a, b) => (sortVal(col[0], b, col[1]) - sortVal(col[0], a, col[1])) * (sort.desc ? 1 : -1))
+    : given;
+  const dividers = col ? {} : givenDividers;
+  const tap = (h) =>
+    setSort((cur) => {
+      const best = !LOW_FIRST.has(h);
+      if (!cur || cur.h !== h) return { h, desc: best };
+      if (cur.desc === best) return { h, desc: !best };
+      return null; // third tap: back to the usual order
+    });
   const span = cols.length + 1;
   // The last column a phone shows (the ones after it are desktop-only) needs the card's right margin.
   const lastOnPhone = cols.reduce((n, c, i) => (c[3] ? n : i), 0);
@@ -79,7 +104,12 @@ function Table({ teams, dividers = {}, showSeed = true, title, season }) {
             <tr className="border-b border-sep text-[11px] font-semibold uppercase tracking-wide text-label-2">
               <th className="sticky left-0 z-10 bg-card py-2.5 pl-4 text-left font-semibold">Team</th>
               {cols.map(([h, , , desk], i) => (
-                <th key={h} className={`${pad(i)} text-right ${desk ? 'hidden md:table-cell' : ''}`}>{h}</th>
+                <th key={h} aria-sort={sort?.h === h ? (sort.desc ? 'descending' : 'ascending') : undefined} className={`${pad(i)} text-right ${desk ? 'hidden md:table-cell' : ''}`}>
+                  <button onClick={() => tap(h)} className={`inline-flex items-center gap-0.5 uppercase ${sort?.h === h ? 'text-accent' : ''}`}>
+                    {h}
+                    {sort?.h === h && <span className="text-[9px]">{sort.desc ? '▼' : '▲'}</span>}
+                  </button>
+                </th>
               ))}
             </tr>
           </thead>
