@@ -653,13 +653,13 @@ Deno.serve(async (req) => {
     return p;
   };
 
-  // Look now, then five more times 10 seconds apart after replying. Between
+  // Look now, then every 5 seconds after replying. Between
   // those, the push feed asks for an extra look the moment something happens.
   const t0 = Date.now();
   const first = await queued(() => pass(0));
   const timed = (async () => {
-    for (const n of [1, 2, 3, 4, 5]) {
-      const wait = t0 + n * 10_000 - Date.now();
+    for (let n = 1; n <= 11; n++) {
+      const wait = t0 + n * 5_000 - Date.now();
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
       if (Date.now() - t0 > 55_000) break; // the next minute's call takes over
       await queued(() => pass(n)).catch((e) => console.error('pass', n, e?.message ?? e));
@@ -672,8 +672,8 @@ Deno.serve(async (req) => {
     busy = true;
     (async () => {
       // ESPN's regular feed can trail its push feed by a moment: look again until it agrees.
-      for (let i = 0; i < 4 && Date.now() - t0 < 56_000; i++) {
-        if (i) await new Promise((r) => setTimeout(r, 1500));
+      for (let i = 0; i < 6 && Date.now() - t0 < 56_000; i++) {
+        if (i) await new Promise((r) => setTimeout(r, 700));
         extra++;
         await queued(() => pass(1, true)).catch((e) => console.error('push pass', e?.message ?? e));
         const g = seen.get(key);
