@@ -1731,10 +1731,10 @@ export async function getTeamStats(lg, id, season, opts) {
           if (cat === 'opp') {
             // Opponents' numbers (points allowed): only in the league table.
             const v = table?.get(String(id))?.opp?.[name];
-            return v != null && { key: `opp.${name}`, label, value: v.toFixed(1), rank: rankInTable(table, id, name, 'opp', true) };
+            return v != null && { key: `opp.${name}`, label, value: v.toFixed(1), rank: rankInTable(table, id, name, 'opp', true), listed: true };
           }
           const x = find(cat, name);
-          return x && { key: `${cat}.${name}`, label, value: x.displayValue, rank: leagueRank(cat, name) || rankOf(cat, name) || '' };
+          return x && { key: `${cat}.${name}`, label, value: x.displayValue, rank: leagueRank(cat, name) || rankOf(cat, name) || '', listed: !!leagueRank(cat, name) };
         })
         .filter(Boolean),
     }))

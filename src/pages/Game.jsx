@@ -1,10 +1,10 @@
 import { WithPct, madePct } from '../lib/pct';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { getGame, getNflQuarters, getStatRanking, getTeamStats, teamHref } from '../api/espn';
+import { getGame, getNflQuarters, getTeamStats, teamHref } from '../api/espn';
 import Comments, { useCommentCounts } from '../components/Comments';
 import Preview, { Injuries, Series } from '../components/Preview';
+import RankSheet from '../components/RankSheet';
 import Highlights from '../components/Highlights';
 import ShotChart from '../components/ShotChart';
 import { HeatBadge } from '../components/GameCard';
@@ -1131,54 +1131,15 @@ function SeasonRanks({ g }) {
           <span className="flex items-center gap-1.5">{g.home.abbr}<TeamLogo abbr={g.home.abbr} size={18} /></span>
         </div>
         {keys.map((k) => (
-          <button key={k} onClick={() => setOpen({ key: k, label: a[k].label })} className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-2 text-left transition active:bg-fill">
+          <button key={k} disabled={!a[k].listed} onClick={() => setOpen({ key: k, label: a[k].label })} className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-2 text-left transition enabled:active:bg-fill">
             <Side r={a[k]} />
-            <span className="flex items-center gap-0.5 text-center text-[12px] text-label-2">{a[k].label}<Icon.ChevronRight className="h-3 w-3 text-label-3" /></span>
+            <span className="flex items-center gap-0.5 text-center text-[12px] text-label-2">{a[k].label}{a[k].listed && <Icon.ChevronRight className="h-3 w-3 text-label-3" />}</span>
             <Side r={h[k]} right />
           </button>
         ))}
       </Card>
       {open && <RankSheet lg={lg} stat={open} mark={[g.away.id, g.home.id]} onClose={() => setOpen(null)} />}
     </>
-  );
-}
-
-/** Every team in the league for one stat, best first; this game's teams highlighted. */
-function RankSheet({ lg, stat, mark, onClose }) {
-  const { data, error } = useData(() => getStatRanking(lg, stat.key), [lg, stat.key]);
-  const fmt = (v) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
-  useEffect(() => {
-    const esc = (e) => e.key === 'Escape' && onClose();
-    addEventListener('keydown', esc);
-    return () => removeEventListener('keydown', esc);
-  }, [onClose]);
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm md:items-center" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-label={stat.label} onClick={(e) => e.stopPropagation()}
-        className="rise flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-card pb-[env(safe-area-inset-bottom)] shadow-2xl md:max-w-md md:rounded-3xl">
-        <div className="flex items-center justify-between px-4 pb-2 pt-3">
-          <h2 className="text-[17px] font-bold">{stat.label}</h2>
-          <button onClick={onClose} className="rounded-full bg-fill px-3 py-1 text-[13px] font-semibold text-accent">Done</button>
-        </div>
-        <div className="flex-1 overflow-y-auto overscroll-contain pb-3">
-          {!data && !error && <div className="space-y-2 px-4">{[...Array(8)].map((_, i) => <Skeleton key={i} className="h-8" />)}</div>}
-          {error && !data && <p className="px-4 text-[13px] text-label-2">League numbers aren't available right now.</p>}
-          {data?.map((t) => {
-            const me = mark.includes(t.id);
-            return (
-              <Link key={t.id} to={teamHref(lg, t.id)} onClick={onClose}
-                className={`flex items-center gap-3 px-4 py-2 text-[14px] ${me ? 'bg-fill font-semibold' : ''}`}>
-                <span className="num w-9 shrink-0 text-[12px] text-label-2">{t.rank}</span>
-                <TeamLogo abbr={t.abbr} size={22} league={lg} />
-                <span className="min-w-0 flex-1 truncate">{t.name}</span>
-                <span className="num font-semibold">{fmt(t.value)}</span>
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-    </div>,
-    document.body
   );
 }
 

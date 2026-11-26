@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { currentSeason, firstSeason, getTeam, getTeamInfo, getTeamSeasons, getTeamStats, getTeamVenue, seasonLabel, seasonOptions } from '../api/espn';
+import RankSheet from '../components/RankSheet';
 import { TeamMoves } from '../components/Moves';
 import Comments, { useCommentCounts } from '../components/Comments';
 import { BackButton, Card, ErrorState, Headshot, SeasonPicker, SectionTitle, Segmented, Skeleton, TeamLogo } from '../components/ui';
@@ -209,6 +210,7 @@ function History({ lg, id, t }) {
 
 function TeamStats({ lg, id, season }) {
   const { data, error, loading, reload } = useData((fresh) => getTeamStats(lg, id, season, { fresh }), [lg, id, season]);
+  const [open, setOpen] = useState(null);
   if (loading && !data) return <Skeleton className="h-[420px] !rounded-2xl" />;
   if (error && !data) return <ErrorState error={error} onRetry={reload} />;
   if (!data.sections.length) return <Card className="py-10 text-center text-label-2">No team stats for this season yet.</Card>;
@@ -223,18 +225,20 @@ function TeamStats({ lg, id, season }) {
             <div className="px-4 pb-1 pt-3 text-[15px] font-bold">{sec.title}</div>
             <div className="divide-y divide-sep">
               {sec.rows.map((r) => (
-                <div key={r.label} className="flex items-center justify-between gap-3 px-4 py-2.5 text-[14px]">
+                <button key={r.label} disabled={!r.listed} onClick={() => setOpen({ key: r.key, label: r.label })} className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-[14px] transition enabled:active:bg-fill">
                   <span className="text-label-2">{r.label}</span>
                   <span className="num flex items-center gap-2 font-semibold">
                     {r.value}
                     {r.rank && <span className="min-w-[44px] rounded-md bg-fill px-1.5 py-0.5 text-center text-[11px] font-semibold text-label-2">{r.rank}</span>}
+                    {r.listed && <Icon.ChevronRight className="-ml-1 h-3 w-3 text-label-3" />}
                   </span>
-                </div>
+                </button>
               ))}
             </div>
           </Card>
         ))}
       </div>
+      {open && <RankSheet lg={lg} stat={open} mark={[id]} season={season} onClose={() => setOpen(null)} />}
     </div>
   );
 }
