@@ -8,6 +8,9 @@ import { ThemeProvider } from './lib/theme';
 import { clearAlertBadgeOnOpen, openAlertTargets, registerServiceWorker } from './lib/push';
 import { loadPage, watchForUpdates } from './lib/update';
 import TransitionRoutes from './lib/pageTransitions';
+import { startCrashReports } from './lib/crash';
+
+startCrashReports(); // broken pages get reported so they can be fixed
 
 registerServiceWorker(); // alerts when the app is closed + offline copy
 clearAlertBadgeOnOpen();
@@ -56,12 +59,13 @@ const Picks = page(() => import('./pages/Picks'));
 const Moves = page(() => import('./pages/Moves'));
 const Settings = page(() => import('./pages/Settings'));
 const About = page(() => import('./pages/About'));
+const Privacy = page(() => import('./pages/Privacy'));
 const Friends = page(() => import('./pages/Friends'));
 const Profile = page(() => import('./pages/Profile'));
 const DM = page(() => import('./pages/DM'));
 // Which page a path opens, for loading its code before a page transition starts.
 const PAGES = [
-  ['/chat', Chat], ['/friends', Friends], ['/u/:id', Profile], ['/dm/:id', DM], ['/settings', Settings], ['/about', About],
+  ['/chat', Chat], ['/friends', Friends], ['/u/:id', Profile], ['/dm/:id', DM], ['/settings', Settings], ['/about', About], ['/privacy', Privacy],
   ['/:lg/game/:id', Game], ['/:lg/standings', Standings], ['/:lg/leaders', Leaders], ['/:lg/player/:id', Player],
   ['/:lg/teams', Teams], ['/:lg/compare', Compare], ['/:lg/moves', Moves], ['/:lg/picks', Picks], ['/:lg/team/:id', Team],
 ];
@@ -113,6 +117,7 @@ createRoot(document.getElementById('root')).render(
             <Route path="dm/:id" element={<UserKeyed Page={DM} />} />
             <Route path="settings" element={<Settings />} />
             <Route path="about" element={<About />} />
+            <Route path="privacy" element={<Privacy />} />
             {import.meta.env.DEV && <Route path="dev/field" element={<DevField />} />}
             <Route path=":lg" element={guard(<Scores />)} />
             <Route path=":lg/game/:id" element={guard(<GameRoute />)} />

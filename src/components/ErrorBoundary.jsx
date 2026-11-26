@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import { reportCrash } from '../lib/crash';
 
 /** Catches render errors so one broken section never blanks the whole app. */
 export default class ErrorBoundary extends Component {
@@ -15,6 +16,7 @@ export default class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error('Render error:', error, info?.componentStack);
+    reportCrash(error, 'render');
   }
 
   render() {

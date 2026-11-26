@@ -344,6 +344,7 @@ function AppSection() {
   return (
     <Group title="App" footer="Scores, stats and news from ESPN. Made for you and your friends.">
       <Row label="About" sub="The vision, and who made it" to="/about" />
+      <Row label="Privacy" sub="What’s stored, who sees it, how to delete it" to="/privacy" />
       {isIOS() && !isStandalone() && (
         <Row label="Add to Home Screen" sub="In Safari tap Share → Add to Home Screen. It opens full screen and can send alerts." />
       )}
@@ -359,10 +360,10 @@ function AccountActions() {
   const acct = useAccount();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  if (!acct || acct.guest) return null;
+  if (!acct) return null;
   const remove = async () => {
     const ok = window.confirm(
-      'Delete your account?\n\nThis permanently removes your picks, comments and reactions, and stops alerts. It can’t be undone.'
+      `${acct.guest ? 'Delete your data?' : 'Delete your account?'}\n\nThis permanently removes your profile, photo, messages, friends, picks, comments and reactions, and stops alerts. It can’t be undone.`
     );
     if (!ok) return;
     setBusy(true);
@@ -378,10 +379,10 @@ function AccountActions() {
   return (
     <Group
       title="Account"
-      footer={err || 'Signed in: your followed teams and settings sync to every device you sign in on. Alerts are set per device.'}
+      footer={err || (acct.guest ? 'Guest on this device. Deleting removes everything tied to your nickname.' : 'Signed in: your followed teams and settings sync to every device you sign in on. Alerts are set per device.')}
     >
-      <Row label="Sign out" onClick={() => signOut()} />
-      <Row label={busy ? 'Deleting…' : 'Delete account'} danger onClick={busy ? undefined : remove} />
+      {!acct.guest && <Row label="Sign out" onClick={() => signOut()} />}
+      <Row label={busy ? 'Deleting…' : acct.guest ? 'Delete my data' : 'Delete account'} danger onClick={busy ? undefined : remove} />
     </Group>
   );
 }

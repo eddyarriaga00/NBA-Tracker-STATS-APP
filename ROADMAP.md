@@ -1,7 +1,7 @@
 # Roadmap
 
 Where the app stands, what's left to make it feel finished, and what could come after. A web app for me and my friends.
-Last updated: November 26, 2026.
+Last updated: November 26, 2026 (evening).
 
 Live today: https://eddyarriaga00.github.io/NBA-Tracker-STATS-APP/ (a web app you can add to the Home Screen).
 
@@ -12,7 +12,7 @@ Live today: https://eddyarriaga00.github.io/NBA-Tracker-STATS-APP/ (a web app yo
 **Scores and games**
 - NBA by day, NFL by week, live games first; seasons back to the 1980s for history, 2017 for most stats
 - Live scores pushed from ESPN's Fastcast feed (about a second behind), with polling as a fallback
-- Game pages: score by quarter, one lead / win-probability chart, player of the game, box scores for both teams (NFL grouped so both teams' passers, rushers and receivers sit together), quarter-by-quarter player stats, plays and drives, NBA shot charts, injuries, previews, venue and TV
+- Game pages: score by quarter, one lead / win-probability chart, player of the game, box scores that put both teams together (NFL by passing, rushing, receiving…; NBA starters with starters and bench with bench on phones, plus a two-team totals table), quarter-by-quarter player stats, plays and drives, NBA shot charts, injuries, previews, venue and TV
 - Cards show records, streaks, last 5, injuries, broadcast, a "thriller" tag, and a team-colour edge on the winner
 - Postponed, cancelled, time-TBD and score-less old games are labelled correctly
 
@@ -33,6 +33,13 @@ Live today: https://eddyarriaga00.github.io/NBA-Tracker-STATS-APP/ (a web app yo
 - Page transitions, pull to refresh, rolling score digits, Back keeps your place, no zooming or overscroll, a tip to add the app to the Home Screen
 - Spoiler-free mode, calendar export, search for players, teams, games and people
 
+**Trust and safety**
+- Privacy page (Settings → Privacy)
+- Delete account, or Delete my data for guests: removes profile, photo, messages, friends, picks, comments, reactions and alerts
+- Mute someone from their profile to hide their chat and comments; delete your own comments and messages; unfriend stops private messages
+- Crash reports go to an `error_log` table in Supabase (no outside service), kept 30 days
+- Database rules checked: every table locked down, private messages readable only by the two people, picks locked at kick-off
+
 ---
 
 ## 2. Getting it to "finished"
@@ -44,41 +51,37 @@ The app is a web app for me and my friends, not a public or app-store release. S
 | # | What | Why |
 |---|------|-----|
 | 1 | **Test on real phones during live games** | Most testing has been in a desktop browser. Needs a real iPhone (installed on the Home Screen) and an Android phone during a live NBA and NFL game: rolling scores, NFL push updates, alert speed, transitions, pull to refresh, the bottom bar. |
-| 2 | **Crash and error reporting** (e.g. Sentry, free tier) | Right now a crash on a friend's phone goes unnoticed unless they say something. |
-| 3 | **Keep Supabase awake** | The free plan pauses after a week without activity, which would stop chat, accounts and closed-app alerts. A weekly ping (or the paid plan) fixes it. |
-| 4 | **ESPN fallback** | The app depends on ESPN's unofficial feeds. When one breaks, the page should fall back to another feed or say clearly what's missing (done for game pages; extend to the rest). |
-| 5 | **A few automated checks** | Tests for the ESPN data parsing and a build check on every push, so a fix in one place doesn't break another. |
-| 6 | **Database rules check** | Make sure friends can't read each other's private messages or change each other's picks. |
+| 2 | **ESPN fallback** | The app depends on ESPN's unofficial feeds. When one breaks, the page should fall back to another feed or say clearly what's missing (done for game pages; extend to the rest). |
+| 3 | **A few automated checks** | Tests for the ESPN data parsing and a build check on every push, so a fix in one place doesn't break another. |
+| 4 | **Late Pick'em picks** | The database trusts the game time the app sends, so someone could add a pick after a game started by faking a later start. Fine among friends; fixable by checking the real start time when grading. |
 
 ### Make it polished
 
 | # | What |
 |---|------|
-| 7 | NBA box score with both teams side by side, like NFL |
-| 8 | Group basics: block or mute someone, delete your own messages, delete your account |
-| 9 | Faster first load (the main bundle is about 490 KB) |
-| 10 | Light-mode and larger-text pass |
-| 11 | Finish GitHub sign-in or drop it (Google and email are enough) |
-| 12 | Optional: own domain instead of github.io |
+| 5 | Faster first load (the main bundle is about 490 KB) |
+| 6 | Light-mode and larger-text pass |
+| 7 | Finish GitHub sign-in or drop it (Google and email are enough) |
+| 8 | Optional: own domain instead of github.io |
 
 ### Only if it ever goes public
 
-Rename it without "NBA"/"NFL" (trademarks), a privacy policy and terms, report and moderation tools, account deletion, a licensed data feed, a paid Supabase plan, and app-store review if wrapped as an app.
+Rename it without "NBA"/"NFL" (trademarks), terms of use, report and moderation tools, a licensed data feed, a paid Supabase plan, and app-store review if wrapped as an app.
 
 ---
 
 ## 3. Suggested order
 
-1. **Next:** crash reporting, keep Supabase awake, database rules check
-2. **Then:** real-phone testing during live games, fix what turns up
-3. **Then:** NBA side-by-side box score, block/delete basics, faster first load
-4. **Ongoing:** ideas below
+1. **Next:** real-phone testing during live games, fix what turns up; check `error_log` now and then
+2. **Then:** ESPN fallbacks on every page, a few automated checks, faster first load
+3. **Ongoing:** ideas below
+
+Supabase stays awake on its own: the alert job runs every minute.
 
 ---
 
 ## 4. Ideas
 
-- NBA box score with both teams side by side, like NFL
 - Head-to-head history between two teams
 - A player's games against a specific opponent
 - Playoff odds and a "what if" playoff predictor

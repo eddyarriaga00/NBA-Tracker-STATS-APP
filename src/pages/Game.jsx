@@ -407,12 +407,13 @@ function PlayerLines({ labels, groups, lg }) {
   return (
     <div className="no-scrollbar overflow-x-auto">
       <div className="min-w-max">
-        {groups.map(({ title, list, live }) =>
+        {groups.map(({ title, list, live, logo }) =>
           list.length ? (
             <div key={title}>
               <div className="flex items-center bg-card-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-label-2">
                 <span className="sticky left-0 z-10 flex w-[132px] shrink-0 items-center gap-1.5 bg-card-2 pl-4 md:w-[190px]">
                   {live && <span className="live-dot h-[6px] w-[6px] rounded-full bg-live" />}
+                  {logo && <TeamLogo abbr={logo} size={14} />}
                   {title}
                 </span>
                 {list.some((a) => !a.dnp) && cols.map(([label]) => (
@@ -524,7 +525,8 @@ function Boxes({ g, focus }) {
   return (
     <div>
       {periods.length > 0 && <PeriodChips periods={periods} sel={sel} onPick={setPeriod} live={livePeriod} />}
-      <div className="space-y-5 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
+      <div className="lg:hidden"><NbaMatchup g={g} period={sel} /></div>
+      <div className="max-lg:hidden space-y-5 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
         {['away', 'home'].map((side) => {
           const t = g[side];
           const other = side === 'away' ? 'home' : 'away';
@@ -708,13 +710,9 @@ function NflMatchup({ g, period }) {
   );
 }
 
-function NbaBox({ g, box, lg, team, period: ctl }) {
+/** One NBA team's rows for the full game (on court / starters, bench, did not play) or one quarter. */
+function nbaGroups(g, box, sel) {
   const q = g.quarters;
-  const [own, setPeriod] = useState('game');
-  const period = ctl ?? own;
-  const periods = q?.periods ?? [];
-  const sel = period !== 'game' && periods.includes(period) ? period : 'game';
-
   let labels = box.labels;
   let totals = box.totals;
   let groups;
@@ -752,6 +750,102 @@ function NbaBox({ g, box, lg, team, period: ctl }) {
     ];
     if (!rows.length) groups = [];
   }
+  return { labels, totals, groups };
+}
+
+/** Phones: each group (starters, bench…) holds both teams, so the two
+ *  starting lineups sit one above the other. Wider screens keep two columns. */
+function NbaMatchup({ g, period }) {
+  const lg = 'nba';
+  const sides = ['away', 'home'].map((side) => {
+    const team = g[side];
+    const box = g.box.find((b) => b.teamId === team.id) ?? g.box[side === 'away' ? 0 : 1];
+    return box ? { side, team, ...nbaGroups(g, box, period) } : null;
+  }).filter(Boolean);
+  if (!sides.length) return <div className="py-10 text-center text-label-2">Box score not available yet.</div>;
+  const titles = [];
+  for (const s of sides) for (const gr of s.groups) if (!titles.includes(gr.title)) titles.push(gr.title);
+  const labels = sides[0].labels;
+  return (
+    <div>
+      <TeamTotals sides={sides} />
+      {!titles.length && <Card className="py-10 text-center text-[14px] text-label-2">No stats for this quarter yet.</Card>}
+      <div className="space-y-3">
+        {titles.map((title) => {
+          const live = sides.some((s) => s.groups.find((x) => x.title === title)?.live);
+          const groups = sides.map((s) => ({
+            title: s.team.abbr,
+            logo: s.team.abbr,
+            list: s.groups.find((x) => x.title === title)?.list ?? [],
+          }));
+          if (!groups.some((x) => x.list.length)) return null;
+          return (
+            <Card key={title} className="overflow-hidden">
+              <div className="flex items-center gap-1.5 px-4 pb-1 pt-2.5 text-[15px] font-bold">
+                {live && <span className="live-dot h-[7px] w-[7px] rounded-full bg-live" />}
+                {title}
+              </div>
+              <PlayerLines lg={lg} labels={labels} groups={groups} />
+            </Card>
+          );
+        })}
+      </div>
+      {period !== 'game' && (
+        <p className="mt-2 px-1 text-[11.5px] text-label-3">
+          {period === g.quarters?.livePeriod ? `${periodName(period)} in progress · ` : ''}Quarter stats are built from play-by-play and match the official box score.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Both teams' totals in one small table. */
+function TeamTotals({ sides }) {
+  const cols = ['FG', '3PT', 'FT', 'REB', 'AST', 'STL', 'BLK', 'TO'];
+  const rows = sides.map((s) => ({ s, at: (l) => s.totals?.[s.labels.indexOf(l)] }));
+  const shown = cols.filter((l) => rows.some((r) => r.at(l) != null && r.at(l) !== ''));
+  if (!shown.length) return null;
+  const pct = (v) => {
+    const [m, n] = String(v ?? '').split('-').map(Number);
+    return Number.isFinite(m) && n > 0 ? `${Math.round((m / n) * 100)}%` : '';
+  };
+  return (
+    <Card className="mb-3 overflow-hidden">
+      <div className="no-scrollbar overflow-x-auto">
+        <table className="num w-full whitespace-nowrap text-[13px]">
+          <thead>
+            <tr className="text-[10.5px] text-label-3">
+              <th className="sticky left-0 bg-card py-1.5 pl-4 text-left font-semibold">Totals</th>
+              {shown.map((l) => <th key={l} className="px-2 font-semibold">{l}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ s, at }) => (
+              <tr key={s.side} className="border-t border-sep">
+                <td className="sticky left-0 bg-card py-1.5 pl-4 pr-2 font-semibold"><span className="flex items-center gap-1.5"><TeamLogo abbr={s.team.abbr} size={16} />{s.team.abbr}</span></td>
+                {shown.map((l) => (
+                  <td key={l} className="px-2 text-center">
+                    <span className="font-semibold">{at(l) ?? '–'}</span>
+                    {pct(at(l)) && <span className="block text-[10px] leading-none text-label-3">{pct(at(l))}</span>}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+function NbaBox({ g, box, lg, team, period: ctl }) {
+  const q = g.quarters;
+  const [own, setPeriod] = useState('game');
+  const period = ctl ?? own;
+  const periods = q?.periods ?? [];
+  const sel = period !== 'game' && periods.includes(period) ? period : 'game';
+
+  const { labels, totals, groups } = nbaGroups(g, box, sel);
 
   return (
     <>

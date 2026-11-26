@@ -1,3 +1,4 @@
+import { setMuted, useMuted } from '../lib/mute';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getTeams } from '../api/espn';
@@ -118,6 +119,7 @@ function EditProfile({ p, onDone }) {
 function FriendActions({ p }) {
   const navigate = useNavigate();
   const [state, setState] = useState(null);
+  const muted = useMuted();
   useEffect(() => {
     let alive = true;
     const load = () => friendStatus(p.user_id).then((s) => alive && setState(s)).catch(() => alive && setState('none'));
@@ -129,6 +131,11 @@ function FriendActions({ p }) {
     try { await fn(); if (done) toast({ title: done }); } catch (e) { toast({ title: e.message }); }
   };
   if (!state) return <div className="h-[34px]" />;
+  const isMuted = muted.has(p.user_id);
+  const toggleMute = () => {
+    setMuted(p.user_id, !isMuted);
+    toast({ title: isMuted ? `${p.display_name} unmuted` : `${p.display_name} muted. Their chat and comments are hidden for you.` });
+  };
   return (
     <div className="flex flex-wrap justify-center gap-2">
       {state === 'friends' && (
@@ -145,6 +152,7 @@ function FriendActions({ p }) {
           <PillButton tone="soft" onClick={run(() => answerFriend(p.user_id, false))}>Decline</PillButton>
         </>
       )}
+      <PillButton tone="soft" onClick={toggleMute}>{isMuted ? 'Unmute' : 'Mute'}</PillButton>
     </div>
   );
 }

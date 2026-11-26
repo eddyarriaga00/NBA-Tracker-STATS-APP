@@ -1,3 +1,4 @@
+import { useMuted } from '../lib/mute';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { commentsEnabled, currentUserId, ensureUser, getClient } from '../lib/supabase';
@@ -406,7 +407,9 @@ export default function Comments({ room, variant = 'card', emptyText = 'No comme
 }
 
 function Thread({ room, variant, emptyText }) {
-  const { comments, reactions, status, me, post, remove, toggleReaction } = useThread(room);
+  const { comments: all, reactions, status, me, post, remove, toggleReaction } = useThread(room);
+  const muted = useMuted();
+  const comments = useMemo(() => (muted.size ? all.filter((c) => !muted.has(c.user_id)) : all), [all, muted]);
   const [name, setName] = useNickname();
   const [renaming, setRenaming] = useState(false);
   const [active, setActive] = useState(null);

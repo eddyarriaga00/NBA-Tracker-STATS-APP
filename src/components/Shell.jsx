@@ -18,7 +18,7 @@ import { useSocialBadge } from '../lib/social';
 function SettingsButton() {
   const [spoilerFree] = useSetting('spoilerFree');
   const { pathname } = useLocation();
-  const active = pathname === '/settings' || pathname === '/about';
+  const active = pathname === '/settings' || pathname === '/about' || pathname === '/privacy';
   return (
     <NavLink
       to="/settings"

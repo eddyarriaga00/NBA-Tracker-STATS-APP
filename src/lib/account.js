@@ -195,10 +195,19 @@ export async function handleAuthRedirect() {
 /** Permanently deletes your account: picks, comments, reactions and alert signups. */
 export async function deleteAccount() {
   const sb = await getClient();
-  const { error } = await sb.rpc('delete_my_account');
-  if (error) throw new Error(error.message);
+  // Profile photos live in storage, which the database can't clear itself.
+  const { data } = await sb.auth.getSession();
+  const me = data.session?.user?.id;
+  if (me) {
+    const { data: files } = await sb.storage.from('avatars').list(me).catch(() => ({ data: null }));
+    if (files?.length) await sb.storage.from('avatars').remove(files.map((f) => `${me}/${f.name}`)).catch(() => {});
+  }
+  if (me) {
+    const { error } = await sb.rpc('delete_my_account');
+    if (error) throw new Error(error.message);
+  }
   await sb.auth.signOut({ scope: 'local' });
-  for (const k of ['pushActive', 'prefsSyncedUser']) {
+  for (const k of ['pushActive', 'prefsSyncedUser', 'nickname', 'recentCompares']) {
     try { localStorage.removeItem(k); } catch { /* ignore */ }
   }
 }
