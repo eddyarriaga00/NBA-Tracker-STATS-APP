@@ -5,13 +5,12 @@ import { useLeague } from '../lib/league';
 import { useTheme } from '../lib/theme';
 import { Card, Headshot, SectionTitle, TeamLogo } from './ui';
 
-const ml = (v) => (v == null ? '–' : v > 0 ? `+${v}` : String(v));
 const shortDate = (d) => (d ? new Date(d).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '');
 
 function Matchup({ preview, home, away }) {
   const { dark } = useTheme();
-  const { predictor, odds } = preview;
-  if (!predictor && !odds) return null;
+  const { predictor } = preview;
+  if (!predictor) return null;
   const a = visibleColor(away.color, dark);
   const h = visibleColor(home.color, dark);
   return (
@@ -38,26 +37,6 @@ function Matchup({ preview, home, away }) {
               <div className="flex-1 rounded-r-full" style={{ background: h }} />
             </div>
             <div className="mt-1.5 text-[11px] text-label-3">ESPN Matchup Predictor</div>
-          </div>
-        )}
-        {odds && (odds.details || odds.overUnder != null) && (
-          <div className={`grid grid-cols-3 gap-2 text-center ${predictor ? 'mt-3.5 border-t border-sep pt-3' : ''}`}>
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-label-2">Spread</div>
-              <div className="num mt-0.5 text-[15px] font-semibold">{odds.details || '–'}</div>
-            </div>
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-label-2">Total</div>
-              <div className="num mt-0.5 text-[15px] font-semibold">{odds.overUnder ?? '–'}</div>
-            </div>
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-label-2">Moneyline</div>
-              <div className="num mt-0.5 text-[13px] font-semibold leading-snug">
-                <div>{away.abbr} {ml(odds.awayML)}</div>
-                <div>{home.abbr} {ml(odds.homeML)}</div>
-              </div>
-            </div>
-            {odds.provider && <div className="col-span-3 text-[11px] text-label-3">Odds via {odds.provider}</div>}
           </div>
         )}
       </Card>
@@ -111,7 +90,7 @@ function LastFive({ preview, home, away }) {
   );
 }
 
-function Series({ preview }) {
+export function Series({ preview }) {
   const lg = useLeague();
   const s = preview.series;
   if (!s?.events?.length) return null;

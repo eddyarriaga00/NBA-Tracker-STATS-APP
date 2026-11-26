@@ -1,9 +1,10 @@
+import GameOdds from '../components/Odds';
 import { WithPct, madePct } from '../lib/pct';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { getGame, getNflQuarters, teamHref } from '../api/espn';
 import Comments, { useCommentCounts } from '../components/Comments';
-import Preview, { Injuries } from '../components/Preview';
+import Preview, { Injuries, Series } from '../components/Preview';
 import Highlights from '../components/Highlights';
 import ShotChart from '../components/ShotChart';
 import { HeatBadge } from '../components/GameCard';
@@ -1373,6 +1374,7 @@ export default function Game() {
               {g.limited && (
                 <p className="mt-3 px-1 text-[12.5px] leading-snug text-label-2">ESPN’s record of this game is incomplete, so the box score and plays aren’t available here.</p>
               )}
+              {state === 'pre' && <GameOdds g={g} />}
               {state === 'pre' && <Preview g={g} />}
 
               {state !== 'pre' && (
@@ -1382,6 +1384,8 @@ export default function Game() {
                     <StarPlayer g={g} />
                     <GameFlow g={g} />
                     <GameLeaders g={g} />
+                    <GameOdds g={g} />
+                    {g.preview && <Series preview={g.preview} />}
                     {injuriesNow && <Injuries preview={g.preview} home={g.home} away={g.away} />}
                   </section>
                   {!g.limited && (

@@ -1,3 +1,4 @@
+import { normOdds } from '../lib/odds';
 import { lastPlay, stoppage } from '../../supabase/functions/send-alerts/stoppage.js';
 import { buildQuarterStats } from '../lib/quarterStats';
 import { buildNflQuarterStats } from '../lib/nflQuarterStats';
@@ -241,6 +242,7 @@ function normGame(lg, e) {
     venue: comp.venue?.fullName ?? '',
     broadcast,
     note: comp.notes?.[0]?.headline ?? '',
+    odds: normOdds(comp.odds?.[0]),
   };
 }
 
@@ -802,15 +804,7 @@ export async function getPregame(lg, id, opts) {
 
 function normPreview(lg, s, away, home) {
   const pc = (s.pickcenter ?? [])[0];
-  const odds = pc
-    ? {
-        provider: pc.provider?.name ?? '',
-        details: pc.details ?? '',
-        overUnder: pc.overUnder,
-        awayML: pc.awayTeamOdds?.moneyLine,
-        homeML: pc.homeTeamOdds?.moneyLine,
-      }
-    : null;
+  const odds = pc ? normOdds(null, pc) : null;
 
   const pr = s.predictor;
   const pct = (x) => (x == null || x === '' ? null : Number(x));

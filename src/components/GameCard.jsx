@@ -1,3 +1,4 @@
+import { lineLabel } from '../lib/odds';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, LiveBadge, TeamLogo } from './ui';
@@ -220,6 +221,15 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
           </div>
         ))}
       </div>
+    );
+  } else if (g.odds && status.state === 'pre') {
+    // Upcoming: the betting line, then where it's played.
+    footer = (
+      <span className="flex items-center gap-2">
+        <span className="num shrink-0 font-semibold text-label">{lineLabel(g.odds, away, home)}</span>
+        {g.odds.total != null && <span className="num shrink-0">O/U {g.odds.total}</span>}
+        {g.venue && <span className="min-w-0 truncate text-label-3">· {g.venue}</span>}
+      </span>
     );
   } else if (g.venue) {
     footer = <span className="block truncate">{g.venue}</span>;
