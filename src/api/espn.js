@@ -1,4 +1,3 @@
-import { normOdds } from '../lib/odds';
 import { lastPlay, stoppage } from '../../supabase/functions/send-alerts/stoppage.js';
 import { buildQuarterStats } from '../lib/quarterStats';
 import { buildNflQuarterStats } from '../lib/nflQuarterStats';
@@ -242,7 +241,6 @@ function normGame(lg, e) {
     venue: comp.venue?.fullName ?? '',
     broadcast,
     note: comp.notes?.[0]?.headline ?? '',
-    odds: normOdds(comp.odds?.[0]),
   };
 }
 
@@ -794,7 +792,7 @@ export async function getGame(lg, id, opts) {
   };
 }
 
-// ---------- Preview (odds, predictor, injuries, form, series) ----------
+// ---------- Preview (predictor, injuries, form, series) ----------
 
 /** Just the pre-game preview (injuries, recent form). Shares the game page's request. */
 export async function getPregame(lg, id, opts) {
@@ -803,8 +801,6 @@ export async function getPregame(lg, id, opts) {
 }
 
 function normPreview(lg, s, away, home) {
-  const pc = (s.pickcenter ?? [])[0];
-  const odds = pc ? normOdds(null, pc) : null;
 
   const pr = s.predictor;
   const pct = (x) => (x == null || x === '' ? null : Number(x));
@@ -865,8 +861,8 @@ function normPreview(lg, s, away, home) {
       }
     : null;
 
-  if (!odds && !predictor && !injuries.length && !lastFive.length && !series) return null;
-  return { odds, predictor, injuries, lastFive, series };
+  if (!predictor && !injuries.length && !lastFive.length && !series) return null;
+  return { predictor, injuries, lastFive, series };
 }
 
 // ---------- Win probability ----------
