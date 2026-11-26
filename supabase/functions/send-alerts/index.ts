@@ -42,7 +42,7 @@ function norm(league: 'nba' | 'nfl', e: any): Game | null {
   const side = (h: string): Team => {
     const x = c.competitors.find((t: any) => t.homeAway === h);
     const score = typeof x?.score === 'object' ? x?.score?.value : x?.score;
-    return { id: x?.team?.id ?? x?.id, abbr: x?.team?.abbreviation, score: Number(score) || 0, winner: x?.winner === true };
+    return { id: x?.team?.id ?? x?.id, abbr: x?.team?.name || x?.team?.shortDisplayName || x?.team?.abbreviation, score: Number(score) || 0, winner: x?.winner === true };
   };
   const st = e.status ?? c.status;
   let top = '';

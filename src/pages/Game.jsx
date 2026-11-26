@@ -1464,10 +1464,10 @@ export default function Game() {
                   <section id="summary" className="game-sec mt-3">
                     <StarPlayer g={g} />
                     <GameFlow g={g} />
-                    <GameLeaders g={g} />
                     <SeasonRanks g={g} />
                     {g.preview && <Series preview={g.preview} />}
                     {injuriesNow && <Injuries preview={g.preview} home={g.home} away={g.away} />}
+                    <GameLeaders g={g} />
                   </section>
                   {!g.limited && (
                     <>
