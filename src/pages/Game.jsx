@@ -957,6 +957,9 @@ function Plays({ g }) {
   const { periods, period, setPeriod } = usePeriods(g.plays);
   const [scoringOnly, setScoringOnly] = useState(false);
   const [newest, setNewest] = useState(true);
+  // A quarter has 100+ plays; show the first stretch and let the rest open on a tap.
+  const [more, setMore] = useState(false);
+  useEffect(() => setMore(false), [period, scoringOnly, newest]);
   if (!g.plays.length) return <div className="py-10 text-center text-label-2">Play-by-play starts at tip-off.</div>;
   let list = g.plays.filter((p) => p.period === period && (!scoringOnly || p.scoring));
   // Same order live and after the game (it used to flip once the game ended).
@@ -967,7 +970,7 @@ function Plays({ g }) {
       <PeriodPicker {...{ periods, period, setPeriod, scoringOnly, setScoringOnly, newest, setNewest }} />
       <Card className="divide-y divide-sep">
         {list.length === 0 && <div className="py-8 text-center text-[14px] text-label-2">No plays.</div>}
-        {list.map((p) => (
+        {(more ? list : list.slice(0, 15)).map((p) => (
           <div key={p.id} className="flex items-center gap-3 px-4 py-2.5">
             <span className="num w-11 shrink-0 text-[12px] text-label-2">{p.clock}</span>
             <div className="w-6 shrink-0">{abbr[p.teamId] && <TeamLogo abbr={abbr[p.teamId]} size={22} />}</div>
@@ -975,6 +978,11 @@ function Plays({ g }) {
             <div className={`num shrink-0 text-right text-[13px] ${p.scoring ? 'font-bold' : 'text-label-3'}`}>{p.away}–{p.home}</div>
           </div>
         ))}
+        {!more && list.length > 15 && (
+          <button onClick={() => setMore(true)} className="w-full py-2.5 text-center text-[14px] font-semibold text-accent active:opacity-60">
+            Show all {list.length} plays
+          </button>
+        )}
       </Card>
     </div>
   );
@@ -1160,15 +1168,101 @@ function HiddenNotice({ onReveal }) {
   );
 }
 
+/** Buttons that jump to each part of the game page; sticks under the top bar
+ *  and marks the part you're reading. */
+function JumpBar({ sections, jumpTo }) {
+  const [on, setOn] = useState(sections[0].id);
+  const bar = useRef(null);
+  const ids = sections.map((x) => x.id).join();
+  useEffect(() => {
+    const pick = () => {
+      const line = (bar.current?.getBoundingClientRect().bottom ?? 100) + 12;
+      let cur = sections[0].id;
+      for (const { id } of sections) {
+        const el = document.getElementById(id);
+        if (el && el.getBoundingClientRect().top <= line) cur = id;
+      }
+      // At the very bottom, the last part counts even if it's short.
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) cur = sections.at(-1).id;
+      setOn(cur);
+    };
+    pick();
+    window.addEventListener('scroll', pick, { passive: true });
+    window.addEventListener('resize', pick);
+    return () => { window.removeEventListener('scroll', pick); window.removeEventListener('resize', pick); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ids]);
+  // Keep the current button in view on a narrow bar.
+  useEffect(() => {
+    // Only the bar scrolls sideways (scrollIntoView would also stop the page mid-scroll).
+    const b = bar.current;
+    const el = b?.querySelector(`[data-sec="${on}"]`);
+    if (el) b.scrollLeft = el.offsetLeft - (b.clientWidth - el.offsetWidth) / 2;
+  }, [on]);
+  const target = (id) => {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    return Math.max(0, el.getBoundingClientRect().top + window.scrollY - ((bar.current?.getBoundingClientRect().bottom ?? 100) + 6));
+  };
+  const settle = useRef(0);
+  const go = (id, smooth = true) => {
+    const top = target(id);
+    if (top == null) return;
+    setOn(id);
+    window.scrollTo({ top, behavior: smooth ? 'smooth' : 'auto' });
+    // Parts above can grow while their data loads; once the scroll stops, land exactly.
+    const run = ++settle.current;
+    let last = -1;
+    let tries = 0;
+    const stop = () => { settle.current++; };
+    window.addEventListener('touchstart', stop, { once: true, passive: true });
+    window.addEventListener('wheel', stop, { once: true, passive: true });
+    const check = () => {
+      if (run !== settle.current || ++tries > 20) return;
+      if (Math.abs(window.scrollY - last) > 1) { last = window.scrollY; setTimeout(check, 120); return; }
+      const want = target(id);
+      if (want != null && Math.abs(want - window.scrollY) > 6) { window.scrollTo({ top: want, behavior: 'auto' }); last = -1; setTimeout(check, 200); }
+    };
+    setTimeout(check, 150);
+  };
+  useEffect(() => {
+    if (!jumpTo.current) return;
+    const id = jumpTo.current;
+    jumpTo.current = null;
+    requestAnimationFrame(() => go(id, false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div
+      ref={bar}
+      className="no-scrollbar sticky top-[calc(3rem+env(safe-area-inset-top))] z-30 -mx-3 mt-3 flex gap-1.5 overflow-x-auto bg-bg/85 px-3 py-2 backdrop-blur-xl md:top-[calc(3.5rem+env(safe-area-inset-top))] md:-mx-4 md:px-4"
+    >
+      {sections.map((x) => (
+        <button
+          key={x.id}
+          data-sec={x.id}
+          onClick={() => go(x.id)}
+          className={`shrink-0 rounded-full px-3.5 py-1 text-[13px] font-semibold transition active:scale-95 ${
+            on === x.id ? 'bg-label text-bg' : 'bg-card text-label-2 hover:text-label'
+          }`}
+        >
+          {x.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function Game() {
   const { id } = useParams();
   const lg = useLeague();
   // ?tab=away|home opens the box score on that team (used by player links).
   const [query] = useSearchParams();
   const asked = query.get('tab');
-  const [tab, setTab] = useState(() => (asked === 'away' || asked === 'home' ? 'box' : asked === 'plays' ? 'plays' : 'game'));
+  // Opened from a link that points at a part of the game: scroll there once it's loaded.
+  const jumpTo = useRef(asked === 'away' || asked === 'home' || asked === 'box' ? 'box' : asked === 'plays' ? 'plays' : null);
   // Only for the game the link pointed at, not the next one opened from the strip.
-  const [focus, setFocus] = useState(() => (asked === 'away' || asked === 'home' ? { id, side: asked } : null));
+  const [focus] = useState(() => (asked === 'away' || asked === 'home' ? { id, side: asked } : null));
   const room = `${lg}:game:${id}`;
   // Going back from here, this game's score card is the one that pairs with the header.
   useEffect(() => { setMorph(id); }, [id]);
@@ -1212,13 +1306,16 @@ export default function Game() {
       <GamePick g={g} />
     </div>
   ) : null;
-  const tabs = [
-    { value: 'game', label: 'Game' },
-    { value: 'box', label: 'Box score' },
-    { value: 'plays', label: lg === 'nfl' ? 'Drives' : 'Plays' },
-    ...(lg === 'nba' ? [{ value: 'shots', label: 'Shots' }] : []),
+  const sections = [
+    { id: 'summary', label: 'Summary' },
+    ...(g?.limited ? [] : [
+      { id: 'box', label: 'Box score' },
+      { id: 'team', label: 'Team stats' },
+      { id: 'plays', label: lg === 'nfl' ? 'Drives' : 'Plays' },
+      ...(lg === 'nba' ? [{ id: 'shots', label: 'Shots' }] : []),
+    ]),
+    { id: 'talk', label: 'Comments' },
   ];
-  const shownTab = tabs.some((t) => t.value === tab) ? tab : 'game';
 
   return (
     <div>
@@ -1280,26 +1377,37 @@ export default function Game() {
 
               {state !== 'pre' && (
                 <>
-                  <Segmented className="mt-4" value={shownTab} onChange={(v) => { setTab(v); setFocus(null); }} options={tabs} />
-                  <div className="mt-3">
-                    {shownTab === 'game' && (
-                      <>
-                        <StarPlayer g={g} />
-                        <GameFlow g={g} />
-                        <GameLeaders g={g} />
+                  <JumpBar sections={sections} jumpTo={jumpTo} />
+                  <section id="summary" className="game-sec mt-3">
+                    <StarPlayer g={g} />
+                    <GameFlow g={g} />
+                    <GameLeaders g={g} />
+                    {injuriesNow && <Injuries preview={g.preview} home={g.home} away={g.away} />}
+                  </section>
+                  {!g.limited && (
+                    <>
+                      <section id="box" className="game-sec">
+                        <SectionTitle>Box Score</SectionTitle>
+                        <InjuryCtx.Provider value={hurt}>
+                          <Boxes g={g} focus={focus?.id === id ? focus.side : null} />
+                        </InjuryCtx.Provider>
+                      </section>
+                      <section id="team" className="game-sec">
                         <SectionTitle>Team Stats</SectionTitle>
                         <TeamStats g={g} />
-                        {injuriesNow && <Injuries preview={g.preview} home={g.home} away={g.away} />}
-                      </>
-                    )}
-                    {shownTab === 'box' && (
-                      <InjuryCtx.Provider value={hurt}>
-                        <Boxes g={g} focus={focus?.id === id ? focus.side : null} />
-                      </InjuryCtx.Provider>
-                    )}
-                    {shownTab === 'plays' && (lg === 'nfl' ? <Drives g={g} /> : <Plays g={g} />)}
-                    {shownTab === 'shots' && lg === 'nba' && <ShotChart g={g} />}
-                  </div>
+                      </section>
+                      <section id="plays" className="game-sec">
+                        <SectionTitle>{lg === 'nfl' ? 'Drives' : 'Plays'}</SectionTitle>
+                        {lg === 'nfl' ? <Drives g={g} /> : <Plays g={g} />}
+                      </section>
+                      {lg === 'nba' && (
+                        <section id="shots" className="game-sec">
+                          <SectionTitle>Shots</SectionTitle>
+                          <ShotChart g={g} />
+                        </section>
+                      )}
+                    </>
+                  )}
                 </>
               )}
 
@@ -1307,7 +1415,7 @@ export default function Game() {
               {state === 'post' && pick}
 
               <div className="grid grid-cols-1 gap-x-4 md:grid-cols-2">
-                <div>{comments}</div>
+                <section id="talk" className="game-sec">{comments}</section>
                 <div>
                   {state === 'pre' && <GameLeaders g={g} />}
                   <GameInfo g={g} />
