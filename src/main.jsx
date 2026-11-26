@@ -2,7 +2,7 @@ import { StrictMode, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import { HashRouter, Navigate, Route, matchPath, useParams } from 'react-router-dom';
 import './index.css';
-import { LEAGUES } from './api/espn';
+import { LEAGUES, getNbaScoreboard, getNflScoreboard, toKey } from './api/espn';
 import { leagueFromPath } from './lib/league';
 import { ThemeProvider } from './lib/theme';
 import { clearAlertBadgeOnOpen, openAlertTargets, registerServiceWorker } from './lib/push';
@@ -98,6 +98,19 @@ function UserKeyed({ Page }) {
 function GameRoute() {
   const { lg } = useParams();
   return <Game key={lg} />;
+}
+// Opening the app: if the usual league has nothing live but the other one does,
+// switch to the one with live games (only while you're still on its scores page).
+if (/^#?\/?$/.test(location.hash)) {
+  const pref = leagueFromPath('/');
+  const other = pref === 'nba' ? 'nfl' : 'nba';
+  const liveIn = (lg) =>
+    (lg === 'nba' ? getNbaScoreboard(toKey(new Date())) : getNflScoreboard(null).then((d) => d.games))
+      .then((gs) => gs.some((g) => g.status?.state === 'in'))
+      .catch(() => false);
+  Promise.all([liveIn(pref), liveIn(other)]).then(([a, b]) => {
+    if (!a && b && location.hash === `#/${pref}`) location.replace(`#/${other}`);
+  });
 }
 const Home = () => <Navigate to={`/${leagueFromPath('/')}`} replace />;
 
