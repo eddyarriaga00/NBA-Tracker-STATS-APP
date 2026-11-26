@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 // Small persisted settings (per device). Every hook instance stays in sync.
-const DEFAULTS = { spoilerFree: false, alertsFollowed: false, alertsClose: false, defaultLeague: 'last' };
+const DEFAULTS = { spoilerFree: false, alertsFollowed: false, alertsClose: false, defaultLeague: 'last', showOdds: false };
 
 // Alert moments started out as one "Followed teams" switch; until changed,
 // each moment follows that old switch. Which games defaults to "all" unless

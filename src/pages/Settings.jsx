@@ -265,6 +265,7 @@ function Alerts() {
 function Preferences() {
   const { pref, setPref } = useTheme();
   const [spoiler, setSpoiler] = useSetting('spoilerFree');
+  const [odds, setOdds] = useSetting('showOdds');
   const [league, setLeague] = useSetting('defaultLeague');
   const [sort, setSort] = useGameSort();
   return (
@@ -298,6 +299,7 @@ function Preferences() {
           <Segmented value={sort} onChange={setSort} options={Object.entries(SORTS).map(([value, s]) => ({ value, label: s.label }))} />
         </Choice>
         <Row label="Spoiler-free" sub="Hide scores and results until you tap Reveal" right={<Switch on={spoiler} onChange={setSpoiler} label="Spoiler-free" />} />
+        <Row label="Betting lines" right={<Switch on={!!odds} onChange={setOdds} label="Betting lines" />} />
       </Group>
     </>
   );

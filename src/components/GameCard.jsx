@@ -1,3 +1,4 @@
+import { useSetting } from '../lib/settings';
 import { lineLabel } from '../lib/odds';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -190,6 +191,7 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
       : null;
 
   let footer = null;
+  const [showOdds] = useSetting('showOdds');
   if (hide) {
     footer = (
       <span className="flex items-center justify-between gap-2">
@@ -222,7 +224,7 @@ export default function GameCard({ g, index = 0, comments = 0, favorite = false 
         ))}
       </div>
     );
-  } else if (g.odds && status.state === 'pre') {
+  } else if (showOdds && g.odds && status.state === 'pre') {
     // Upcoming: the betting line, then where it's played.
     footer = (
       <span className="flex items-center gap-2">

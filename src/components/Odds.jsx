@@ -1,3 +1,4 @@
+import { useSetting } from '../lib/settings';
 import { peekGame } from '../lib/morph';
 import { fmtLine, fmtOdds, impliedOdds, lineResult, mergeOdds } from '../lib/odds';
 import { visibleColor } from '../lib/color';
@@ -12,9 +13,10 @@ function Moved({ from, to, fmt = fmtLine }) {
 /** Spread, total and moneyline for a game; after it ends, how each one finished. */
 export default function GameOdds({ g }) {
   const { dark } = useTheme();
+  const [on] = useSetting('showOdds');
   // The game feed has the line ESPN shows; the scoreboard adds where it opened.
   const o = mergeOdds(g.preview?.odds, g.odds ?? peekGame(g.league, g.id)?.odds);
-  if (!o) return null;
+  if (!on || !o) return null;
   const { away, home } = g;
   const result = lineResult(o, g);
   const chance = g.status.state === 'pre' ? impliedOdds(o) : null;
