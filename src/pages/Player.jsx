@@ -127,14 +127,18 @@ function SummaryTiles({ bio, lg, id, onGameLog }) {
   );
 }
 
+// The last tile stretches over any empty cells left in its row (2 across on a phone, 4 wider).
+const SPAN4 = ['', '', 'md:col-span-3', 'md:col-span-2'];
+const FILL = [SPAN4, SPAN4.map((c) => `col-span-2 ${c || 'md:col-span-1'}`)];
+FILL[1][1] = 'col-span-2 md:col-span-4';
 function Facts({ bio }) {
   if (!bio.facts.length) return null;
   return (
     <>
       <SectionTitle>Bio</SectionTitle>
       <Card className="grid grid-cols-2 gap-px overflow-hidden bg-sep md:grid-cols-4">
-        {bio.facts.map(([k, v]) => (
-          <div key={k} className="bg-card px-3.5 py-2.5 md:px-4 md:py-3">
+        {bio.facts.map(([k, v], i) => (
+          <div key={k} className={`bg-card px-3.5 py-2.5 md:px-4 md:py-3 ${i === bio.facts.length - 1 ? FILL[bio.facts.length % 2][bio.facts.length % 4] : ''}`}>
             <div className="text-[12px] text-label-2">{k}</div>
             <div className="mt-0.5 text-[14px] font-semibold md:text-[15px]">{v}</div>
           </div>
@@ -163,8 +167,8 @@ function Awards({ awards, lg }) {
       <SectionTitle right={<span className="text-[13px] text-label-2">{list.length} {list.length === 1 ? 'honor' : 'honors'}</span>}>Awards</SectionTitle>
       <Card className="overflow-hidden">
         <div className="grid grid-cols-1 gap-px bg-sep md:grid-cols-2">
-          {shown.map((a) => (
-            <div key={a.id ?? a.name} className="flex items-center gap-3 bg-card px-3.5 py-2.5 md:px-4">
+          {shown.map((a, i) => (
+            <div key={a.id ?? a.name} className={`flex items-center gap-3 bg-card px-3.5 py-2.5 md:px-4 ${i === shown.length - 1 && shown.length % 2 ? 'md:col-span-2' : ''}`}>
               <span className="num flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#ffd60a]/15 text-[13px] font-bold text-[#806000] dark:text-[#ffd60a]">
                 {a.count || `${a.seasons.length || 1}x`}
               </span>

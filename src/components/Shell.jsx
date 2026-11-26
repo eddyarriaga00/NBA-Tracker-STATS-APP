@@ -126,7 +126,7 @@ export default function Shell() {
       <BioProvider>
       <div className="min-h-dvh">
         <header style={TOP_BAR} className="app-bar sticky top-0 z-40 border-b border-sep bg-bar pt-[env(safe-area-inset-top)] backdrop-blur-xl backdrop-saturate-150">
-          <div className="mx-auto flex h-12 max-w-5xl items-center gap-2.5 px-3 md:h-14 md:gap-3 md:px-4">
+          <div className="mx-auto flex h-12 max-w-5xl xl:max-w-6xl items-center gap-2.5 px-3 md:h-14 md:gap-3 md:px-4">
             <NavLink to={`/${league}`} className="flex shrink-0 items-center gap-2" aria-label="Home">
               <img src="./favicon.svg" alt="" className="h-7 w-7 md:h-8 md:w-8" />
             </NavLink>
@@ -160,7 +160,7 @@ export default function Shell() {
           </div>
         </header>
 
-        <main className="mx-auto max-w-5xl px-3 pb-[calc(84px+env(safe-area-inset-bottom))] pt-3 md:px-4 md:pt-4 lg:pb-16">
+        <main className="mx-auto max-w-5xl xl:max-w-6xl px-3 pb-[calc(84px+env(safe-area-inset-bottom))] pt-3 md:px-4 md:pt-4 lg:pb-16">
           <OfflineNotice />
           <ErrorBoundary resetKey={pathname}>
             <Suspense fallback={<div className="skeleton mt-2 h-[240px] rounded-2xl" />}>

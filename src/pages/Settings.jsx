@@ -65,7 +65,7 @@ function Choice({ label, children }) {
   return (
     <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <span className="text-[15.5px]">{label}</span>
-      <div className="sm:w-[260px]">{children}</div>
+      <div className="sm:w-[300px]">{children}</div>
     </div>
   );
 }

@@ -30,7 +30,7 @@ function GameGrid({ games, loading, error, reload, emptyTitle, emptySub, byDay =
 
   if (loading && !games)
     return (
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-[156px] !rounded-2xl" />)}
       </div>
     );
@@ -61,7 +61,7 @@ function GameGrid({ games, loading, error, reload, emptyTitle, emptySub, byDay =
               <span className="font-normal text-label-3">· {sec.games.length}</span>
             </h2>
           )}
-          <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 md:gap-3">
+          <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 md:gap-3 xl:grid-cols-3">
             {sec.games.map((g) => (
               <GameCard key={g.id} g={g} index={index++} favorite={fav(g)} comments={counts[`${g.league}:game:${g.id}`] ?? 0} />
             ))}

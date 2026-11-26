@@ -15,13 +15,13 @@ const num = (v) => {
 
 const RECENT_KEY = 'recentCompares';
 const loadRecent = () => {
-  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]').filter((x) => x.a?.id !== x.b?.id); } catch { return []; }
 };
 /** Remember a finished comparison (newest first, four per league at most). */
 function saveRecent(lg, pa, pb) {
   const side = (p, id) => ({ id, name: p.bio.name ?? [p.bio.first, p.bio.last].filter(Boolean).join(' '), headshot: p.bio.headshot });
   const item = { lg, a: side(pa, pa.bio.id), b: side(pb, pb.bio.id) };
-  if (!item.a.id || !item.b.id) return;
+  if (!item.a.id || !item.b.id || item.a.id === item.b.id) return;
   const same = (x) => x.lg === lg && [x.a.id, x.b.id].sort().join() === [item.a.id, item.b.id].sort().join();
   const rest = loadRecent().filter((x) => !same(x));
   const mine = [item, ...rest.filter((x) => x.lg === lg)].slice(0, 4);
