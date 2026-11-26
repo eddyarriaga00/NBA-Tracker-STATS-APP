@@ -1094,8 +1094,8 @@ function Officials({ g }) {
 
 // Key season numbers for the head-to-head card, in this order.
 const RANK_KEYS = {
-  nba: ['offensive.avgPoints', 'offensive.fieldGoalPct', 'offensive.threePointFieldGoalPct', 'general.avgRebounds', 'offensive.avgAssists', 'offensive.avgTurnovers', 'defensive.avgSteals', 'defensive.avgBlocks'],
-  nfl: ['passing.totalPointsPerGame', 'passing.yardsPerGame', 'passing.passingYardsPerGame', 'rushing.rushingYardsPerGame', 'miscellaneous.thirdDownConvPct', 'miscellaneous.redzoneTouchdownPct', 'miscellaneous.turnOverDifferential', 'defensive.sacks'],
+  nba: ['offensive.avgPoints', 'opp.offensive.avgPoints', 'offensive.fieldGoalPct', 'offensive.threePointFieldGoalPct', 'general.avgRebounds', 'offensive.avgAssists', 'offensive.avgTurnovers', 'defensive.avgSteals', 'defensive.avgBlocks'],
+  nfl: ['passing.totalPointsPerGame', 'opp.passing.totalPointsPerGame', 'passing.yardsPerGame', 'passing.passingYardsPerGame', 'rushing.rushingYardsPerGame', 'miscellaneous.thirdDownConvPct', 'miscellaneous.redzoneTouchdownPct', 'miscellaneous.turnOverDifferential', 'defensive.sacks'],
 };
 
 /** Both teams' season numbers side by side, each with its league rank. */

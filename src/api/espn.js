@@ -1636,15 +1636,51 @@ const TEAM_STATS = {
   nba: [
     ['Scoring', [['offensive', 'avgPoints', 'Points / Game'], ['offensive', 'fieldGoalPct', 'Field Goal %'], ['offensive', 'threePointFieldGoalPct', '3-Point %'], ['offensive', 'freeThrowPct', 'Free Throw %'], ['offensive', 'twoPointFieldGoalPct', '2-Point %'], ['offensive', 'avgThreePointFieldGoalsMade', '3PM / Game'], ['offensive', 'avgFreeThrowsAttempted', 'FTA / Game']]],
     ['Playmaking', [['offensive', 'avgAssists', 'Assists / Game'], ['offensive', 'avgTurnovers', 'Turnovers / Game'], ['general', 'assistTurnoverRatio', 'Assist / Turnover']]],
-    ['Rebounding & Defense', [['general', 'avgRebounds', 'Rebounds / Game'], ['offensive', 'avgOffensiveRebounds', 'Off. Rebounds / Game'], ['defensive', 'avgDefensiveRebounds', 'Def. Rebounds / Game'], ['defensive', 'avgSteals', 'Steals / Game'], ['defensive', 'avgBlocks', 'Blocks / Game'], ['general', 'avgFouls', 'Fouls / Game']]],
+    ['Rebounding & Defense', [['opp', 'offensive.avgPoints', 'Opp. Points / Game'], ['general', 'avgRebounds', 'Rebounds / Game'], ['offensive', 'avgOffensiveRebounds', 'Off. Rebounds / Game'], ['defensive', 'avgDefensiveRebounds', 'Def. Rebounds / Game'], ['defensive', 'avgSteals', 'Steals / Game'], ['defensive', 'avgBlocks', 'Blocks / Game'], ['general', 'avgFouls', 'Fouls / Game']]],
   ],
   nfl: [
     ['Offense', [['passing', 'totalPointsPerGame', 'Points / Game'], ['passing', 'yardsPerGame', 'Yards / Game'], ['passing', 'passingYardsPerGame', 'Pass Yards / Game'], ['rushing', 'rushingYardsPerGame', 'Rush Yards / Game'], ['passing', 'completionPct', 'Completion %'], ['passing', 'yardsPerPassAttempt', 'Yards / Pass'], ['rushing', 'yardsPerRushAttempt', 'Yards / Rush'], ['passing', 'passingTouchdowns', 'Pass TDs'], ['rushing', 'rushingTouchdowns', 'Rush TDs'], ['passing', 'QBRating', 'Passer Rating'], ['passing', 'sacks', 'Sacks Allowed']]],
     ['Efficiency', [['miscellaneous', 'thirdDownConvPct', '3rd Down %'], ['miscellaneous', 'fourthDownConvPct', '4th Down %'], ['miscellaneous', 'redzoneTouchdownPct', 'Red Zone TD %'], ['miscellaneous', 'turnOverDifferential', 'Turnover Diff.'], ['miscellaneous', 'totalTakeaways', 'Takeaways'], ['miscellaneous', 'totalGiveaways', 'Giveaways'], ['miscellaneous', 'totalPenalties', 'Penalties']]],
-    ['Defense', [['defensive', 'sacks', 'Sacks'], ['defensive', 'totalTackles', 'Tackles'], ['defensive', 'tacklesForLoss', 'Tackles for Loss'], ['defensive', 'passesDefended', 'Passes Defended'], ['defensiveInterceptions', 'interceptions', 'Interceptions'], ['general', 'fumblesRecovered', 'Fumbles Recovered']]],
+    ['Defense', [['opp', 'passing.totalPointsPerGame', 'Points Allowed / Game'], ['opp', 'passing.yardsPerGame', 'Yards Allowed / Game'], ['defensive', 'sacks', 'Sacks'], ['defensive', 'totalTackles', 'Tackles'], ['defensive', 'tacklesForLoss', 'Tackles for Loss'], ['defensive', 'passesDefended', 'Passes Defended'], ['defensiveInterceptions', 'interceptions', 'Interceptions'], ['general', 'fumblesRecovered', 'Fumbles Recovered']]],
     ['Special Teams', [['kicking', 'fieldGoalPct', 'Field Goal %'], ['kicking', 'longFieldGoalMade', 'Longest FG'], ['kicking', 'extraPointPct', 'Extra Point %'], ['punting', 'grossAvgPuntYards', 'Punt Average'], ['returning', 'yardsPerKickReturn', 'Kick Return Avg.']]],
   ],
 };
+
+/** Every team's season numbers (theirs and their opponents'), for ranking per-game stats fairly. */
+async function getLeagueTable(lg, season, opts) {
+  const url = `https://site.web.api.espn.com/apis/common/v3/sports/${LEAGUES[lg].path}/statistics/byteam?limit=40&season=${season}&seasontype=2`;
+  const d = await get(url, { ttl: 60 * 60_000, ...opts });
+  const names = {};
+  for (const c of d.categories ?? []) if (c.names?.length && !names[c.name]) names[c.name] = c.names; // NBA repeats each group without names
+  const table = new Map();
+  for (const t of d.teams ?? []) {
+    const row = { own: {}, opp: {} };
+    for (const c of t.categories ?? []) {
+      const side = c.splitId === '900' ? row.opp : row.own;
+      (names[c.name] ?? []).forEach((n, i) => {
+        const v = c.values?.[i];
+        if (Number.isFinite(v) && side[`${c.name}.${n}`] == null) side[`${c.name}.${n}`] = v;
+      });
+    }
+    table.set(String(t.team?.id), row);
+  }
+  return table;
+}
+
+const ordinalRank = (r, tied) => {
+  const sfx = r % 100 >= 11 && r % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][r % 10] ?? 'th';
+  return `${tied ? 'T-' : ''}${r}${sfx}`;
+};
+
+/** Where one team's number sits among all teams ("1st" = best; fewer is better for some). */
+function rankInTable(table, id, key, side = 'own', lower = false) {
+  const mine = table?.get(String(id))?.[side]?.[key];
+  if (mine == null) return '';
+  const all = [...table.values()].map((r) => r[side][key]).filter((v) => v != null);
+  const better = all.filter((v) => (lower ? v < mine : v > mine)).length;
+  const same = all.filter((v) => v === mine).length;
+  return ordinalRank(better + 1, same > 1);
+}
 
 const LOWER_IS_BETTER = new Set([
   'passing.sacks', 'miscellaneous.totalGiveaways', 'miscellaneous.totalPenalties', 'offensive.avgTurnovers', 'general.avgFouls',
@@ -1652,11 +1688,13 @@ const LOWER_IS_BETTER = new Set([
 
 export async function getTeamStats(lg, id, season, opts) {
   const past = season && season !== currentSeason(lg);
-  // The site feed has the numbers; the core feed adds where each one ranks in the league.
+  // The site feed has the numbers; every team's numbers (or ESPN's own ranks) say where each one ranks.
+  let table = null;
   const [d, core] = await Promise.all([
     get(`${site(lg)}/teams/${id}/statistics${past ? `?season=${season}` : ''}`, { ttl: 10 * 60_000, patient: past, ...opts }),
     get(`${CORE(lg)}/seasons/${season || currentSeason(lg)}/types/2/teams/${id}/statistics`, { ttl: 60 * 60_000, ...opts }).catch(() => null),
-  ]);
+    getLeagueTable(lg, season || currentSeason(lg), opts).catch(() => null),
+  ]).then(([a, b, c]) => { table = c; return [a, b]; });
   const cats = d.results?.stats?.categories ?? [];
   const coreCats = core?.splits?.categories ?? [];
   // ESPN ranks by "most". Where fewer is better (sacks allowed, turnovers, fouls), 1st means fewest here.
@@ -1667,17 +1705,22 @@ export async function getTeamStats(lg, id, season, opts) {
     const tied = /^Tied/i.test(x.rankDisplayValue ?? '');
     const r = LOWER_IS_BETTER.has(`${cat}.${name}`) ? teams + 1 - x.rank : x.rank;
     if (r < 1 || r > teams) return '';
-    const sfx = r % 100 >= 11 && r % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][r % 10] ?? 'th';
-    return `${tied ? 'T-' : ''}${r}${sfx}`;
+    return ordinalRank(r, tied);
   };
+  const leagueRank = (cat, name) => rankInTable(table, id, `${cat}.${name}`, 'own', LOWER_IS_BETTER.has(`${cat}.${name}`));
   const find = (cat, name) => cats.find((c) => c.name === cat)?.stats?.find((x) => x.name === name);
   const sections = TEAM_STATS[lg]
     .map(([title, rows]) => ({
       title,
       rows: rows
         .map(([cat, name, label]) => {
+          if (cat === 'opp') {
+            // Opponents' numbers (points allowed): only in the league table.
+            const v = table?.get(String(id))?.opp?.[name];
+            return v != null && { key: `opp.${name}`, label, value: v.toFixed(1), rank: rankInTable(table, id, name, 'opp', true) };
+          }
           const x = find(cat, name);
-          return x && { key: `${cat}.${name}`, label, value: x.displayValue, rank: rankOf(cat, name) || x.rankDisplayValue || '' };
+          return x && { key: `${cat}.${name}`, label, value: x.displayValue, rank: leagueRank(cat, name) || rankOf(cat, name) || '' };
         })
         .filter(Boolean),
     }))
