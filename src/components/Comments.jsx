@@ -1,3 +1,4 @@
+import { usePhoto } from '../lib/photos';
 import { useMuted } from '../lib/mute';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -47,7 +48,23 @@ function ago(iso) {
   return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-export function Avatar({ name, size = 28 }) {
+/** A person's profile photo; their initial on a colour until it loads, or if they have none. */
+export function Avatar({ name, size = 28, id, src }) {
+  const found = usePhoto(src ? null : id);
+  const photo = src || found;
+  const [broken, setBroken] = useState(false);
+  if (photo && !broken) {
+    return (
+      <img
+        src={photo}
+        alt=""
+        referrerPolicy="no-referrer"
+        onError={() => setBroken(true)}
+        className="shrink-0 rounded-full bg-fill object-cover"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
   return (
     <div
       className="grid shrink-0 place-items-center rounded-full font-semibold text-white"
@@ -315,7 +332,7 @@ function Message({ c, mine, showHead, reactions, me, active, setActive, onReact,
   return (
     <div className={`group flex gap-2 ${mine ? 'flex-row-reverse' : ''} ${showHead ? 'mt-3' : 'mt-0.5'}`}>
       <div className="w-7 shrink-0">
-        {!mine && showHead && <Link to={`/u/${c.user_id}`} aria-label={`${c.author}'s profile`}><Avatar name={c.author} /></Link>}
+        {!mine && showHead && <Link to={`/u/${c.user_id}`} aria-label={`${c.author}'s profile`}><Avatar name={c.author} id={c.user_id} /></Link>}
       </div>
       <div className={`flex min-w-0 max-w-[78%] flex-col ${mine ? 'items-end' : 'items-start'}`}>
         {showHead && (

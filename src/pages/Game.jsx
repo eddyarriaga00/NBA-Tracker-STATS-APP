@@ -1,7 +1,7 @@
 import { WithPct, madePct } from '../lib/pct';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { getGame, getNflQuarters, teamHref } from '../api/espn';
+import { getGame, getNflQuarters, getTeamStats, teamHref } from '../api/espn';
 import Comments, { useCommentCounts } from '../components/Comments';
 import Preview, { Injuries, Series } from '../components/Preview';
 import Highlights from '../components/Highlights';
@@ -1058,6 +1058,88 @@ function Drives({ g }) {
   );
 }
 
+/** A round photo slot with initials, for people ESPN has no photo of (referees). */
+function Initials({ name, size = 34 }) {
+  const parts = name.split(/\s+/).filter(Boolean);
+  const text = ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts.at(-1)[0] : '')).toUpperCase();
+  return (
+    <span className="grid shrink-0 place-items-center rounded-full bg-fill text-[12px] font-bold text-label-2" style={{ width: size, height: size }} aria-hidden>
+      {text}
+    </span>
+  );
+}
+
+/** The game's referees (NBA: crew chief first; NFL: the full seven-person crew). */
+function Officials({ g }) {
+  const list = g.officials ?? [];
+  if (!list.length) return null;
+  const role = (o, i) => (g.league === 'nba' && i === 0 && /referee/i.test(o.role) ? 'Crew chief' : o.role);
+  return (
+    <>
+      <SectionTitle>Officials</SectionTitle>
+      <Card className="grid grid-cols-1 divide-y divide-sep sm:grid-cols-2 sm:divide-y-0">
+        {list.map((o, i) => (
+          <div key={`${o.name}${i}`} className="flex items-center gap-3 px-4 py-2.5 sm:border-b sm:border-sep">
+            <Initials name={o.name} />
+            <span className="min-w-0">
+              <span className="block truncate text-[14.5px] font-semibold">{o.name}</span>
+              {o.role && <span className="block text-[12px] text-label-2">{role(o, i)}</span>}
+            </span>
+          </div>
+        ))}
+      </Card>
+    </>
+  );
+}
+
+// Key season numbers for the head-to-head card, in this order.
+const RANK_KEYS = {
+  nba: ['offensive.avgPoints', 'offensive.fieldGoalPct', 'offensive.threePointFieldGoalPct', 'general.avgRebounds', 'offensive.avgAssists', 'offensive.avgTurnovers', 'defensive.avgSteals', 'defensive.avgBlocks'],
+  nfl: ['passing.totalPointsPerGame', 'passing.yardsPerGame', 'passing.passingYardsPerGame', 'rushing.rushingYardsPerGame', 'miscellaneous.thirdDownConvPct', 'miscellaneous.redzoneTouchdownPct', 'miscellaneous.turnOverDifferential', 'defensive.sacks'],
+};
+
+/** Both teams' season numbers side by side, each with its league rank. */
+function SeasonRanks({ g }) {
+  const lg = g.league;
+  // Only for this season's games: older games would show today's numbers.
+  const recent = Math.abs(Date.now() - Date.parse(g.date)) < 45 * 864e5;
+  const { data } = useData(
+    () => (recent ? Promise.all([getTeamStats(lg, g.away.id), getTeamStats(lg, g.home.id)]) : Promise.resolve(null)),
+    [lg, g.away.id, g.home.id, recent],
+    { remember: `ranks:${lg}:${g.away.id}:${g.home.id}` }
+  );
+  if (!data) return null;
+  const pick = (d) => Object.fromEntries(d.sections.flatMap((sec) => sec.rows).map((r) => [r.key, r]));
+  const [a, h] = data.map(pick);
+  const keys = RANK_KEYS[lg].filter((k) => a[k] && h[k]);
+  if (!keys.length) return null;
+  const rankNum = (r) => parseInt(String(r ?? '').replace(/\D/g, ''), 10) || 99;
+  const Side = ({ r, right }) => (
+    <span className={`num flex min-w-0 items-baseline gap-1.5 ${right ? 'flex-row-reverse text-right' : ''}`}>
+      <span className="text-[15px] font-semibold">{r.value}</span>
+      {r.rank && <span className={`text-[11px] ${rankNum(r.rank) <= 5 ? 'font-semibold text-label' : 'text-label-3'}`}>{r.rank}</span>}
+    </span>
+  );
+  return (
+    <>
+      <SectionTitle right={<span className="text-[12px] text-label-2">League rank</span>}>Season Ranks</SectionTitle>
+      <Card className="divide-y divide-sep">
+        <div className="flex items-center justify-between px-4 py-2 text-[13px] font-semibold">
+          <span className="flex items-center gap-1.5"><TeamLogo abbr={g.away.abbr} size={18} />{g.away.abbr}</span>
+          <span className="flex items-center gap-1.5">{g.home.abbr}<TeamLogo abbr={g.home.abbr} size={18} /></span>
+        </div>
+        {keys.map((k) => (
+          <div key={k} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-2">
+            <Side r={a[k]} />
+            <span className="text-center text-[12px] text-label-2">{a[k].label}</span>
+            <Side r={h[k]} right />
+          </div>
+        ))}
+      </Card>
+    </>
+  );
+}
+
 function GameInfo({ g }) {
   const rows = [
     ['Venue', g.venue],
@@ -1374,6 +1456,7 @@ export default function Game() {
                 <p className="mt-3 px-1 text-[12.5px] leading-snug text-label-2">ESPN’s record of this game is incomplete, so the box score and plays aren’t available here.</p>
               )}
               {state === 'pre' && <Preview g={g} />}
+              {state === 'pre' && <SeasonRanks g={g} />}
 
               {state !== 'pre' && (
                 <>
@@ -1382,6 +1465,7 @@ export default function Game() {
                     <StarPlayer g={g} />
                     <GameFlow g={g} />
                     <GameLeaders g={g} />
+                    <SeasonRanks g={g} />
                     {g.preview && <Series preview={g.preview} />}
                     {injuriesNow && <Injuries preview={g.preview} home={g.home} away={g.away} />}
                   </section>
@@ -1420,6 +1504,7 @@ export default function Game() {
                 <div>
                   {state === 'pre' && <GameLeaders g={g} />}
                   <GameInfo g={g} />
+                  <Officials g={g} />
                 </div>
               </div>
             </>

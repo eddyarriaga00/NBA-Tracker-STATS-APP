@@ -95,7 +95,7 @@ function Profile() {
         {signedIn && acct.avatar ? (
           <img src={acct.avatar} alt="" referrerPolicy="no-referrer" className="h-14 w-14 rounded-full object-cover" />
         ) : (
-          <Avatar name={name || '?'} size={56} />
+          <Avatar name={name || '?'} size={56} id={acct?.id} />
         )}
         <div className="min-w-0 flex-1">
           <div className="truncate font-display text-[21px] font-bold leading-tight tracking-tight">{name || 'No nickname yet'}</div>

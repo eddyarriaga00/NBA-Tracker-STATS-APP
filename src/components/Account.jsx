@@ -173,7 +173,7 @@ function SignedIn({ acct, onDone }) {
         {acct.avatar ? (
           <img src={acct.avatar} alt="" referrerPolicy="no-referrer" className="h-16 w-16 rounded-full object-cover" />
         ) : (
-          <Avatar name={name || acct.email} size={64} />
+          <Avatar name={name || acct.email} size={64} id={acct.id} />
         )}
       </div>
       <div className="mt-2 font-display text-[22px] font-bold tracking-tight">{name || 'No nickname yet'}</div>
@@ -273,7 +273,7 @@ export function AccountRow({ onOpen }) {
       {signedIn && acct.avatar ? (
         <img src={acct.avatar} alt="" referrerPolicy="no-referrer" className="h-8 w-8 rounded-full object-cover" />
       ) : (
-        <Avatar name={signedIn ? name || acct.email : name || '?'} size={32} />
+        <Avatar name={signedIn ? name || acct.email : name || '?'} size={32} id={acct?.id} />
       )}
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[15px] font-semibold">{signedIn ? name || acct.email : 'Sign in'}</span>

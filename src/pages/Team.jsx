@@ -215,7 +215,7 @@ function TeamStats({ lg, id, season }) {
   return (
     <div className="space-y-4">
       <p className="px-1 text-[12px] text-label-2">
-        {data.season} season{data.gamesPlayed ? ` · ${data.gamesPlayed} games` : ''}
+        {data.season} season{data.gamesPlayed ? ` · ${data.gamesPlayed} games` : ''} · ranks are out of the whole league
       </p>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {data.sections.map((sec) => (
@@ -225,9 +225,9 @@ function TeamStats({ lg, id, season }) {
               {sec.rows.map((r) => (
                 <div key={r.label} className="flex items-center justify-between gap-3 px-4 py-2.5 text-[14px]">
                   <span className="text-label-2">{r.label}</span>
-                  <span className="num font-semibold">
+                  <span className="num flex items-center gap-2 font-semibold">
                     {r.value}
-                    {r.rank && <span className="ml-1.5 text-[11px] font-normal text-label-3">{r.rank}</span>}
+                    {r.rank && <span className="min-w-[44px] rounded-md bg-fill px-1.5 py-0.5 text-center text-[11px] font-semibold text-label-2">{r.rank}</span>}
                   </span>
                 </div>
               ))}

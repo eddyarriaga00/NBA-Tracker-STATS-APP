@@ -15,6 +15,8 @@ Live today: https://eddyarriaga00.github.io/NBA-Tracker-STATS-APP/ (a web app yo
 - Game pages: score by quarter, one lead / win-probability chart, player of the game, box scores that put both teams together (NFL by passing, rushing, receiving…; NBA starters with starters and bench with bench on phones, plus a two-team totals table), quarter-by-quarter player stats, plays and drives, NBA shot charts, injuries, previews, venue and TV
 - Cards show records, streaks, last 5, injuries, broadcast, a "thriller" tag, and a team-colour edge on the winner
 - Season series on every game
+- Referees on every game; league ranks on team stats (flipped where fewer is better) and a Season Ranks card comparing both teams on game pages
+- Real profile photos in chat, comments and Pick'em lists, not just initials
 - Postponed, cancelled, time-TBD and score-less old games are labelled correctly
 
 **Players and teams**

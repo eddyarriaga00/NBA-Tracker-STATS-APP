@@ -1,3 +1,4 @@
+import { notePhoto } from './photos';
 // Profiles, friends and private messages (Supabase: supabase/social.sql).
 import { useCallback, useEffect, useState } from 'react';
 import { commentsEnabled, ensureUser, getClient } from './supabase';
@@ -49,6 +50,7 @@ export async function saveProfile({ display, username, bio, avatar, teams } = {}
   });
   fail(error);
   mine = data;
+  if (data?.user_id) notePhoto(data.user_id, data.avatar_url);
   changed('profile');
   return data;
 }

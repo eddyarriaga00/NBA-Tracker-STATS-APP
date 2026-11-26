@@ -59,7 +59,7 @@ function Pickers({ rows, max = 4 }) {
     <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
       {rows.slice(0, max).map((r) => (
         <span key={r.user_id} className="flex min-w-0 items-center gap-1 text-[12px] text-label-2">
-          <Avatar name={r.nickname} size={16} />
+          <Avatar name={r.nickname} size={16} id={r.user_id} />
           <span className="max-w-[80px] truncate">{r.nickname}</span>
         </span>
       ))}
@@ -256,7 +256,7 @@ export function Leaderboard({ league }) {
               className={`flex items-center gap-3 border-t border-sep px-4 py-2.5 ${u.user_id === me ? 'bg-accent/[0.06]' : ''}`}
             >
               <span className="num w-5 text-center text-[14px] font-bold text-label-2">{i + 1}</span>
-              <Avatar name={u.nickname} size={28} />
+              <Avatar name={u.nickname} size={28} id={u.user_id} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <Link to={`/u/${u.user_id}`} className="truncate text-[15px] font-semibold">{u.nickname}</Link>

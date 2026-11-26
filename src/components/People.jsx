@@ -15,7 +15,7 @@ export function UserAvatar({ profile, name, size = 40 }) {
       />
     );
   }
-  return <Avatar name={label} size={size} />;
+  return <Avatar name={label} size={size} id={profile?.user_id} />;
 }
 
 /** One person in a list: photo, name, a line under it, and whatever goes on the right. */

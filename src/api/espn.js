@@ -789,6 +789,10 @@ export async function getGame(lg, id, opts) {
     attendance: info.attendance,
     weather: info.weather ? `${info.weather.temperature ?? ''}° ${info.weather.displayValue ?? ''}`.trim() : '',
     broadcast: (comp.broadcasts ?? []).map((b) => b.media?.shortName).filter(Boolean).join(', '),
+    officials: (info.officials ?? [])
+      .map((o) => ({ name: o.displayName ?? o.fullName ?? '', role: o.position?.displayName ?? '', order: o.order ?? 99 }))
+      .filter((o) => o.name)
+      .sort((a, b) => a.order - b.order),
   };
 }
 
@@ -1642,10 +1646,30 @@ const TEAM_STATS = {
   ],
 };
 
+const LOWER_IS_BETTER = new Set([
+  'passing.sacks', 'miscellaneous.totalGiveaways', 'miscellaneous.totalPenalties', 'offensive.avgTurnovers', 'general.avgFouls',
+]);
+
 export async function getTeamStats(lg, id, season, opts) {
   const past = season && season !== currentSeason(lg);
-  const d = await get(`${site(lg)}/teams/${id}/statistics${past ? `?season=${season}` : ''}`, { ttl: 10 * 60_000, patient: past, ...opts });
+  // The site feed has the numbers; the core feed adds where each one ranks in the league.
+  const [d, core] = await Promise.all([
+    get(`${site(lg)}/teams/${id}/statistics${past ? `?season=${season}` : ''}`, { ttl: 10 * 60_000, patient: past, ...opts }),
+    get(`${CORE(lg)}/seasons/${season || currentSeason(lg)}/types/2/teams/${id}/statistics`, { ttl: 60 * 60_000, ...opts }).catch(() => null),
+  ]);
   const cats = d.results?.stats?.categories ?? [];
+  const coreCats = core?.splits?.categories ?? [];
+  // ESPN ranks by "most". Where fewer is better (sacks allowed, turnovers, fouls), 1st means fewest here.
+  const teams = lg === 'nba' ? 30 : 32;
+  const rankOf = (cat, name) => {
+    const x = coreCats.find((c) => c.name === cat)?.stats?.find((y) => y.name === name);
+    if (!x?.rank) return '';
+    const tied = /^Tied/i.test(x.rankDisplayValue ?? '');
+    const r = LOWER_IS_BETTER.has(`${cat}.${name}`) ? teams + 1 - x.rank : x.rank;
+    if (r < 1 || r > teams) return '';
+    const sfx = r % 100 >= 11 && r % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][r % 10] ?? 'th';
+    return `${tied ? 'T-' : ''}${r}${sfx}`;
+  };
   const find = (cat, name) => cats.find((c) => c.name === cat)?.stats?.find((x) => x.name === name);
   const sections = TEAM_STATS[lg]
     .map(([title, rows]) => ({
@@ -1653,7 +1677,7 @@ export async function getTeamStats(lg, id, season, opts) {
       rows: rows
         .map(([cat, name, label]) => {
           const x = find(cat, name);
-          return x && { label, value: x.displayValue, rank: x.rankDisplayValue ?? '' };
+          return x && { key: `${cat}.${name}`, label, value: x.displayValue, rank: rankOf(cat, name) || x.rankDisplayValue || '' };
         })
         .filter(Boolean),
     }))
