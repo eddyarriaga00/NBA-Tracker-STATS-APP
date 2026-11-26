@@ -1654,7 +1654,7 @@ async function getLeagueTable(lg, season, opts) {
   for (const c of d.categories ?? []) if (c.names?.length && !names[c.name]) names[c.name] = c.names; // NBA repeats each group without names
   const table = new Map();
   for (const t of d.teams ?? []) {
-    const row = { own: {}, opp: {} };
+    const row = { own: {}, opp: {}, abbr: t.team?.abbreviation, name: t.team?.shortDisplayName ?? t.team?.name };
     for (const c of t.categories ?? []) {
       const side = c.splitId === '900' ? row.opp : row.own;
       (names[c.name] ?? []).forEach((n, i) => {
@@ -1685,6 +1685,20 @@ function rankInTable(table, id, key, side = 'own', lower = false) {
 const LOWER_IS_BETTER = new Set([
   'passing.sacks', 'miscellaneous.totalGiveaways', 'miscellaneous.totalPenalties', 'offensive.avgTurnovers', 'general.avgFouls',
 ]);
+
+/** All teams in order for one stat key (as used in getTeamStats rows), best first. */
+export async function getStatRanking(lg, key, season) {
+  const table = await getLeagueTable(lg, season || currentSeason(lg));
+  const opp = key.startsWith('opp.');
+  const k = opp ? key.slice(4) : key;
+  const lower = opp || LOWER_IS_BETTER.has(k);
+  const side = opp ? 'opp' : 'own';
+  const rows = [...table.entries()]
+    .map(([id, r]) => ({ id, abbr: r.abbr, name: r.name, value: r[side][k] }))
+    .filter((r) => r.value != null)
+    .sort((a, b) => (lower ? a.value - b.value : b.value - a.value));
+  return rows.map((r) => ({ ...r, rank: rankInTable(table, r.id, k, side, lower) }));
+}
 
 export async function getTeamStats(lg, id, season, opts) {
   const past = season && season !== currentSeason(lg);
