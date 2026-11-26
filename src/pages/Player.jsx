@@ -1,3 +1,4 @@
+import { WithPct } from '../lib/pct';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { currentSeason, firstSeason, getCareerGames, getGamelog, getPlayer, seasonLabel } from '../api/espn';
@@ -320,7 +321,7 @@ function GameLog({ log, lg }) {
                 </Link>
               </td>
               {order.map((i) => (
-                <td key={i} className={`px-2.5 text-center ${i === stat ? 'font-bold' : 'text-label-2'}`}>{r.stats[i]}</td>
+                <td key={i} className={`px-2.5 text-center ${i === stat ? 'font-bold' : 'text-label-2'}`}><WithPct label={log.labels.some((l) => l.includes('%')) ? '' : log.labels[i]} v={r.stats[i]} /></td>
               ))}
             </tr>
           ))}
@@ -450,7 +451,7 @@ function Splits({ splits }) {
         rows={splits.rows.map((r) => (
           <tr key={r.label} className="border-t border-sep">
             <td className="sticky left-0 z-10 bg-card py-2.5 pl-4 pr-3 font-semibold">{r.label}</td>
-            {r.stats.map((s, i) => <td key={i} className="px-2.5 text-center">{s}</td>)}
+            {r.stats.map((s, i) => <td key={i} className="px-2.5 text-center"><WithPct label={splits.labels.some((l) => l.includes('%')) ? '' : splits.labels[i]} v={s} /></td>)}
           </tr>
         ))}
       />

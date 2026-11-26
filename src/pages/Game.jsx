@@ -1,3 +1,4 @@
+import { WithPct, madePct } from '../lib/pct';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { getGame, getNflQuarters, teamHref } from '../api/espn';
@@ -365,7 +366,9 @@ function StatTable({ labels, groups, totals, lg, highlight }) {
                       <td colSpan={labels.length} className="px-3 text-[12px] italic text-label-2">{a.reason ? titleCase(a.reason) : 'Did not play'}</td>
                     ) : (
                       a.stats.map((s, i) => (
-                        <td key={i} className={`whitespace-nowrap px-2.5 text-center ${i === highlight ? 'font-bold' : 'text-label-2'}`}>{s}</td>
+                        <td key={i} className={`whitespace-nowrap px-2.5 text-center ${i === highlight ? 'font-bold' : 'text-label-2'}`}>
+                          <WithPct label={labels[i]} v={s} />
+                        </td>
                       ))
                     )}
                   </tr>
@@ -373,7 +376,7 @@ function StatTable({ labels, groups, totals, lg, highlight }) {
                 own?.some(Boolean) && (
                   <tr key={`t-${gk ?? gi}`} className="border-t border-sep text-label-2">
                     <td className="sticky left-0 z-10 bg-card py-1.5 pl-4 text-[12px] font-semibold">Team</td>
-                    {own.map((t, i) => <td key={i} className="whitespace-nowrap px-2.5 text-center">{t}</td>)}
+                    {own.map((t, i) => <td key={i} className="whitespace-nowrap px-2.5 text-center"><WithPct label={labels[i]} v={t} /></td>)}
                   </tr>
                 ),
               ]
@@ -382,7 +385,7 @@ function StatTable({ labels, groups, totals, lg, highlight }) {
           {totals?.some(Boolean) && (
             <tr className="border-t-2 border-sep font-semibold">
               <td className="sticky left-0 z-10 bg-card py-2.5 pl-4">Team</td>
-              {totals.map((t, i) => <td key={i} className="whitespace-nowrap px-2.5 text-center">{t}</td>)}
+              {totals.map((t, i) => <td key={i} className="whitespace-nowrap px-2.5 text-center"><WithPct label={labels[i]} v={t} /></td>)}
             </tr>
           )}
         </tbody>
@@ -441,6 +444,7 @@ function PlayerLines({ labels, groups, lg }) {
                         <span className={`block leading-none ${label === 'PTS' ? 'text-[16px] font-bold' : 'text-[14px] font-semibold'} ${tone(label, a.stats[i])}`}>
                           {label === '+/-' && Number(a.stats[i]) > 0 ? `+${Number(a.stats[i])}` : a.stats[i] ?? '–'}
                         </span>
+                        {madePct(label, a.stats[i]) && <span className="mt-0.5 block text-[9.5px] leading-none text-label-3">{madePct(label, a.stats[i])}</span>}
                       </span>
                     ))
                   )}
