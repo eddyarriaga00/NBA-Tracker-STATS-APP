@@ -196,4 +196,8 @@ export function clearAlertBadgeOnOpen() {
   };
   clear();
   document.addEventListener('visibilitychange', clear);
+  // Ask for a daily wake-up so yesterday's alerts clear even if the app isn't opened.
+  navigator.serviceWorker?.ready
+    .then((reg) => reg.periodicSync?.register('daily-reset', { minInterval: 12 * 60 * 60 * 1000 }))
+    .catch(() => {});
 }

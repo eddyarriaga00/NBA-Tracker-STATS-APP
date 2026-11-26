@@ -108,15 +108,28 @@ self.addEventListener('fetch', (event) => {
 
 // ---- alerts ----
 
+// The icon number only counts today's alerts: anything from before midnight is
+// closed, so the count starts again from zero every day.
+const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
 async function updateBadge() {
   try {
-    const shown = await self.registration.getNotifications();
+    const midnight = startOfToday();
+    const shown = [];
+    for (const n of await self.registration.getNotifications()) {
+      const at = n.data?.at ?? n.timestamp ?? Date.now();
+      if (at < midnight) n.close();
+      else shown.push(n);
+    }
     if (shown.length) await self.navigator.setAppBadge?.(shown.length);
     else await self.navigator.clearAppBadge?.();
   } catch {
     /* badges not supported */
   }
 }
+// Where the phone allows a daily wake-up (installed app on Android), clear yesterday's alerts.
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'daily-reset') event.waitUntil(updateBadge());
+});
 
 self.addEventListener('push', (event) => {
   let data = {};
@@ -136,7 +149,7 @@ self.addEventListener('push', (event) => {
         // Live score updates replace themselves quietly where the phone allows it.
         silent: data.quiet === true,
         renotify: false,
-        data: { url: data.url || './' },
+        data: { url: data.url || './', at: Date.now() },
       })
       .then(updateBadge)
   );

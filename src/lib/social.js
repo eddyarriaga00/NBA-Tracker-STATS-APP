@@ -239,9 +239,13 @@ export function useSocialBadge() {
     const { data } = await sb.auth.getSession();
     const me = data.session?.user?.id;
     if (!me) return;
+    // The badge starts fresh each day: only today's unread messages and requests count.
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
+    const since = midnight.toISOString();
     const [dm, fr] = await Promise.all([
-      sb.from('dms').select('id', { count: 'exact', head: true }).eq('recipient', me).is('read_at', null),
-      sb.from('friendships').select('requester', { count: 'exact', head: true }).eq('addressee', me).eq('status', 'pending'),
+      sb.from('dms').select('id', { count: 'exact', head: true }).eq('recipient', me).is('read_at', null).gte('created_at', since),
+      sb.from('friendships').select('requester', { count: 'exact', head: true }).eq('addressee', me).eq('status', 'pending').gte('created_at', since),
     ]);
     setN((dm.count ?? 0) + (fr.count ?? 0));
   }, []);
@@ -256,11 +260,20 @@ export function useSocialBadge() {
       watchSocial(run).then((s) => (alive ? (stop = s) : s())).catch(() => {});
     }, 3000);
     const vis = () => document.visibilityState === 'visible' && run();
+    // Recount just after midnight if the app is left open overnight.
+    let night;
+    const atMidnight = () => {
+      const next = new Date();
+      next.setHours(24, 0, 5, 0);
+      night = setTimeout(() => { run(); atMidnight(); }, next - Date.now());
+    };
+    atMidnight();
     document.addEventListener('visibilitychange', vis);
     window.addEventListener('social', run);
     return () => {
       alive = false;
       clearTimeout(t);
+      clearTimeout(night);
       stop?.();
       document.removeEventListener('visibilitychange', vis);
       window.removeEventListener('social', run);
