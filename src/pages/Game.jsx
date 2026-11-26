@@ -324,11 +324,11 @@ const fitName = (n = '') => (n.length > 16 ? n.replace(/^(\S)\S*\s+/, '$1. ') : 
 
 function PlayerCell({ a, lg, width = 'max-w-[124px]' }) {
   return (
-    <Link to={`/${lg}/player/${a.id}`} className="flex items-center gap-2.5">
-      <Headshot src={a.headshot} size={30} />
+    <Link to={`/${lg}/player/${a.id}`} className="flex items-center gap-2">
+      <Headshot src={a.headshot} size={26} />
       <div className="min-w-0">
-        <div className={`${width} truncate text-[14px] font-semibold md:max-w-none`}><span className="md:hidden">{fitName(a.short)}</span><span className="max-md:hidden">{a.short}</span></div>
-        <div className="text-[11px] text-label-2">
+        <div className={`${width} truncate text-[13.5px] font-semibold leading-tight md:max-w-none`}><span className="md:hidden">{fitName(a.short)}</span><span className="max-md:hidden">{a.short}</span></div>
+        <div className="text-[10.5px] leading-tight text-label-2">
           {[a.pos, a.jersey && `#${a.jersey}`].filter(Boolean).join(' · ')}
           <InjuryTag id={a.id} />
         </div>
@@ -343,24 +343,24 @@ function StatTable({ labels, groups, totals, lg, highlight }) {
       <table className="num w-full text-[13px]">
         <thead>
           <tr className="text-[11px] text-label-2">
-            <th className="sticky left-0 z-10 bg-card py-2.5 pl-4 text-left font-semibold">Player</th>
+            <th className="sticky left-0 z-10 bg-card py-1.5 pl-4 text-left font-semibold">Player</th>
             {labels.map((l, i) => <th key={i} className="px-2.5 font-semibold">{l}</th>)}
           </tr>
         </thead>
         <tbody>
-          {groups.map(({ title, list }) =>
+          {groups.map(({ title, list, key: gk, totals: own }, gi) =>
             list.length ? (
               [
                 title && (
-                  <tr key={`h-${title}`}>
-                    <td colSpan={labels.length + 1} className="sticky left-0 bg-card-2 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-label-2">
-                      {title}
+                  <tr key={`h-${gk ?? gi}`}>
+                    <td colSpan={labels.length + 1} className="bg-card-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-label-2">
+                      <span className="sticky left-0 inline-flex items-center gap-1.5 px-4">{title}</span>
                     </td>
                   </tr>
                 ),
                 ...list.map((a) => (
-                  <tr key={a.id} className="border-t border-sep">
-                    <td className="sticky left-0 z-10 bg-card py-2 pl-4 pr-3"><PlayerCell a={a} lg={lg} /></td>
+                  <tr key={`${gk ?? gi}-${a.id}`} className="border-t border-sep">
+                    <td className="sticky left-0 z-10 bg-card py-1.5 pl-4 pr-3"><PlayerCell a={a} lg={lg} /></td>
                     {a.dnp && lg === 'nba' ? (
                       <td colSpan={labels.length} className="px-3 text-[12px] italic text-label-2">{a.reason ? titleCase(a.reason) : 'Did not play'}</td>
                     ) : (
@@ -370,6 +370,12 @@ function StatTable({ labels, groups, totals, lg, highlight }) {
                     )}
                   </tr>
                 )),
+                own?.some(Boolean) && (
+                  <tr key={`t-${gk ?? gi}`} className="border-t border-sep text-label-2">
+                    <td className="sticky left-0 z-10 bg-card py-1.5 pl-4 text-[12px] font-semibold">Team</td>
+                    {own.map((t, i) => <td key={i} className="whitespace-nowrap px-2.5 text-center">{t}</td>)}
+                  </tr>
+                ),
               ]
             ) : null
           )}
@@ -404,14 +410,19 @@ function PlayerLines({ labels, groups, lg }) {
         {groups.map(({ title, list, live }) =>
           list.length ? (
             <div key={title}>
-              <div className="sticky left-0 flex w-screen max-w-full items-center gap-1.5 bg-card-2 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-label-2">
-                {live && <span className="live-dot h-[6px] w-[6px] rounded-full bg-live" />}
-                {title}
+              <div className="flex items-center bg-card-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-label-2">
+                <span className="sticky left-0 z-10 flex w-[132px] shrink-0 items-center gap-1.5 bg-card-2 pl-4 md:w-[190px]">
+                  {live && <span className="live-dot h-[6px] w-[6px] rounded-full bg-live" />}
+                  {title}
+                </span>
+                {list.some((a) => !a.dnp) && cols.map(([label]) => (
+                  <span key={label} className={`shrink-0 text-center text-[10px] normal-case tracking-normal text-label-3 ${WIDE.has(label) ? 'w-[52px]' : 'w-[42px]'}`}>{label}</span>
+                ))}
               </div>
               {list.map((a) => (
                 <div key={a.id} className="flex items-center border-t border-sep">
-                  <Link to={`/${lg}/player/${a.id}`} className="sticky left-0 z-10 flex w-[132px] shrink-0 items-center gap-2 bg-card py-2 pl-3 pr-1.5 md:w-[190px]">
-                    <Headshot src={a.headshot} size={30} />
+                  <Link to={`/${lg}/player/${a.id}`} className="sticky left-0 z-10 flex w-[132px] shrink-0 items-center gap-2 bg-card py-1.5 pl-3 pr-1.5 md:w-[190px]">
+                    <Headshot src={a.headshot} size={26} />
                     <span className="min-w-0">
                       <span className="line-clamp-2 text-[13px] font-semibold leading-[1.15] [overflow-wrap:anywhere] md:text-[13.5px]">{a.short}</span>
                       <span className="block truncate text-[10.5px] text-label-2">
@@ -425,11 +436,10 @@ function PlayerLines({ labels, groups, lg }) {
                     <span className="px-3 text-[12px] italic text-label-2">{a.reason ? titleCase(a.reason) : 'Did not play'}</span>
                   ) : (
                     cols.map(([label, i]) => (
-                      <span key={label} className={`num shrink-0 py-2 text-center ${WIDE.has(label) ? 'w-[52px]' : 'w-[42px]'}`}>
-                        <span className={`block leading-none ${label === 'PTS' ? 'text-[18px] font-bold' : 'text-[15.5px] font-semibold'} ${tone(label, a.stats[i])}`}>
+                      <span key={label} className={`num shrink-0 text-center ${WIDE.has(label) ? 'w-[52px]' : 'w-[42px]'}`}>
+                        <span className={`block leading-none ${label === 'PTS' ? 'text-[16px] font-bold' : 'text-[14px] font-semibold'} ${tone(label, a.stats[i])}`}>
                           {label === '+/-' && Number(a.stats[i]) > 0 ? `+${Number(a.stats[i])}` : a.stats[i] ?? '–'}
                         </span>
-                        <span className="mt-1 block text-[9.5px] font-medium text-label-3">{label}</span>
                       </span>
                     ))
                   )}
@@ -503,6 +513,14 @@ function Boxes({ g, focus }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus, g.id]);
   const jump = (side) => refs[side].current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (lg === 'nfl') {
+    return (
+      <div>
+        {periods.length > 0 && <PeriodChips periods={periods} sel={sel} onPick={setPeriod} live={livePeriod} />}
+        <NflMatchup g={g} period={sel} />
+      </div>
+    );
+  }
   return (
     <div>
       {periods.length > 0 && <PeriodChips periods={periods} sel={sel} onPick={setPeriod} live={livePeriod} />}
@@ -565,9 +583,8 @@ function PeriodChips({ periods, sel, onPick, live }) {
   );
 }
 
-function NflBox({ g, box, lg, period: ctl }) {
-  const [own, setPeriod] = useState('game');
-  const period = ctl ?? own;
+/** One team's NFL stat groups for the full game or one quarter. */
+function useNflGroups(g, box, period) {
   const [q, setQ] = useState(null);
   const [failed, setFailed] = useState(false);
   const live = g.status.state === 'in';
@@ -590,11 +607,11 @@ function NflBox({ g, box, lg, period: ctl }) {
 
   const athletes = useMemo(() => {
     const seen = new Map();
-    for (const gr of box.groups) for (const a of gr.athletes) if (!seen.has(a.id)) seen.set(a.id, a);
+    for (const gr of box?.groups ?? []) for (const a of gr.athletes) if (!seen.has(a.id)) seen.set(a.id, a);
     return [...seen.values()];
   }, [box]);
 
-  let groups = box.groups;
+  let groups = box?.groups ?? [];
   let note = null;
   if (sel !== 'game') {
     if (!q) note = failed ? "Couldn't load quarter stats. Check your connection and try again." : 'loading';
@@ -605,6 +622,17 @@ function NflBox({ g, box, lg, period: ctl }) {
     }
   }
 
+  return { groups, note, q, sel };
+}
+
+function NflBox({ g, box, lg, period: ctl }) {
+  const [own, setPeriod] = useState('game');
+  const period = ctl ?? own;
+  const live = g.status.state === 'in';
+  const started = g.status.state !== 'pre';
+  const count = started ? Math.max(live ? 1 : 4, g.status.period || 0, ...g.drives.map((d) => d.period || 0)) : 0;
+  const periods = Array.from({ length: count }, (_, i) => i + 1);
+  const { groups, note, q, sel } = useNflGroups(g, box, period);
   return (
     <div>
       {ctl === undefined && periods.length > 0 && <PeriodChips periods={periods} sel={sel} onPick={setPeriod} live={live ? g.status.period : null} />}
@@ -628,6 +656,52 @@ function NflBox({ g, box, lg, period: ctl }) {
       {sel !== 'game' && !note && (
         <p className="mt-2 px-1 text-[11.5px] text-label-3">
           {sel === q.livePeriod ? `${periodName(sel)} in progress · ` : ''}Quarter stats are built from play-by-play. An unusual play (a fumble or a flag) can leave a line a yard or a tackle off the official count.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** NFL box score by stat group, both teams in the same card, so the two
+ *  quarterbacks (or rushers, receivers…) sit right next to each other. */
+function NflMatchup({ g, period }) {
+  const lg = 'nfl';
+  const boxOf = (side) => g.box.find((b) => b.teamId === g[side].id) ?? g.box[side === 'away' ? 0 : 1];
+  const away = useNflGroups(g, boxOf('away'), period);
+  const home = useNflGroups(g, boxOf('home'), period);
+  if (!g.box.length) return <div className="py-10 text-center text-label-2">Box score not available yet.</div>;
+  const note = away.note ?? home.note;
+  if (note === 'loading') return <div className="space-y-3"><Skeleton className="h-36" /><Skeleton className="h-48" /></div>;
+  if (note && !away.groups.length && !home.groups.length) return <Card className="px-4 py-10 text-center text-[14px] text-label-2">{note}</Card>;
+  const keys = [];
+  for (const gr of [...away.groups, ...home.groups]) if (!keys.includes(gr.key)) keys.push(gr.key);
+  const head = (t) => <><TeamLogo abbr={t.abbr} size={14} />{t.abbr}</>;
+  return (
+    <div>
+      <div className="space-y-3">
+        {keys.map((k) => {
+          const a = away.groups.find((x) => x.key === k);
+          const h = home.groups.find((x) => x.key === k);
+          const base = a ?? h;
+          return (
+            <Card key={k} className="overflow-hidden">
+              <div className="px-4 pb-0.5 pt-2.5 text-[15px] font-bold">{base.title}</div>
+              <StatTable
+                labels={base.labels}
+                lg={lg}
+                highlight={base.highlight ?? base.labels.indexOf('YDS')}
+                groups={[
+                  { key: 'away', title: head(g.away), list: a?.athletes ?? [], totals: a?.athletes.length > 1 ? a.totals : null },
+                  { key: 'home', title: head(g.home), list: h?.athletes ?? [], totals: h?.athletes.length > 1 ? h.totals : null },
+                ]}
+              />
+            </Card>
+          );
+        })}
+      </div>
+      {period !== 'game' && away.q && (
+        <p className="mt-2 px-1 text-[11.5px] text-label-3">
+          {period === away.q.livePeriod ? `${periodName(period)} in progress · ` : ''}Quarter stats are built from play-by-play. An unusual play (a fumble or a flag) can leave a line a yard or a tackle off the official count.
         </p>
       )}
     </div>
