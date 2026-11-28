@@ -25,14 +25,15 @@ const md = (d) => {
 
 function Form({ form }) {
   return (
-    <span className="inline-flex shrink-0 items-center gap-[4px]" aria-label="Last games, oldest first">
+    <span className="mt-[3px] flex gap-[3px]" aria-label="Last games, oldest first">
       {form.map((f, i) => (
         <span
           key={i}
           title={`${md(f.date)} ${f.r} ${f.atVs ?? ''} ${f.opp ?? ''} ${f.score ?? ''}`.replace(/\s+/g, ' ').trim()}
-          className="flex"
+          className="flex w-[31px] flex-col items-center gap-[2px]"
         >
           <span className={`h-[7px] w-[7px] rounded-full ${f.r === 'W' ? 'bg-[#30a46c]' : 'border-[1.5px] border-live'}`} />
+          <span className="whitespace-nowrap text-[9.5px] leading-none text-label-3 num">{md(f.date)}</span>
         </span>
       ))}
     </span>
@@ -79,16 +80,17 @@ function TeamRow({ t, state, dim, hasBall, redZone, hide, extra, edge, noScore }
           )}
         </div>
         {/* Records update after a game ends, so they'd spoil the result. */}
-        <div className={`flex gap-1.5 truncate text-[11px] text-label-2 num md:text-[12px] ${extra?.form?.length ? 'items-start' : 'items-center'}`}>
+        <div className={`flex gap-1.5 truncate text-[11px] text-label-2 num md:text-[12px] items-center`}>
           {hide ? '\u00a0' : (
             <>
               <span>{t.record}</span>
               {extra?.streak && <><span className="text-label-3">·</span><Streak s={extra.streak} /></>}
-              {extra?.form?.length > 0 && <Form form={extra.form} />}
               {extra?.next && <><span className="text-label-3">·</span><span className="truncate">Next {nextLabel(extra.next)}</span></>}
             </>
           )}
         </div>
+        {/* Last games get their own line so their dates always fit next to an injury note. */}
+        {!hide && extra?.form?.length > 0 && <Form form={extra.form} />}
       </div>
       {state === 'pre' && extra?.inj && <Injuries inj={extra.inj} />}
       {showScore && (
