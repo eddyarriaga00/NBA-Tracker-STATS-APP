@@ -115,6 +115,9 @@ export default function TransitionRoutes({ children, preload }) {
       };
       try {
         t = document.startViewTransition(() => once(true));
+        // A skipped transition rejects these; that's expected, not an error.
+        t.ready?.catch(() => {});
+        t.updateCallbackDone?.catch(() => {});
       } catch {
         solidBars(false);
         once(false);

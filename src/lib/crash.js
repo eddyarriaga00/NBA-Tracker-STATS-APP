@@ -8,7 +8,7 @@ const MAX_PER_VISIT = 5;
 const sent = new Set();
 
 // Noise that isn't a bug in the app: flaky connections, browser quirks, extensions.
-const IGNORE = /ResizeObserver loop|Failed to fetch|NetworkError|Load failed|network connection was lost|AbortError|The operation was aborted|Importing a module script failed|Failed to fetch dynamically imported module|chrome-extension:|moz-extension:|safari-extension:/i;
+const IGNORE = /ResizeObserver loop|Failed to fetch|NetworkError|Load failed|network connection was lost|AbortError|Transition was skipped|The operation was aborted|Importing a module script failed|Failed to fetch dynamically imported module|chrome-extension:|moz-extension:|safari-extension:/i;
 
 export function reportCrash(error, where = '') {
   if (import.meta.env.DEV || !url || !key) return;
