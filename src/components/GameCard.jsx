@@ -25,15 +25,14 @@ const md = (d) => {
 
 function Form({ form }) {
   return (
-    <span className="inline-flex items-start gap-[3px] pt-[4px]">
+    <span className="inline-flex shrink-0 items-center gap-[4px]" aria-label="Last games, oldest first">
       {form.map((f, i) => (
         <span
           key={i}
           title={`${md(f.date)} ${f.r} ${f.atVs ?? ''} ${f.opp ?? ''} ${f.score ?? ''}`.replace(/\s+/g, ' ').trim()}
-          className="flex w-[24px] flex-col items-center gap-[2px]"
+          className="flex"
         >
           <span className={`h-[7px] w-[7px] rounded-full ${f.r === 'W' ? 'bg-[#30a46c]' : 'border-[1.5px] border-live'}`} />
-          <span className="text-[8.5px] leading-none text-label-3 num">{md(f.date)}</span>
         </span>
       ))}
     </span>

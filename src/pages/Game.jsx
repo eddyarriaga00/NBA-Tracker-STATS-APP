@@ -280,9 +280,9 @@ function GameLeaders({ g }) {
       <Link to={`/${lg}/player/${p.id}`} className={`flex min-w-0 flex-1 items-center gap-2.5 ${right ? 'flex-row-reverse text-right' : ''}`}>
         <Headshot src={p.headshot} size={big ? 34 : 30} className="md:h-10 md:w-10" />
         <div className="min-w-0">
-          {/* Football rows are tighter: a long "C. Schwesinger" drops the initial on a phone. */}
+          {/* A long "J. Johnson" drops the initial on a phone rather than being cut off. */}
           <div className={`truncate font-semibold ${big ? 'text-[14px]' : 'text-[13px] md:text-[14px]'}`}>
-            {!big && p.name.length > 12 ? <><span className="md:hidden">{p.name.replace(/^\S+\.\s+/, '')}</span><span className="max-md:hidden">{p.name}</span></> : p.name}
+            {p.name.length > (big ? 9 : 12) ? <><span className="md:hidden">{p.name.replace(/^\S+\.\s+/, '')}</span><span className="max-md:hidden">{p.name}</span></> : p.name}
           </div>
           {big ? (
             <div className="num font-display text-[18px] font-bold leading-tight md:text-[20px]">{p.value}</div>

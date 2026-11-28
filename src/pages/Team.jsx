@@ -55,7 +55,7 @@ function GameRow({ e, lg }) {
           {e.us}–{e.them}
         </span>
       ) : e.state === 'in' ? (
-        <span className="shrink-0 text-[13px] font-semibold text-live">Live · {e.us}–{e.them}</span>
+        <span className="shrink-0 text-[13px] font-semibold text-live">{e.us != null && e.them != null && e.us !== '' ? `Live · ${e.us}–${e.them}` : 'Live'}</span>
       ) : (
         <span className="shrink-0 text-right text-[13px] text-label-2">
           {timeOf(e)}
@@ -80,7 +80,7 @@ function TeamFacts({ lg, data }) {
     real(data.division) && ['vs Division', data.division],
     real(data.conference) && ['vs Conference', data.conference],
     data.ppg != null && ['Points / game', data.ppg.toFixed(1)],
-    data.oppPpg != null && ['Allowed / game', data.oppPpg.toFixed(1)],
+    data.oppPpg != null && ['Opp. points', data.oppPpg.toFixed(1)],
     data.diff != null && [lg === 'nba' ? 'Margin / game' : 'Point diff', signed(data.diff, lg === 'nba' ? 1 : 0), data.diff > 0 ? 'text-win' : data.diff < 0 ? 'text-live' : ''],
     data.rank && ['In conference', ordinal(data.rank)],
   ].filter(Boolean).slice(0, 8);
@@ -455,9 +455,9 @@ export default function Team() {
 
           <TeamFacts lg={lg} data={info} />
 
-          <div className="mt-6 flex items-center gap-2">
+          <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
             <Segmented
-              className="flex-1"
+              className="min-w-[270px] flex-1"
               value={view}
               onChange={setTab}
               options={[{ value: 'schedule', label: 'Games' }, { value: 'stats', label: 'Stats' }, { value: 'roster', label: 'Roster' }, ...(Number(season) === currentSeason(lg) ? [{ value: 'moves', label: 'Moves' }] : [])]}

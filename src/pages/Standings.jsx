@@ -94,7 +94,7 @@ function Table({ teams: given, dividers: givenDividers = {}, showSeed = true, ti
   const span = cols.length + 1;
   // The last column a phone shows (the ones after it are desktop-only) needs the card's right margin.
   const lastOnPhone = cols.reduce((n, c, i) => (c[3] ? n : i), 0);
-  const pad = (i) => `px-1.5 md:px-2 last:pr-4 ${i === lastOnPhone ? 'max-md:pr-3.5' : ''}`;
+  const pad = (i) => `px-[5px] md:px-2 last:pr-4 ${i === lastOnPhone ? 'max-md:pr-3' : ''}`;
   return (
     <Card className="rise overflow-hidden">
       {title && <div className="px-4 pt-3 text-[15px] font-bold">{title}</div>}
